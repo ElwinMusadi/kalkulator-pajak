@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "pages:dev": "wrangler pages dev dist --d1 DB",
-    "seed": "tsx scripts/seed-d1.ts"
+    "seed": "tsx scripts/seed-d1.ts",
+    "test:tax": "tsx tests/tax-calculator.regression.ts"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.11",
