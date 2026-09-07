@@ -1,0 +1,13 @@
+name = "kalkulator-pajak"
+pages_build_output_dir = "./dist"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kalkulator-pajak-db"
+database_id = "GANTI_DENGAN_D1_DATABASE_ID"
+
+# Untuk mendapatkan database_id:
+#   npx wrangler d1 create kalkulator-pajak-db
+# Lalu ganti GANTI_DENGAN_D1_DATABASE_ID dengan ID yang diberikan.
