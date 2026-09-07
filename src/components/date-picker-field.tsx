@@ -1,20 +1,24 @@
-import { format } from "date-fns"
-import { id as idLocale } from "date-fns/locale"
-import { CalendarIcon } from "lucide-react"
-import type { SelectSingleEventHandler } from "react-day-picker"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { format } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
+import { CalendarIcon } from "lucide-react";
+import type { SelectSingleEventHandler } from "react-day-picker";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface DatePickerFieldProps {
-  id: string
-  label: string
-  value: Date | undefined
-  onChange: (date: Date | undefined) => void
-  required?: boolean
-  placeholder?: string
+  id: string;
+  label: string;
+  value: Date | undefined;
+  onChange: (date: Date | undefined) => void;
+  required?: boolean;
+  placeholder?: string;
 }
 
 export function DatePickerField({
@@ -26,8 +30,8 @@ export function DatePickerField({
   placeholder = "Pilih tanggal",
 }: DatePickerFieldProps) {
   const handleSelect: SelectSingleEventHandler = (day) => {
-    onChange(day)
-  }
+    onChange(day);
+  };
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -42,7 +46,7 @@ export function DatePickerField({
             variant="outline"
             className={cn(
               "w-full justify-start text-left font-normal",
-              !value && "text-muted-foreground"
+              !value && "text-muted-foreground",
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
@@ -53,12 +57,15 @@ export function DatePickerField({
           <Calendar
             mode="single"
             selected={value}
-            onSelect={handleSelect}
             locale={idLocale}
+            onSelect={handleSelect}
+            captionLayout="dropdown-buttons"
+            fromYear={2000}
+            toYear={new Date().getFullYear() + 10}
             initialFocus
           />
         </PopoverContent>
       </Popover>
     </div>
-  )
+  );
 }

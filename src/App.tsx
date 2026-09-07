@@ -43,11 +43,11 @@ export default function App() {
             </Card>
           )}
         </div>
-
-        <footer className="mt-10 border-t pt-5 text-center text-sm text-muted-foreground">
-          <p>© 2026 Elwin Musadi Bessiesura. Hak cipta dilindungi.</p>
-        </footer>
       </div>
+
+      <footer className="mt-16 lg:mt-38 border-t pt-8 text-center text-sm text-muted-foreground">
+        <p>© 2026 Elwin Musadi Bessiesura. Hak cipta dilindungi.</p>
+      </footer>
     </div>
   );
 }

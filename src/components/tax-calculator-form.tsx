@@ -68,7 +68,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [jenisKendaraan, setJenisKendaraan] = useState<JenisKendaraan | undefined>(undefined)
   const [jatuhTempoPajak, setJatuhTempoPajak] = useState<Date | undefined>(undefined)
   const [jatuhTempoStnk, setJatuhTempoStnk] = useState<Date | undefined>(undefined)
-  const [tanggalBayar, setTanggalBayar] = useState<Date | undefined>(() => new Date("2026-09-03"))
+  const [tanggalBayar, setTanggalBayar] = useState<Date | undefined>(() => new Date())
   const [isDomisiliGempa, setIsDomisiliGempa] = useState(false)
   const [isTembakRu, setIsTembakRu] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
