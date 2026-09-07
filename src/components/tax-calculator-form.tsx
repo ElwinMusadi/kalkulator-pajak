@@ -1,31 +1,26 @@
-import { useEffect, useState } from "react"
-import { parseISO } from "date-fns"
-import {
-  CheckCircle2,
-  HelpCircle,
-  Loader2,
-  XCircle,
-} from "lucide-react"
-import { DatePickerField } from "@/components/date-picker-field"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useEffect, useState } from "react";
+import { parseISO } from "date-fns";
+import { CheckCircle2, HelpCircle, Loader2, XCircle } from "lucide-react";
+import { DatePickerField } from "@/components/date-picker-field";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { useNopolLookup } from "@/hooks/use-nopol-lookup"
-import { calculateTax } from "@/lib/tax-calculator"
-import { formatRupiah } from "@/lib/format"
-import { BOBOT_MAP } from "@/types/tax"
-import type { JenisKendaraan, TaxCalculationResult } from "@/types/tax"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useNopolLookup } from "@/hooks/use-nopol-lookup";
+import { calculateTax } from "@/lib/tax-calculator";
+import { formatRupiah } from "@/lib/format";
+import { BOBOT_MAP } from "@/types/tax";
+import type { JenisKendaraan, TaxCalculationResult } from "@/types/tax";
+import { cn } from "@/lib/utils";
 
 const JENIS_OPTIONS: { value: JenisKendaraan; label: string }[] = [
   { value: "SEPEDA MOTOR", label: "Sepeda Motor (Bobot 1.0)" },
@@ -36,91 +31,100 @@ const JENIS_OPTIONS: { value: JenisKendaraan; label: string }[] = [
   { value: "LIGHT TRUCK", label: "Light Truck (Bobot 1.3)" },
   { value: "MICROBUS", label: "Microbus (Bobot 1.085)" },
   { value: "TRUCK", label: "Truck (Bobot 1.4)" },
-]
+];
 
 /** Petakan jenis dari D1 (uppercase) ke JenisKendaraan yang valid */
 function normalizeJenis(raw: string | null): JenisKendaraan | undefined {
-  if (!raw) return undefined
-  const upper = raw.toUpperCase().trim()
-  const match = Object.keys(BOBOT_MAP).find((k) => k === upper)
-  return match as JenisKendaraan | undefined
+  if (!raw) return undefined;
+  const upper = raw.toUpperCase().trim();
+  const match = Object.keys(BOBOT_MAP).find((k) => k === upper);
+  return match as JenisKendaraan | undefined;
 }
 
 /** Parse "YYYY-MM-DD" ke Date, return undefined jika invalid */
 function isoToDate(iso: string | null | undefined): Date | undefined {
-  if (!iso) return undefined
+  if (!iso) return undefined;
   try {
-    return parseISO(iso)
+    return parseISO(iso);
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
 interface TaxCalculatorFormProps {
-  onResult: (result: TaxCalculationResult | null) => void
+  onResult: (result: TaxCalculationResult | null) => void;
 }
 
 export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
-  const [nopol, setNopol] = useState("")
-  const [njkb, setNjkb] = useState("")
-  const [njub, setNjub] = useState("0")
-  const [bobot, setBobot] = useState<number | undefined>(undefined)
-  const [jenisKendaraan, setJenisKendaraan] = useState<JenisKendaraan | undefined>(undefined)
-  const [jatuhTempoPajak, setJatuhTempoPajak] = useState<Date | undefined>(undefined)
-  const [jatuhTempoStnk, setJatuhTempoStnk] = useState<Date | undefined>(undefined)
-  const [tanggalBayar, setTanggalBayar] = useState<Date | undefined>(() => new Date())
-  const [isDomisiliGempa, setIsDomisiliGempa] = useState(false)
-  const [isMutasiMasuk, setIsMutasiMasuk] = useState(false)
-  const [isTembakRu, setIsTembakRu] = useState(false)
-  const [validationError, setValidationError] = useState<string | null>(null)
+  const [nopol, setNopol] = useState("");
+  const [njkb, setNjkb] = useState("");
+  const [njub, setNjub] = useState("0");
+  const [bobot, setBobot] = useState<number | undefined>(undefined);
+  const [jenisKendaraan, setJenisKendaraan] = useState<
+    JenisKendaraan | undefined
+  >(undefined);
+  const [jatuhTempoPajak, setJatuhTempoPajak] = useState<Date | undefined>(
+    undefined,
+  );
+  const [jatuhTempoStnk, setJatuhTempoStnk] = useState<Date | undefined>(
+    undefined,
+  );
+  const [tanggalBayar, setTanggalBayar] = useState<Date | undefined>(
+    () => new Date(),
+  );
+  const [isDomisiliGempa, setIsDomisiliGempa] = useState(false);
+  const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
+  const [isTembakRu, setIsTembakRu] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { vehicleData, status: lookupStatus } = useNopolLookup(nopol)
+  const { vehicleData, status: lookupStatus } = useNopolLookup(nopol);
 
   // Auto-fill saat data kendaraan ditemukan
   useEffect(() => {
-    if (!vehicleData) return
-    if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb))
-    setNjub(String(vehicleData.njub ?? 0))
-    if (vehicleData.bobot) setBobot(vehicleData.bobot)
+    if (!vehicleData) return;
+    if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb));
+    setNjub(String(vehicleData.njub ?? 0));
+    if (vehicleData.bobot) setBobot(vehicleData.bobot);
 
-    const jenisNormal = normalizeJenis(vehicleData.jenis)
-    if (jenisNormal) setJenisKendaraan(jenisNormal)
+    const jenisNormal = normalizeJenis(vehicleData.jenis);
+    if (jenisNormal) setJenisKendaraan(jenisNormal);
 
-    const stnkDate = isoToDate(vehicleData.jatuhTempoStnk)
-    if (stnkDate) setJatuhTempoStnk(stnkDate)
+    const stnkDate = isoToDate(vehicleData.jatuhTempoStnk);
+    if (stnkDate) setJatuhTempoStnk(stnkDate);
 
-    const pajakDate = isoToDate(vehicleData.jatuhTempoPajak)
-    if (pajakDate) setJatuhTempoPajak(pajakDate)
-  }, [vehicleData])
+    const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
+    if (pajakDate) setJatuhTempoPajak(pajakDate);
+  }, [vehicleData]);
 
   // Hitung bobot aktual: prioritaskan dari database, lalu dari pilihan jenis
-  const effectiveBobot = bobot ?? (jenisKendaraan ? BOBOT_MAP[jenisKendaraan] : 1.0)
+  const effectiveBobot =
+    bobot ?? (jenisKendaraan ? BOBOT_MAP[jenisKendaraan] : 1.0);
 
   function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setValidationError(null)
+    e.preventDefault();
+    setValidationError(null);
 
-    const njkbNum = parseFloat(njkb)
+    const njkbNum = parseFloat(njkb);
     if (!njkb || isNaN(njkbNum) || njkbNum <= 0) {
-      setValidationError("NJKB harus diisi dengan nilai lebih dari 0.")
-      return
+      setValidationError("NJKB harus diisi dengan nilai lebih dari 0.");
+      return;
     }
-    const njubNum = parseFloat(njub) || 0
+    const njubNum = parseFloat(njub) || 0;
     if (!jenisKendaraan) {
-      setValidationError("Jenis kendaraan harus dipilih.")
-      return
+      setValidationError("Jenis kendaraan harus dipilih.");
+      return;
     }
     if (!jatuhTempoPajak) {
-      setValidationError("Jatuh Tempo Pajak harus diisi.")
-      return
+      setValidationError("Jatuh Tempo Pajak harus diisi.");
+      return;
     }
     if (!jatuhTempoStnk) {
-      setValidationError("Jatuh Tempo STNK harus diisi.")
-      return
+      setValidationError("Jatuh Tempo STNK harus diisi.");
+      return;
     }
     if (!tanggalBayar) {
-      setValidationError("Tanggal Pembayaran harus diisi.")
-      return
+      setValidationError("Tanggal Pembayaran harus diisi.");
+      return;
     }
 
     const result = calculateTax({
@@ -134,41 +138,40 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       isDomisiliGempa,
       isMutasiMasuk,
       isTembakRu,
-    })
+    });
 
-    onResult(result)
+    onResult(result);
   }
 
   // Status indicator Nopol
   const LookupIndicator = () => {
     if (lookupStatus === "loading")
-      return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
     if (lookupStatus === "found")
-      return <CheckCircle2 className="h-4 w-4 text-green-500" />
+      return <CheckCircle2 className="h-4 w-4 text-green-500" />;
     if (lookupStatus === "not_found")
-      return <HelpCircle className="h-4 w-4 text-amber-500" />
+      return <HelpCircle className="h-4 w-4 text-amber-500" />;
     if (lookupStatus === "error")
-      return <XCircle className="h-4 w-4 text-red-500" />
-    return null
-  }
+      return <XCircle className="h-4 w-4 text-red-500" />;
+    return null;
+  };
 
   return (
     <form onSubmit={handleSubmit} noValidate>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-
         {/* ── Baris 1 ── */}
 
         {/* Nopol */}
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="nopol">Nomor Polisi (Plat)</Label>
+          <Label htmlFor="nopol">Nomor Polisi</Label>
           <div className="relative">
             <Input
               id="nopol"
               value={nopol}
               onChange={(e) => {
-                setNopol(e.target.value.toUpperCase())
+                setNopol(e.target.value.toUpperCase());
                 // Reset auto-fill jika user ganti nopol
-                onResult(null)
+                onResult(null);
               }}
               placeholder="Contoh: DH6096KS"
               className="uppercase pr-8"
@@ -202,8 +205,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             type="number"
             value={njkb}
             onChange={(e) => {
-              setNjkb(e.target.value)
-              setBobot(undefined)
+              setNjkb(e.target.value);
+              setBobot(undefined);
             }}
             placeholder="Otomatis / manual"
             min={0}
@@ -220,7 +223,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="njub">
             NJUB{" "}
-            <span className="text-muted-foreground font-normal">(Ubah Bentuk)</span>
+            <span className="text-muted-foreground font-normal">
+              (Ubah Bentuk)
+            </span>
           </Label>
           <Input
             id="njub"
@@ -244,9 +249,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           <Select
             value={jenisKendaraan}
             onValueChange={(v) => {
-              setJenisKendaraan(v as JenisKendaraan)
+              setJenisKendaraan(v as JenisKendaraan);
               // Saat user ganti jenis, clear bobot dari DB
-              setBobot(undefined)
+              setBobot(undefined);
             }}
           >
             <SelectTrigger id="jenis">
@@ -300,13 +305,13 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           <Checkbox
             id="is-gempa"
             checked={isDomisiliGempa}
-            onCheckedChange={(checked) =>
-              setIsDomisiliGempa(checked === true)
-            }
+            onCheckedChange={(checked) => setIsDomisiliGempa(checked === true)}
           />
           <Label htmlFor="is-gempa" className="cursor-pointer font-normal">
             Domisili Wilayah Gempa{" "}
-            <span className="text-muted-foreground">(Diskon Tunggakan 75%)</span>
+            <span className="text-muted-foreground">
+              (Diskon Tunggakan 75%)
+            </span>
           </Label>
         </div>
 
@@ -317,7 +322,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors",
               isMutasiMasuk
                 ? "border-primary/30 bg-primary/5"
-                : "border-border bg-muted/30 hover:bg-muted/50"
+                : "border-border bg-muted/30 hover:bg-muted/50",
             )}
           >
             <Switch
@@ -326,9 +331,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               onCheckedChange={setIsMutasiMasuk}
             />
             <div>
-              <p className="text-sm font-medium">Diskon PKB Mutasi Masuk Luar Daerah</p>
+              <p className="text-sm font-medium">
+                Diskon PKB Mutasi Masuk Luar Daerah
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Pengurangan PKB berjalan 50%. Menggantikan diskon pembayaran awal.
+                Pengurangan PKB berjalan 50%. Menggantikan diskon pembayaran
+                awal.
               </p>
             </div>
           </label>
@@ -341,7 +349,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors",
               isTembakRu
                 ? "border-primary/30 bg-primary/5"
-                : "border-border bg-muted/30 hover:bg-muted/50"
+                : "border-border bg-muted/30 hover:bg-muted/50",
             )}
           >
             <Switch
@@ -372,5 +380,5 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         Hitung Rincian Pajak
       </Button>
     </form>
-  )
+  );
 }

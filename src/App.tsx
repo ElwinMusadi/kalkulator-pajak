@@ -13,7 +13,7 @@ export default function App() {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-black tracking-tight">
             KALKULATOR PAJAK
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
