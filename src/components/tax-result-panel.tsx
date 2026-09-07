@@ -16,6 +16,7 @@ interface RowProps {
   isGreen?: boolean;
   isMuted?: boolean;
   isTotal?: boolean;
+  isLabelTotal?: boolean;
 }
 
 function Row({
@@ -24,14 +25,16 @@ function Row({
   isGreen = false,
   isMuted = false,
   isTotal = false,
+  isLabelTotal = false,
 }: RowProps) {
   const displayed = typeof value === "number" ? formatRupiah(value) : value;
   return (
-    <div className="flex items-start justify-between gap-2">
+    <div className="flex items-center justify-between gap-2">
       <span
         className={cn(
           "text-sm leading-snug",
           isTotal && "font-bold text-foreground",
+          isLabelTotal && "text-[19px] font-bold! dark:text-primary",
           !isTotal && isMuted && "text-muted-foreground",
           !isTotal && !isMuted && "text-muted-foreground",
         )}
@@ -42,7 +45,8 @@ function Row({
         className={cn(
           "text-sm font-medium text-right shrink-0",
           isGreen && "text-green-600 dark:text-green-400",
-          isTotal && "text-xl font-bold text-red-600 dark:text-red-500",
+          isTotal && "text-xl font-extrabold! text-primary dark:text-red-500",
+          // isLabelTotal && "text-xl font-bold! dark:text-primary",
         )}
       >
         {displayed}
@@ -115,7 +119,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
         />
 
         {/* ── Opsen ── */}
-        <Separator className="my-1" />
+        <Separator className="my-2" />
 
         {opsenBerjalan > 0 && (
           <Row label="Opsen PKB (Berjalan)" value={opsenBerjalan} />
@@ -137,7 +141,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
         )} */}
 
         {/* ── SWDKLLJ ── */}
-        <Separator className="my-1" />
+        <Separator className="my-2" />
 
         <Row label="SWDKLLJ (Berjalan)" value={swdklljBerjalan} />
 
@@ -158,7 +162,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
         {/* ── PNBP ── */}
         {(biayaStnk > 0 || biayaTnkb > 0) && (
           <>
-            <Separator className="my-1" />
+            <Separator className="my-2" />
             {biayaStnk > 0 && <Row label="PNBP STNK" value={biayaStnk} />}
             {biayaTnkb > 0 && <Row label="PNBP TNKB" value={biayaTnkb} />}
           </>
@@ -167,7 +171,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
         {/* ── Biaya tambahan ── */}
         {biayaTembakRu > 0 && (
           <>
-            <Separator className="my-1" />
+            <Separator className="my-2" />
             <Row label="Biaya Tembak RU/STNK" value={biayaTembakRu} />
           </>
         )}
@@ -175,7 +179,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
 
       {/* ── Total ── */}
       <Separator />
-      <Row label="Total Bayar" value={total} isTotal />
+      <Row label="Total Bayar" value={total} isTotal isLabelTotal />
     </div>
   );
 }

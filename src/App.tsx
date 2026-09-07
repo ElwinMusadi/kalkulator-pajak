@@ -13,8 +13,8 @@ export default function App() {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-black tracking-tight">
-            KALKULATOR PAJAK
+          <h1 className="text-3xl font-black! tracking-normal text-primary">
+            • KALKULATOR PAJAK •
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Berdasarkan Pergub NTT No. 54 Tahun 2026 — UPTD Kota Kupang
@@ -51,7 +51,7 @@ export default function App() {
         </div>
       </div>
 
-      <footer className="mt-12 lg:mt-20 text-center text-sm text-muted-foreground">
+      <footer className="mt-8 md:mt-14 text-center text-[13px] md:text-sm text-muted-foreground">
         <p>
           © 2026 Elwin Musadi Bessiesura • UPT Pendapatan Daerah Wilayah Kota
           Kupang.
