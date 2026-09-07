@@ -63,6 +63,7 @@ interface TaxCalculatorFormProps {
 export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [nopol, setNopol] = useState("")
   const [njkb, setNjkb] = useState("")
+  const [njub, setNjub] = useState("0")
   const [bobot, setBobot] = useState<number | undefined>(undefined)
   const [jenisKendaraan, setJenisKendaraan] = useState<JenisKendaraan | undefined>(undefined)
   const [jatuhTempoPajak, setJatuhTempoPajak] = useState<Date | undefined>(undefined)
@@ -78,6 +79,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   useEffect(() => {
     if (!vehicleData) return
     if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb))
+    setNjub(String(vehicleData.njub ?? 0))
     if (vehicleData.bobot) setBobot(vehicleData.bobot)
 
     const jenisNormal = normalizeJenis(vehicleData.jenis)
@@ -102,6 +104,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       setValidationError("NJKB harus diisi dengan nilai lebih dari 0.")
       return
     }
+    const njubNum = parseFloat(njub) || 0
     if (!jenisKendaraan) {
       setValidationError("Jenis kendaraan harus dipilih.")
       return
@@ -121,6 +124,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
     const result = calculateTax({
       njkb: njkbNum,
+      njub: njubNum,
       bobot: effectiveBobot,
       jenisKendaraan,
       jatuhTempoPajak,
@@ -148,7 +152,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
 
         {/* ── Baris 1 ── */}
 
@@ -197,7 +201,6 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             value={njkb}
             onChange={(e) => {
               setNjkb(e.target.value)
-              // Jika user edit manual, clear bobot dari DB agar jenis kendaraan yg menentukan
               setBobot(undefined)
             }}
             placeholder="Otomatis / manual"
@@ -211,7 +214,27 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           )}
         </div>
 
-        {/* Jenis Kendaraan */}
+        {/* NJUB */}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="njub">
+            NJUB{" "}
+            <span className="text-muted-foreground font-normal">(Ubah Bentuk)</span>
+          </Label>
+          <Input
+            id="njub"
+            type="number"
+            value={njub}
+            onChange={(e) => setNjub(e.target.value)}
+            placeholder="0"
+            min={0}
+            step={1000}
+          />
+          {njub && parseFloat(njub) > 0 && (
+            <p className="text-xs text-blue-600 dark:text-blue-400">
+              {formatRupiah(parseFloat(njub))} ditambahkan ke dasar pengenaan
+            </p>
+          )}
+        </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="jenis">
             Jenis Kendaraan <span className="text-destructive">*</span>
@@ -271,7 +294,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         {/* ── Opsi Tambahan ── */}
 
         {/* Checkbox Gempa */}
-        <div className="md:col-span-3 flex items-center gap-2 mt-1">
+        <div className="md:col-span-2 lg:col-span-4 flex items-center gap-2 mt-1">
           <Checkbox
             id="is-gempa"
             checked={isDomisiliGempa}
@@ -286,7 +309,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         </div>
 
         {/* Switch Tembak RU */}
-        <div className="md:col-span-3">
+        <div className="md:col-span-2 lg:col-span-4">
           <label
             className={cn(
               "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors",

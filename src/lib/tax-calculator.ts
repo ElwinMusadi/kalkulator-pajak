@@ -1,22 +1,95 @@
 /**
  * src/lib/tax-calculator.ts
  *
- * Logika murni kalkulasi PKB & Opsen berdasarkan Pergub NTT No. 54 Tahun 2026.
- * Diadaptasi dari hitungPajak() pada index.html dengan periodisasi tunggakan
- * berdasarkan tahun pajak sesuai ketentuan Pergub.
+ * Kalkulasi PKB & Opsen berdasarkan Pergub NTT No. 54 Tahun 2026.
+ * Mengacu pada Surat Edaran Nomor 900.1.13.1/2741/BPAD2.1 beserta
+ * seluruh contoh penetapan (Contoh 1–14) yang terlampir.
  */
 
 import type { TaxCalculatorInput, TaxCalculationResult } from "@/types/tax"
 
-/** Tanggal cutoff berlakunya opsen (5 Januari 2025) */
-const CUTOFF_OPSEN = new Date("2025-01-05")
+/** Tanggal cutoff berlakunya Opsen PKB dan tarif PKB 1,2% */
+const CUTOFF_OPSEN = new Date("2025-01-05T00:00:00")
+
+// ---------------------------------------------------------------------------
+// Utilitas tanggal
+// ---------------------------------------------------------------------------
 
 /**
- * Fungsi utama — menerima input tervalidasi, mengembalikan rincian pajak.
+ * Jumlah bulan kalender antara dua tanggal, dibulatkan ke atas.
+ * Digunakan untuk menghitung denda Opsen dan denda SWDKLLJ.
  */
+function bulanKalender(dari: Date, hingga: Date): number {
+  const tahun = hingga.getFullYear() - dari.getFullYear()
+  const bulan = hingga.getMonth() - dari.getMonth()
+  const hari = hingga.getDate() - dari.getDate()
+  const total = tahun * 12 + bulan + (hari > 0 ? 1 : 0)
+  return Math.max(0, total)
+}
+
+// ---------------------------------------------------------------------------
+// Struktur periode pajak internal
+// ---------------------------------------------------------------------------
+
+interface TaxPeriod {
+  start: Date     // Tanggal awal periode
+  tarifPkb: 0.015 | 0.012
+  kenaOpsen: boolean
+  status: "tunggakan" | "berjalan"
+}
+
+/**
+ * Menghasilkan daftar periode pajak dari awal jatuh tempo hingga
+ * tahun bayar. Maksimal 4 tunggakan + 1 berjalan.
+ */
+function buildTaxPeriods(
+  jatuhTempoPajak: Date,
+  tanggalBayar: Date
+): TaxPeriod[] {
+  const tahunBayar = tanggalBayar.getFullYear()
+  const tahunAwal = jatuhTempoPajak.getFullYear()
+
+  // Semua tahun sebelum tahun bayar = tunggakan
+  const semuaTunggakan: TaxPeriod[] = []
+  for (let tahun = tahunAwal; tahun < tahunBayar; tahun++) {
+    const start = new Date(jatuhTempoPajak)
+    start.setFullYear(tahun)
+    semuaTunggakan.push({
+      start,
+      tarifPkb: start < CUTOFF_OPSEN ? 0.015 : 0.012,
+      kenaOpsen: start >= CUTOFF_OPSEN,
+      status: "tunggakan",
+    })
+  }
+
+  // Maksimal 4 tunggakan terakhir
+  const tunggakan =
+    semuaTunggakan.length > 4
+      ? semuaTunggakan.slice(-4)
+      : semuaTunggakan
+
+  // Periode berjalan
+  const berjalanStart = new Date(jatuhTempoPajak)
+  berjalanStart.setFullYear(tahunBayar)
+
+  const berjalan: TaxPeriod = {
+    start: berjalanStart,
+    tarifPkb: berjalanStart < CUTOFF_OPSEN ? 0.015 : 0.012,
+    kenaOpsen: berjalanStart >= CUTOFF_OPSEN,
+    status: "berjalan",
+  }
+
+  return [...tunggakan, berjalan]
+}
+
+// ---------------------------------------------------------------------------
+// Fungsi utama
+// ---------------------------------------------------------------------------
+
 export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   const {
     njkb,
+    njub,
     bobot,
     jenisKendaraan,
     jatuhTempoPajak,
@@ -29,113 +102,129 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   const isMotor = jenisKendaraan === "SEPEDA MOTOR"
   const swdklljBase = isMotor ? 35_000 : 143_000
 
+  /** Dasar pengenaan penuh (termasuk NJUB jika ada ubah bentuk) */
+  const dasarPenuh = (njkb + njub) * bobot
+
   // -----------------------------------------------------------------------
-  // Hitung periode tunggakan berdasarkan TAHUN PAJAK.
-  //
-  // Tahun pembayaran adalah periode berjalan, walaupun tanggal anniversary
-  // jatuh tempo periode itu belum terlewati. Semua tahun sebelumnya adalah
-  // tunggakan, maksimal empat tahun terakhir.
-  // Contoh bayar 03/09/2026 dengan jatuh tempo awal 22/10/2024:
-  //   2024 dan 2025 = tunggakan; 2026 = berjalan.
+  // Bangun periode
   // -----------------------------------------------------------------------
-  const tahunBayar = tanggalBayar.getFullYear()
-  const tahunAwalPajak = jatuhTempoPajak.getFullYear()
-  const semuaTahunTunggakan: Date[] = []
-
-  for (let tahun = tahunAwalPajak; tahun < tahunBayar; tahun++) {
-    const period = new Date(jatuhTempoPajak)
-    period.setFullYear(tahun)
-    semuaTahunTunggakan.push(period)
-  }
-
-  // Maksimal 4 tahun tunggakan (aturan max 5 tahun = 4 tunggakan + 1 berjalan)
-  const tunggakanYears =
-    semuaTahunTunggakan.length > 4
-      ? semuaTahunTunggakan.slice(-4)
-      : semuaTahunTunggakan
-
-  const berjalanStart = new Date(jatuhTempoPajak)
-  berjalanStart.setFullYear(tahunBayar)
-
+  const semua = buildTaxPeriods(jatuhTempoPajak, tanggalBayar)
+  const tunggakanPeriods = semua.filter((p) => p.status === "tunggakan")
+  const berjalanPeriod = semua.find((p) => p.status === "berjalan")!
 
   // -----------------------------------------------------------------------
   // PKB & Opsen Tunggakan
   // -----------------------------------------------------------------------
   const diskonTunggakan = isDomisiliGempa ? 0.75 : 0.5
 
-  let totalPkbTunggakan = 0
-  let totalOpsenTunggakan = 0
+  let pkbTunggakanPra2025 = 0
+  let pkbTunggakanPost2025 = 0
+  let opsenTunggakan = 0
+  let tahunTunggakanPra = 0
+  let tahunTunggakanPost = 0
 
-  for (const period of tunggakanYears) {
-    const tarif = period < CUTOFF_OPSEN ? 0.015 : 0.012
-    const dp = njkb * bobot
-    const pkbPeriod = dp * tarif
-    const discountedPkb = pkbPeriod * (1 - diskonTunggakan)
+  for (const period of tunggakanPeriods) {
+    const pkbPokok = dasarPenuh * period.tarifPkb
+    const pkbDiskon = pkbPokok * (1 - diskonTunggakan)
 
-    totalPkbTunggakan += discountedPkb
-
-    // Opsen berlaku untuk tahun pajak mulai 2025.
-    // Periode 2025 tetap terkena opsen meski anniversary jatuh tempo
-    // berada sebelum 5 Januari 2025 (mis. 22 Oktober 2025).
-    if (period.getFullYear() >= CUTOFF_OPSEN.getFullYear()) {
-      totalOpsenTunggakan += discountedPkb * 0.66
+    if (period.kenaOpsen) {
+      pkbTunggakanPost2025 += pkbDiskon
+      opsenTunggakan += pkbDiskon * 0.66
+      tahunTunggakanPost++
+    } else {
+      pkbTunggakanPra2025 += pkbDiskon
+      tahunTunggakanPra++
     }
   }
+
+  const tahunTunggakan = tunggakanPeriods.length
+  const pkbTunggakan = pkbTunggakanPra2025 + pkbTunggakanPost2025
 
   // -----------------------------------------------------------------------
   // PKB Berjalan
   // -----------------------------------------------------------------------
-  // Dasar pengenaan berjalan: jika ada tunggakan → NJKB penuh
-  // Jika tidak ada tunggakan → NJKB × 0.825 (pengurang 17.5%)
-  const dpBerjalan =
-    tunggakanYears.length > 0 ? njkb * bobot : njkb * bobot * 0.825
+  // Pengurang dasar pengenaan 17,5% hanya berlaku jika:
+  //   (a) tidak ada tunggakan, DAN
+  //   (b) masa pajak berjalan sudah masuk rezim Opsen (≥ 5 Jan 2025)
+  const adaTunggakan = tahunTunggakan > 0
+  const boolOpsenBerjalan = berjalanPeriod.kenaOpsen
 
-  const basePkbBerjalan = dpBerjalan * 0.012
+  const faktorDpBerjalan =
+    !adaTunggakan && boolOpsenBerjalan ? 0.825 : 1.0
+  const dpBerjalan = dasarPenuh * faktorDpBerjalan
 
-  // Diskon PKB berjalan berdasarkan jarak hari menuju jatuh tempo
-  const daysToJatuhTempo = Math.floor(
-    (berjalanStart.getTime() - tanggalBayar.getTime()) / (1000 * 60 * 60 * 24)
+  const basePkbBerjalan = dpBerjalan * berjalanPeriod.tarifPkb
+
+  // Diskon PKB berjalan: hanya bila tidak ada tunggakan dan bayar sebelum jatuh tempo
+  const hariMenujuJT = Math.floor(
+    (berjalanPeriod.start.getTime() - tanggalBayar.getTime()) /
+      (1000 * 60 * 60 * 24)
   )
 
   let pkbDiscount = 0
-  if (daysToJatuhTempo >= 0 && tunggakanYears.length === 0) {
+  if (!adaTunggakan && hariMenujuJT >= 0) {
     if (isMotor) {
-      if (daysToJatuhTempo <= 30) pkbDiscount = 0.1
-      else if (daysToJatuhTempo <= 60) pkbDiscount = 0.15
-      else if (daysToJatuhTempo <= 90) pkbDiscount = 0.2
+      if (hariMenujuJT <= 30) pkbDiscount = 0.1
+      else if (hariMenujuJT <= 60) pkbDiscount = 0.15
+      else if (hariMenujuJT <= 90) pkbDiscount = 0.2
     } else {
-      if (daysToJatuhTempo <= 90) pkbDiscount = 0.1
+      if (hariMenujuJT <= 90) pkbDiscount = 0.1
     }
   }
 
   const pkbBerjalan = basePkbBerjalan * (1 - pkbDiscount)
 
   // -----------------------------------------------------------------------
-  // Opsen PKB Berjalan (66% dari PKB berjalan)
+  // Opsen PKB Berjalan
   // -----------------------------------------------------------------------
-  const opsenBerjalan = pkbBerjalan * 0.66
+  const opsenBerjalan = boolOpsenBerjalan ? pkbBerjalan * 0.66 : 0
+
+  // -----------------------------------------------------------------------
+  // Denda Opsen PKB
+  // Denda = 1% per bulan × Opsen PKB Berjalan, maks 24 bulan.
+  // Dipungut bila bayar melewati tanggal jatuh tempo berjalan.
+  // Denda PKB sendiri dihapus 100% (Tax Amnesty), tetapi Denda Opsen TIDAK.
+  // -----------------------------------------------------------------------
+  const bulanTerlambat = Math.min(
+    24,
+    bulanKalender(berjalanPeriod.start, tanggalBayar)
+  )
+  const dendaOpsen = opsenBerjalan * 0.01 * bulanTerlambat
 
   // -----------------------------------------------------------------------
   // SWDKLLJ
   // -----------------------------------------------------------------------
   const swdklljBerjalan = swdklljBase
-  const swdklljTunggakan = tunggakanYears.length * swdklljBase
+  const swdklljTunggakan = tahunTunggakan * swdklljBase
 
-  // Tax Amnesty Pergub 54/2026 menghapus seluruh denda SWDKLLJ atas
-  // tunggakan. Pokok SWDKLLJ berjalan dan tunggakan tetap ditagihkan.
-  const dendaSwdkllj = 0
+  // Denda SWDKLLJ tetap dipungut (bukan bagian Tax Amnesty).
+  // Referensi: semua contoh 1–14 dalam pedoman tetap mencantumkan denda ini.
+  let dendaSwdkllj = 0
+  if (bulanTerlambat > 0) {
+    if (isMotor) {
+      if (bulanTerlambat <= 3) dendaSwdkllj = 8_000
+      else if (bulanTerlambat <= 6) dendaSwdkllj = 16_000
+      else if (bulanTerlambat <= 9) dendaSwdkllj = 24_000
+      else dendaSwdkllj = 32_000
+    } else {
+      if (bulanTerlambat <= 3) dendaSwdkllj = 35_000
+      else if (bulanTerlambat <= 6) dendaSwdkllj = 70_000
+      else dendaSwdkllj = 100_000
+    }
+  }
 
   // -----------------------------------------------------------------------
   // PNBP STNK & TNKB
-  // HANYA dikenakan jika STNK jatuh tempo ≤ 90 hari dari tanggal bayar
+  // Dikenakan bila STNK jatuh tempo ≤ 90 hari dari tanggal bayar
+  // (artinya STNK sudah kadaluarsa atau hampir kadaluarsa)
   // -----------------------------------------------------------------------
-  const daysToStnk = Math.floor(
-    (jatuhTempoStnk.getTime() - tanggalBayar.getTime()) / (1000 * 60 * 60 * 24)
+  const hariMenujuStnk = Math.floor(
+    (jatuhTempoStnk.getTime() - tanggalBayar.getTime()) /
+      (1000 * 60 * 60 * 24)
   )
-
   let biayaStnk = 0
   let biayaTnkb = 0
-  if (daysToStnk <= 90) {
+  if (hariMenujuStnk <= 90) {
     biayaStnk = isMotor ? 100_000 : 200_000
     biayaTnkb = isMotor ? 60_000 : 100_000
   }
@@ -150,10 +239,11 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   // -----------------------------------------------------------------------
   const total =
     pkbBerjalan +
-    totalPkbTunggakan +
-    0 + // denda PKB → tax amnesty = Rp0
+    pkbTunggakan +
+    0 +              // denda PKB → tax amnesty = Rp0
     opsenBerjalan +
-    totalOpsenTunggakan +
+    opsenTunggakan +
+    dendaOpsen +
     swdklljBerjalan +
     swdklljTunggakan +
     dendaSwdkllj +
@@ -164,11 +254,16 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   return {
     pkbBerjalan,
     pkbDiscount,
-    pkbTunggakan: totalPkbTunggakan,
-    tahunTunggakan: tunggakanYears.length,
+    pkbTunggakanPra2025,
+    pkbTunggakanPost2025,
+    tahunTunggakanPra,
+    tahunTunggakanPost,
+    tahunTunggakan,
     dendaPkb: 0,
     opsenBerjalan,
-    opsenTunggakan: totalOpsenTunggakan,
+    opsenTunggakan,
+    dendaOpsen,
+    bulanTerlambat,
     swdklljBerjalan,
     swdklljTunggakan,
     dendaSwdkllj,

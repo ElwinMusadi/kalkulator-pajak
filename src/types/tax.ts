@@ -40,6 +40,7 @@ export interface VehicleData {
 /** Input untuk fungsi calculateTax */
 export interface TaxCalculatorInput {
   njkb: number
+  njub: number   // Nilai Jual Ubah Bentuk; 0 jika tidak ada
   bobot: number
   jenisKendaraan: JenisKendaraan
   jatuhTempoPajak: Date   // SD Notice — tanggal jatuh tempo pajak
@@ -53,9 +54,12 @@ export interface TaxCalculatorInput {
 export interface TaxCalculationResult {
   // PKB
   pkbBerjalan: number
-  pkbDiscount: number          // Persentase diskon (0–0.2)
-  pkbTunggakan: number
-  tahunTunggakan: number       // Jumlah tahun tunggakan yang dihitung (max 4)
+  pkbDiscount: number              // Persentase diskon PKB berjalan (0–0.2)
+  pkbTunggakanPra2025: number      // PKB tunggakan dengan tarif 1,5% (sebelum 5 Jan 2025)
+  pkbTunggakanPost2025: number     // PKB tunggakan dengan tarif 1,2% (mulai 5 Jan 2025)
+  tahunTunggakanPra: number        // Jumlah tahun tunggakan pra-cutoff
+  tahunTunggakanPost: number       // Jumlah tahun tunggakan post-cutoff
+  tahunTunggakan: number           // Total tahun tunggakan (max 4)
 
   // Denda PKB — selalu 0 (tax amnesty)
   dendaPkb: number
@@ -63,6 +67,10 @@ export interface TaxCalculationResult {
   // Opsen PKB
   opsenBerjalan: number
   opsenTunggakan: number
+
+  // Denda Opsen PKB (tidak termasuk amnesty, tetap dipungut)
+  dendaOpsen: number
+  bulanTerlambat: number
 
   // SWDKLLJ
   swdklljBerjalan: number

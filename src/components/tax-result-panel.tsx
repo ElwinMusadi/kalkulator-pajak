@@ -6,45 +6,59 @@ interface TaxResultPanelProps {
   result: TaxCalculationResult
 }
 
-interface ResultRowProps {
-  label: string
-  value: string
-  isGreen?: boolean
-  isBold?: boolean
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(" ")
 }
 
-function ResultRow({ label, value, isGreen = false, isBold = false }: ResultRowProps) {
+interface RowProps {
+  label: string
+  value: string | number
+  isGreen?: boolean
+  isMuted?: boolean
+  isTotal?: boolean
+}
+
+function Row({ label, value, isGreen = false, isMuted = false, isTotal = false }: RowProps) {
+  const displayed = typeof value === "number" ? formatRupiah(value) : value
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className={cn("text-sm text-muted-foreground", isBold && "font-medium text-foreground")}>
+    <div className="flex items-start justify-between gap-2">
+      <span
+        className={cn(
+          "text-sm leading-snug",
+          isTotal && "font-bold text-foreground",
+          !isTotal && isMuted && "text-muted-foreground",
+          !isTotal && !isMuted && "text-muted-foreground"
+        )}
+      >
         {label}
       </span>
       <span
         className={cn(
           "text-sm font-medium text-right shrink-0",
-          isGreen ? "text-green-600 dark:text-green-400" : "text-foreground",
-          isBold && "font-semibold"
+          isGreen && "text-green-600 dark:text-green-400",
+          isTotal && "text-xl font-bold text-red-600 dark:text-red-500"
         )}
       >
-        {value}
+        {displayed}
       </span>
     </div>
   )
-}
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
 }
 
 export function TaxResultPanel({ result }: TaxResultPanelProps) {
   const {
     pkbBerjalan,
     pkbDiscount,
-    pkbTunggakan,
+    pkbTunggakanPra2025,
+    pkbTunggakanPost2025,
+    tahunTunggakanPra,
+    tahunTunggakanPost,
     tahunTunggakan,
     dendaPkb,
     opsenBerjalan,
     opsenTunggakan,
+    dendaOpsen,
+    bulanTerlambat,
     swdklljBerjalan,
     swdklljTunggakan,
     dendaSwdkllj,
@@ -54,94 +68,109 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
     total,
   } = result
 
+  const adaTunggakan = tahunTunggakan > 0
+  const adaOpsenTunggakan = opsenTunggakan > 0
+  const terlambat = bulanTerlambat > 0
+
   return (
     <div className="space-y-3">
-      <h3 className="font-semibold text-base border-b pb-2">Rincian Pembayaran</h3>
+      <h3 className="font-semibold text-base border-b pb-2 dark:border-gray-700">
+        Rincian Pembayaran
+      </h3>
 
       <div className="space-y-2">
-        {/* PKB */}
-        <ResultRow
-          label={`PKB Berjalan${pkbDiscount > 0 ? ` (Diskon ${pkbDiscount * 100}%)` : ""}`}
-          value={formatRupiah(pkbBerjalan)}
+
+        {/* ── PKB ── */}
+        <Row
+          label={
+            pkbDiscount > 0
+              ? `PKB Berjalan (Diskon ${pkbDiscount * 100}%)`
+              : "PKB Berjalan"
+          }
+          value={pkbBerjalan}
         />
 
-        {tahunTunggakan > 0 && (
-          <ResultRow
-            label={`PKB Tunggakan (${tahunTunggakan} Thn – Diskon 50%)`}
-            value={formatRupiah(pkbTunggakan)}
+        {pkbTunggakanPost2025 > 0 && (
+          <Row
+            label={`PKB Tunggakan ≥5 Jan 2025 (${tahunTunggakanPost} thn, tarif 1,2%, Diskon ${result.tahunTunggakanPra + result.tahunTunggakanPost > 0 && result.tahunTunggakanPra === 0 ? "" : ""}50%)`}
+            value={pkbTunggakanPost2025}
           />
         )}
 
-        <ResultRow
-          label="Denda PKB (Tax Amnesty)"
+        {pkbTunggakanPra2025 > 0 && (
+          <Row
+            label={`PKB Tunggakan <5 Jan 2025 (${tahunTunggakanPra} thn, tarif 1,5%, Diskon 50%)`}
+            value={pkbTunggakanPra2025}
+          />
+        )}
+
+        <Row
+          label="Denda PKB (Tax Amnesty – Hapus 100%)"
           value={formatRupiah(dendaPkb)}
           isGreen
         />
 
-        {/* Opsen */}
+        {/* ── Opsen ── */}
         <Separator className="my-1" />
-        <ResultRow
-          label="Opsen PKB (Berjalan)"
-          value={formatRupiah(opsenBerjalan)}
-        />
-        {opsenTunggakan > 0 && (
-          <ResultRow
-            label="Opsen PKB (Tunggakan)"
-            value={formatRupiah(opsenTunggakan)}
+
+        {opsenBerjalan > 0 && (
+          <Row label="Opsen PKB (Berjalan)" value={opsenBerjalan} />
+        )}
+
+        {adaOpsenTunggakan && (
+          <Row
+            label={`Opsen PKB Tunggakan (${tahunTunggakanPost} thn ≥5 Jan 2025)`}
+            value={opsenTunggakan}
           />
         )}
 
-        {/* SWDKLLJ */}
-        <Separator className="my-1" />
-        <ResultRow
-          label="SWDKLLJ (Berjalan)"
-          value={formatRupiah(swdklljBerjalan)}
-        />
-        {swdklljTunggakan > 0 && (
-          <ResultRow
-            label={`SWDKLLJ (Tunggakan ${tahunTunggakan} Thn)`}
-            value={formatRupiah(swdklljTunggakan)}
+        {terlambat && dendaOpsen > 0 && (
+          <Row
+            label={`Denda Opsen PKB (${bulanTerlambat} bln × 1%)`}
+            value={dendaOpsen}
           />
         )}
-        <ResultRow
-          label="Denda SWDKLLJ (Tax Amnesty)"
-          value={formatRupiah(dendaSwdkllj)}
-          isGreen
-        />
 
-        {/* PNBP */}
+        {/* ── SWDKLLJ ── */}
+        <Separator className="my-1" />
+
+        <Row label="SWDKLLJ (Berjalan)" value={swdklljBerjalan} />
+
+        {adaTunggakan && swdklljTunggakan > 0 && (
+          <Row
+            label={`SWDKLLJ Tunggakan (${tahunTunggakan} thn)`}
+            value={swdklljTunggakan}
+          />
+        )}
+
+        {dendaSwdkllj > 0 && (
+          <Row
+            label={`Denda SWDKLLJ (${bulanTerlambat} bln terlambat)`}
+            value={dendaSwdkllj}
+          />
+        )}
+
+        {/* ── PNBP ── */}
         {(biayaStnk > 0 || biayaTnkb > 0) && (
           <>
             <Separator className="my-1" />
-            {biayaStnk > 0 && (
-              <ResultRow label="PNBP STNK" value={formatRupiah(biayaStnk)} />
-            )}
-            {biayaTnkb > 0 && (
-              <ResultRow label="PNBP TNKB" value={formatRupiah(biayaTnkb)} />
-            )}
+            {biayaStnk > 0 && <Row label="PNBP STNK" value={biayaStnk} />}
+            {biayaTnkb > 0 && <Row label="PNBP TNKB" value={biayaTnkb} />}
           </>
         )}
 
-        {/* Biaya tambahan */}
+        {/* ── Biaya tambahan ── */}
         {biayaTembakRu > 0 && (
           <>
             <Separator className="my-1" />
-            <ResultRow
-              label="Biaya Tembak RU/STNK"
-              value={formatRupiah(biayaTembakRu)}
-            />
+            <Row label="Biaya Tembak RU/STNK" value={biayaTembakRu} />
           </>
         )}
       </div>
 
-      {/* Total */}
+      {/* ── Total ── */}
       <Separator />
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <span className="font-bold text-base">Total Bayar</span>
-        <span className="text-xl font-bold text-red-600 dark:text-red-500">
-          {formatRupiah(total)}
-        </span>
-      </div>
+      <Row label="Total Bayar" value={total} isTotal />
     </div>
   )
 }
