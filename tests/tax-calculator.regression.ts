@@ -101,11 +101,8 @@ const innoBase: Omit<TaxCalculatorInput, "jatuhTempoPajak" | "jatuhTempoStnk"> =
   )
   // Terlambat 7 bulan → denda SWDKLLJ roda 4+ > 6 bln: Rp100.000
   assert.equal(r.dendaSwdkllj, 100_000, "Contoh 5 - dendaSwdkllj")
-  // Denda Opsen: 7 bln × 1% × opsenBerjalan
-  assert.ok(
-    Math.abs(r.dendaOpsen - r.opsenBerjalan * 0.07) < 1,
-    "Contoh 5 - dendaOpsen"
-  )
+  // Denda Opsen berjalan maupun tunggakan dihapus melalui Tax Amnesty.
+  assert.equal(r.dendaOpsen, 0, "Contoh 5 - dendaOpsen Tax Amnesty")
   pass("Contoh 5 – Minibus terlambat tanpa tunggakan, gempa 75%")
 }
 
@@ -137,11 +134,8 @@ const innoBase: Omit<TaxCalculatorInput, "jatuhTempoPajak" | "jatuhTempoStnk"> =
   )
   // Terlambat 7 bulan → denda SWDKLLJ motor >6 bln: Rp24.000
   assert.equal(r.dendaSwdkllj, 24_000, "Contoh 10 - dendaSwdkllj")
-  // Denda Opsen: 7 bln × 1% × opsenBerjalan ≈ Rp4.985
-  assert.ok(
-    Math.abs(r.dendaOpsen - r.opsenBerjalan * 0.07) < 1,
-    "Contoh 10 - dendaOpsen"
-  )
+  // Denda Opsen berjalan maupun tunggakan dihapus melalui Tax Amnesty.
+  assert.equal(r.dendaOpsen, 0, "Contoh 10 - dendaOpsen Tax Amnesty")
   pass("Contoh 10 – Motor terlambat tanpa tunggakan, gempa 75%")
 }
 

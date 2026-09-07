@@ -1,25 +1,31 @@
-import { Separator } from "@/components/ui/separator"
-import { formatRupiah } from "@/lib/format"
-import type { TaxCalculationResult } from "@/types/tax"
+import { Separator } from "@/components/ui/separator";
+import { formatRupiah } from "@/lib/format";
+import type { TaxCalculationResult } from "@/types/tax";
 
 interface TaxResultPanelProps {
-  result: TaxCalculationResult
+  result: TaxCalculationResult;
 }
 
 function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
+  return classes.filter(Boolean).join(" ");
 }
 
 interface RowProps {
-  label: string
-  value: string | number
-  isGreen?: boolean
-  isMuted?: boolean
-  isTotal?: boolean
+  label: string;
+  value: string | number;
+  isGreen?: boolean;
+  isMuted?: boolean;
+  isTotal?: boolean;
 }
 
-function Row({ label, value, isGreen = false, isMuted = false, isTotal = false }: RowProps) {
-  const displayed = typeof value === "number" ? formatRupiah(value) : value
+function Row({
+  label,
+  value,
+  isGreen = false,
+  isMuted = false,
+  isTotal = false,
+}: RowProps) {
+  const displayed = typeof value === "number" ? formatRupiah(value) : value;
   return (
     <div className="flex items-start justify-between gap-2">
       <span
@@ -27,7 +33,7 @@ function Row({ label, value, isGreen = false, isMuted = false, isTotal = false }
           "text-sm leading-snug",
           isTotal && "font-bold text-foreground",
           !isTotal && isMuted && "text-muted-foreground",
-          !isTotal && !isMuted && "text-muted-foreground"
+          !isTotal && !isMuted && "text-muted-foreground",
         )}
       >
         {label}
@@ -36,13 +42,13 @@ function Row({ label, value, isGreen = false, isMuted = false, isTotal = false }
         className={cn(
           "text-sm font-medium text-right shrink-0",
           isGreen && "text-green-600 dark:text-green-400",
-          isTotal && "text-xl font-bold text-red-600 dark:text-red-500"
+          isTotal && "text-xl font-bold text-red-600 dark:text-red-500",
         )}
       >
         {displayed}
       </span>
     </div>
-  )
+  );
 }
 
 export function TaxResultPanel({ result }: TaxResultPanelProps) {
@@ -57,7 +63,6 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
     dendaPkb,
     opsenBerjalan,
     opsenTunggakan,
-    dendaOpsen,
     bulanTerlambat,
     swdklljBerjalan,
     swdklljTunggakan,
@@ -66,11 +71,10 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
     biayaTnkb,
     biayaTembakRu,
     total,
-  } = result
+  } = result;
 
-  const adaTunggakan = tahunTunggakan > 0
-  const adaOpsenTunggakan = opsenTunggakan > 0
-  const terlambat = bulanTerlambat > 0
+  const adaTunggakan = tahunTunggakan > 0;
+  const adaOpsenTunggakan = opsenTunggakan > 0;
 
   return (
     <div className="space-y-3">
@@ -79,7 +83,6 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
       </h3>
 
       <div className="space-y-2">
-
         {/* ── PKB ── */}
         <Row
           label={
@@ -92,20 +95,20 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
 
         {pkbTunggakanPost2025 > 0 && (
           <Row
-            label={`PKB Tunggakan ≥5 Jan 2025 (${tahunTunggakanPost} thn, tarif 1,2%, Diskon ${result.tahunTunggakanPra + result.tahunTunggakanPost > 0 && result.tahunTunggakanPra === 0 ? "" : ""}50%)`}
+            label={`PKB Tunggakan >=2025 (${tahunTunggakanPost} thn, Diskon ${result.tahunTunggakanPra + result.tahunTunggakanPost > 0 && result.tahunTunggakanPra === 0 ? "" : ""}50%)`}
             value={pkbTunggakanPost2025}
           />
         )}
 
         {pkbTunggakanPra2025 > 0 && (
           <Row
-            label={`PKB Tunggakan <5 Jan 2025 (${tahunTunggakanPra} thn, tarif 1,5%, Diskon 50%)`}
+            label={`PKB Tunggakan <2025 (${tahunTunggakanPra} thn, Diskon 50%)`}
             value={pkbTunggakanPra2025}
           />
         )}
 
         <Row
-          label="Denda PKB (Tax Amnesty – Hapus 100%)"
+          label="Denda PKB & Opsen (Hapus 100%)"
           value={formatRupiah(dendaPkb)}
           isGreen
         />
@@ -124,12 +127,13 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
           />
         )}
 
-        {terlambat && dendaOpsen > 0 && (
+        {/* {terlambat && (
           <Row
-            label={`Denda Opsen PKB (${bulanTerlambat} bln × 1%)`}
+            label="Denda Opsen PKB (Tax Amnesty – Hapus 100%)"
             value={dendaOpsen}
+            isGreen
           />
-        )}
+        )} */}
 
         {/* ── SWDKLLJ ── */}
         <Separator className="my-1" />
@@ -172,5 +176,5 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
       <Separator />
       <Row label="Total Bayar" value={total} isTotal />
     </div>
-  )
+  );
 }

@@ -68,7 +68,7 @@ export interface TaxCalculationResult {
   opsenBerjalan: number
   opsenTunggakan: number
 
-  // Denda Opsen PKB (tidak termasuk amnesty, tetap dipungut)
+  // Denda Opsen PKB — selalu 0 (Tax Amnesty)
   dendaOpsen: number
   bulanTerlambat: number
 

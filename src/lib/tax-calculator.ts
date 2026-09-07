@@ -180,16 +180,15 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   const opsenBerjalan = boolOpsenBerjalan ? pkbBerjalan * 0.66 : 0
 
   // -----------------------------------------------------------------------
-  // Denda Opsen PKB
-  // Denda = 1% per bulan × Opsen PKB Berjalan, maks 24 bulan.
-  // Dipungut bila bayar melewati tanggal jatuh tempo berjalan.
-  // Denda PKB sendiri dihapus 100% (Tax Amnesty), tetapi Denda Opsen TIDAK.
+  // Denda PKB & Opsen PKB
+  // Seluruh denda, baik periode berjalan maupun tunggakan, dihapus
+  // melalui Tax Amnesty. Jumlah bulan tetap dihitung untuk denda SWDKLLJ.
   // -----------------------------------------------------------------------
   const bulanTerlambat = Math.min(
     24,
     bulanKalender(berjalanPeriod.start, tanggalBayar)
   )
-  const dendaOpsen = opsenBerjalan * 0.01 * bulanTerlambat
+  const dendaOpsen = 0
 
   // -----------------------------------------------------------------------
   // SWDKLLJ
@@ -243,7 +242,6 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     0 +              // denda PKB → tax amnesty = Rp0
     opsenBerjalan +
     opsenTunggakan +
-    dendaOpsen +
     swdklljBerjalan +
     swdklljTunggakan +
     dendaSwdkllj +

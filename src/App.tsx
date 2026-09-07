@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TaxCalculatorForm } from "@/components/tax-calculator-form";
 import { TaxResultPanel } from "@/components/tax-result-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { TaxCalculationResult } from "@/types/tax";
 
 export default function App() {
@@ -21,9 +22,14 @@ export default function App() {
         </div>
 
         {/* Layout 2/3 + 1/3 */}
-        <div className="flex flex-col lg:flex-row items-start gap-6">
-          {/* Form — 2/3 */}
-          <Card className="w-full lg:w-2/3">
+        <div className="flex flex-col items-start gap-6 lg:flex-row">
+          {/* Form: terpusat tanpa hasil, mengambil 2/3 sisi kiri saat hasil tampil */}
+          <Card
+            className={cn(
+              "w-full transition-transform duration-500 ease-out lg:w-2/3",
+              !result && "lg:translate-x-1/4"
+            )}
+          >
             <CardHeader className="pb-4">
               <CardTitle className="text-base">
                 Data Kendaraan &amp; Pembayaran
@@ -36,7 +42,7 @@ export default function App() {
 
           {/* Hasil — 1/3 */}
           {result && (
-            <Card className="w-full lg:w-1/3 sticky top-6">
+            <Card className="animate-result-panel-in w-full lg:sticky lg:top-6 lg:w-1/3">
               <CardContent className="pt-6">
                 <TaxResultPanel result={result} />
               </CardContent>
