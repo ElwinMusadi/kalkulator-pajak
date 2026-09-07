@@ -1,0 +1,21 @@
+{
+  "routes": [
+    {
+      "routePath": "/api/njkb/:nopol",
+      "mountPath": "/api/njkb",
+      "method": "GET",
+      "module": [
+        "api/njkb/[nopol].ts:onRequestGet"
+      ]
+    },
+    {
+      "routePath": "/api/njkb/:nopol",
+      "mountPath": "/api/njkb",
+      "method": "OPTIONS",
+      "module": [
+        "api/njkb/[nopol].ts:onRequestOptions"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}

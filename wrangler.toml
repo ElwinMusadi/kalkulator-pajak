@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "kalkulator-pajak-db"
-database_id = "GANTI_DENGAN_D1_DATABASE_ID"
+database_id = "2de80ff7-66be-4d45-81e4-7f98e3403c65"
 
 # Untuk mendapatkan database_id:
 #   npx wrangler d1 create kalkulator-pajak-db
