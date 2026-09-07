@@ -1,12 +1,15 @@
 /**
  * scripts/seed-d1.ts
  *
- * Membaca Data Potensi September.xlsx dan menghasilkan seed/vehicles.sql
- * berisi INSERT ... ON CONFLICT DO UPDATE ke tabel vehicle_njkb.
+ * Memproses data-kendaraan/Data Kendaraan New.xlsx lalu menghasilkan file SQL
+ * bertahap yang siap diimpor ke Cloudflare D1. File pertama menghapus seluruh
+ * data lama sehingga hasil import selalu mencerminkan workbook terbaru.
  *
  * Jalankan:
- *   npx tsx scripts/seed-d1.ts
- *   npx wrangler d1 execute kalkulator-pajak-db --file=./seed/vehicles.sql [--remote]
+ *   npm run seed
+ *   Get-ChildItem ./seed/vehicles/*.sql | Sort-Object Name | ForEach-Object {
+ *     npx wrangler d1 execute kalkulator-pajak-db --remote --file=$_.FullName
+ *   }
  */
 
 import * as fs from "fs"
@@ -14,90 +17,66 @@ import * as path from "path"
 import { fileURLToPath } from "url"
 import XLSX from "xlsx"
 
-// ---------------------------------------------------------------------------
-// Konfigurasi path (ESM-compatible __dirname)
-// ---------------------------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const EXCEL_PATH = path.resolve(__dirname, "../Data Potensi September.xlsx")
-const OUTPUT_SQL = path.resolve(__dirname, "../seed/vehicles.sql")
+const EXCEL_PATH = path.resolve(
+  __dirname,
+  "../data-kendaraan/Data Kendaraan New.xlsx"
+)
+const OUTPUT_DIR = path.resolve(__dirname, "../seed/vehicles")
+const ROWS_PER_FILE = 50_000
+const ROWS_PER_INSERT = 500
 
-// ---------------------------------------------------------------------------
-// Fungsi parsing nilai uang: "11.500.000" atau "27,000,000" → 11500000
-// ---------------------------------------------------------------------------
+type ExcelRow = Record<string, unknown>
+
 function parseRupiah(raw: unknown): number {
-  if (raw === null || raw === undefined) return 0
-  // Jika sudah number (Excel number cell)
+  if (raw === null || raw === undefined || raw === "") return 0
   if (typeof raw === "number") return Math.round(raw)
-  const str = String(raw).trim()
-  // Hapus semua karakter bukan digit
-  const cleaned = str.replace(/[^0-9]/g, "")
-  return cleaned === "" ? 0 : parseInt(cleaned, 10)
+  const digits = String(raw).replace(/[^0-9]/g, "")
+  return digits ? Number.parseInt(digits, 10) : 0
 }
 
-// ---------------------------------------------------------------------------
-// Fungsi parsing bobot: "1,050" → 1.05 | "1,000" → 1.0 | 1.05 → 1.05
-// ---------------------------------------------------------------------------
 function parseBobot(raw: unknown): number {
-  if (raw === null || raw === undefined) return 1.0
+  if (raw === null || raw === undefined || raw === "") return 1
   if (typeof raw === "number") {
-    // Excel mungkin menyimpan sebagai 1.05 langsung
     if (raw > 0 && raw <= 3) return raw
-    // Atau sebagai 1050 (ribuan) → normalisasi
-    if (raw >= 1000) return raw / 1000
-    return 1.0
+    return raw >= 1_000 ? raw / 1_000 : 1
   }
-  const str = String(raw).trim()
-  // Format "1,050" atau "1,300" — koma sebagai separator ribuan dalam format id
-  // Deteksi: jika ada koma dan 3 digit setelahnya → separator ribuan → ganti dengan titik
-  const normalized = str.replace(",", ".")
-  const val = parseFloat(normalized)
-  // Nilai bobot seharusnya antara 1.0 - 2.0
-  if (!isNaN(val) && val >= 1 && val <= 3) return val
-  // Fallback: jika > 3 mungkin format ribuan (e.g. 1050 → 1.05)
-  if (!isNaN(val) && val >= 1000) return val / 1000
-  return 1.0
+
+  const value = Number.parseFloat(String(raw).trim().replace(",", "."))
+  if (Number.isNaN(value)) return 1
+  if (value >= 1 && value <= 3) return value
+  return value >= 1_000 ? value / 1_000 : 1
 }
 
-// ---------------------------------------------------------------------------
-// Fungsi normalisasi tanggal ke ISO YYYY-MM-DD
-// ---------------------------------------------------------------------------
 function parseDate(raw: unknown): string | null {
   if (raw === null || raw === undefined || raw === "") return null
 
-  // Excel date serial number
   if (typeof raw === "number") {
-    // XLSX dapat memberikan Date object via sheet_to_json dengan dateNF
     const date = XLSX.SSF.parse_date_code(raw)
-    if (date) {
-      const y = date.y
-      const m = String(date.m).padStart(2, "0")
-      const d = String(date.d).padStart(2, "0")
-      return `${y}-${m}-${d}`
-    }
-    return null
+    if (!date || date.y < 2000 || date.y > 2100) return null
+    return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`
   }
 
-  const str = String(raw).trim()
-  if (str === "" || str === "--") return null
-
-  // Format ISO YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10)
-
-  // Format DD/MM/YYYY atau DD-MM-YYYY
-  const ddmmyyyy = str.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/)
-  if (ddmmyyyy) {
-    const [, d, m, y] = ddmmyyyy
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
+  const value = String(raw).trim()
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) {
+    const [, year, month, day] = iso
+    const yearNumber = Number(year)
+    return yearNumber >= 2000 && yearNumber <= 2100 ? `${year}-${month}-${day}` : null
   }
 
-  return null
+  const match = value.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/)
+  if (!match) return null
+
+  const [, day, month, year] = match
+  const yearNumber = Number(year)
+  return yearNumber >= 2000 && yearNumber <= 2100
+    ? `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+    : null
 }
 
-// ---------------------------------------------------------------------------
-// Normalisasi Nopol: uppercase, hapus spasi dan karakter non-alfanumerik
-// ---------------------------------------------------------------------------
 function normalizeNopol(raw: unknown): string {
   return String(raw ?? "")
     .toUpperCase()
@@ -105,135 +84,187 @@ function normalizeNopol(raw: unknown): string {
     .replace(/[^A-Z0-9]/g, "")
 }
 
-// ---------------------------------------------------------------------------
-// Escape string untuk SQL
-// ---------------------------------------------------------------------------
-function sqlStr(val: string | null | undefined): string {
-  if (val === null || val === undefined) return "NULL"
-  return `'${String(val).replace(/'/g, "''")}'`
+function sqlString(value: string | null): string {
+  return value === null ? "NULL" : `'${value.replace(/'/g, "''")}'`
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-function main() {
-  if (!fs.existsSync(EXCEL_PATH)) {
-    console.error(`❌ File tidak ditemukan: ${EXCEL_PATH}`)
-    process.exit(1)
+function rowToValues(row: ExcelRow, headers: Record<string, string>): string | null {
+  const nopol = normalizeNopol(row[headers.nopol])
+  const njkb = parseRupiah(row[headers.njkb])
+
+  if (!nopol || njkb <= 0) return null
+
+  const nama = String(row[headers.nama] ?? "").trim() || null
+  const jenis = String(row[headers.jenis] ?? "").trim() || null
+  const jatuhTempoStnk = parseDate(row[headers.jatuhTempoStnk])
+  const jatuhTempoPajak = parseDate(row[headers.jatuhTempoPajak])
+  const njub = parseRupiah(row[headers.njub])
+  const bobot = parseBobot(row[headers.bobot])
+
+  return `(${sqlString(nopol)}, ${sqlString(nama)}, ${sqlString(jenis)}, ${sqlString(jatuhTempoStnk)}, ${sqlString(jatuhTempoPajak)}, ${njkb}, ${njub}, ${bobot})`
+}
+
+function findHeaders(firstRow: ExcelRow): Record<string, string> {
+  const normalized = new Map(
+    Object.keys(firstRow).map((key) => [key.trim().toLowerCase(), key])
+  )
+
+  function requireHeader(...candidates: string[]): string {
+    for (const candidate of candidates) {
+      const found = normalized.get(candidate.toLowerCase())
+      if (found) return found
+    }
+    throw new Error(`Header Excel tidak ditemukan: ${candidates.join(" / ")}`)
   }
 
-  console.log(`📂 Membaca: ${EXCEL_PATH}`)
-  const workbook = XLSX.readFile(EXCEL_PATH, { cellDates: false, raw: true })
+  return {
+    nopol: requireHeader("nopol", "nomor polisi", "no. polisi"),
+    nama: requireHeader("nama"),
+    jenis: requireHeader("jenis"),
+    jatuhTempoStnk: requireHeader("jt_stnk", "sd stnk"),
+    jatuhTempoPajak: requireHeader("jt_pajak", "sd notice"),
+    njkb: requireHeader("nilai_jual", "njkb"),
+    njub: requireHeader("njub"),
+    bobot: requireHeader("bobot"),
+  }
+}
 
-  // Cari sheet "Data Potensi" atau gunakan sheet pertama
-  const targetSheet =
-    workbook.SheetNames.find((n) =>
-      n.toLowerCase().includes("data potensi")
-    ) ?? workbook.SheetNames[0]
+function createInsert(values: string[]): string {
+  return `INSERT INTO vehicle_njkb (
+  nopol, nama, jenis, jatuh_tempo_stnk, jatuh_tempo_pajak, njkb, njub, bobot
+) VALUES
+${values.join(",\n")}
+ON CONFLICT(nopol) DO UPDATE SET
+  nama = excluded.nama,
+  jenis = excluded.jenis,
+  jatuh_tempo_stnk = excluded.jatuh_tempo_stnk,
+  jatuh_tempo_pajak = excluded.jatuh_tempo_pajak,
+  njkb = excluded.njkb,
+  njub = excluded.njub,
+  bobot = excluded.bobot,
+  updated_at = CURRENT_TIMESTAMP;\n\n`
+}
 
-  console.log(`📋 Menggunakan sheet: "${targetSheet}"`)
-  const worksheet = workbook.Sheets[targetSheet]
+function ensureCleanOutputDirectory(): void {
+  fs.rmSync(OUTPUT_DIR, { recursive: true, force: true })
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true })
+}
 
-  // Konversi ke JSON — header pada baris pertama
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+function main(): void {
+  if (!fs.existsSync(EXCEL_PATH)) {
+    throw new Error(`File tidak ditemukan: ${EXCEL_PATH}`)
+  }
+
+  console.log(`Membaca workbook: ${EXCEL_PATH}`)
+  const workbook = XLSX.readFile(EXCEL_PATH, { raw: true })
+  const sheetName = workbook.SheetNames[0]
+  const worksheet = workbook.Sheets[sheetName]
+  const range = XLSX.utils.decode_range(worksheet["!ref"] ?? "A1")
+  const totalRows = range.e.r
+
+  // Ambil satu baris data untuk memvalidasi header yang sebenarnya.
+  const firstDataRow = XLSX.utils.sheet_to_json<ExcelRow>(worksheet, {
+    range: 0,
     raw: true,
     defval: null,
-  })
+  })[0]
+  if (!firstDataRow) throw new Error("Workbook tidak memiliki data kendaraan.")
 
-  console.log(`📊 Total baris: ${rows.length}`)
+  const headers = findHeaders(firstDataRow)
+  const excelHeaders = Object.keys(firstDataRow)
+  console.log(`Sheet: ${sheetName}; baris data: ${totalRows.toLocaleString("id-ID")}`)
+  console.log(`Kolom terdeteksi: ${JSON.stringify(headers)}`)
 
-  // Mapping header — case-insensitive, trim spasi
-  function findKey(row: Record<string, unknown>, candidates: string[]): string | undefined {
-    const keys = Object.keys(row)
-    for (const candidate of candidates) {
-      const found = keys.find(
-        (k) => k.trim().toLowerCase() === candidate.toLowerCase()
-      )
-      if (found !== undefined) return found
-    }
-    return undefined
+  ensureCleanOutputDirectory()
+
+  let fileIndex = 1
+  let fileRows = 0
+  let validRows = 0
+  let skippedRows = 0
+  let currentOutput = ""
+  let values: string[] = []
+
+  const openFile = () => {
+    const fileName = `${String(fileIndex).padStart(4, "0")}.sql`
+    currentOutput = path.join(OUTPUT_DIR, fileName)
+    const prefix = `-- Auto-generated from Data Kendaraan New.xlsx\n-- File ${fileIndex}; jalankan berurutan.\n${fileIndex === 1 ? "\n-- Menimpa seluruh dataset sebelumnya.\nDELETE FROM vehicle_njkb;\n\n" : ""}`
+    fs.writeFileSync(currentOutput, prefix)
+    fileRows = 0
   }
 
-  const statements: string[] = []
-  let validCount = 0
-  let skipCount = 0
-  const seenNopol = new Set<string>()
-
-  for (const row of rows) {
-    const nopolKey = findKey(row, ["nopol", "nomor polisi", "no. polisi"])
-    const namaKey = findKey(row, ["nama"])
-    const jenisKey = findKey(row, ["jenis"])
-    const sdStnkKey = findKey(row, ["sd stnk"])
-    const sdNoticeKey = findKey(row, ["sd notice"])
-    const njkbKey = findKey(row, ["njkb"])
-    const njubKey = findKey(row, ["njub"])
-    const bobotKey = findKey(row, ["bobot"])
-
-    if (!nopolKey || !njkbKey) {
-      skipCount++
-      continue
-    }
-
-    const nopol = normalizeNopol(row[nopolKey])
-    if (!nopol) {
-      skipCount++
-      continue
-    }
-
-    const njkb = parseRupiah(njkbKey ? row[njkbKey] : null)
-    if (njkb <= 0) {
-      skipCount++
-      continue
-    }
-
-    // Hanya simpan satu baris per Nopol (duplikasi di Excel → UPSERT akan overwrite)
-    // Tapi kita tandai yang pertama dijumpai agar log lebih informatif
-    const isDuplicate = seenNopol.has(nopol)
-    if (!isDuplicate) seenNopol.add(nopol)
-
-    const nama = namaKey ? String(row[namaKey] ?? "").trim() || null : null
-    const jenis = jenisKey ? String(row[jenisKey] ?? "").trim() || null : null
-    const stnk = sdStnkKey ? parseDate(row[sdStnkKey]) : null
-    const notice = sdNoticeKey ? parseDate(row[sdNoticeKey]) : null
-    const njub = njubKey ? parseRupiah(row[njubKey]) : 0
-    const bobot = bobotKey ? parseBobot(row[bobotKey]) : 1.0
-
-    const sql = `INSERT INTO vehicle_njkb (nopol, nama, jenis, jatuh_tempo_stnk, jatuh_tempo_pajak, njkb, njub, bobot)
-VALUES (${sqlStr(nopol)}, ${sqlStr(nama)}, ${sqlStr(jenis)}, ${sqlStr(stnk)}, ${sqlStr(notice)}, ${njkb}, ${njub}, ${bobot})
-ON CONFLICT(nopol) DO UPDATE SET
-  nama              = excluded.nama,
-  jenis             = excluded.jenis,
-  jatuh_tempo_stnk  = excluded.jatuh_tempo_stnk,
-  jatuh_tempo_pajak = excluded.jatuh_tempo_pajak,
-  njkb              = excluded.njkb,
-  njub              = excluded.njub,
-  bobot             = excluded.bobot,
-  updated_at        = CURRENT_TIMESTAMP;`
-
-    statements.push(sql)
-    validCount++
+  const flushInsert = () => {
+    if (!values.length) return
+    fs.appendFileSync(currentOutput, createInsert(values))
+    values = []
   }
 
-  // Tulis ke file SQL
-  const outputDir = path.dirname(OUTPUT_SQL)
-  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
+  const closeFile = () => {
+    flushInsert()
+    if (fileRows > 0) {
+      console.log(`  ${path.basename(currentOutput)}: ${fileRows.toLocaleString("id-ID")} data`)
+      fileIndex++
+    } else {
+      fs.rmSync(currentOutput, { force: true })
+    }
+  }
 
-  const header = `-- Auto-generated by scripts/seed-d1.ts
--- Sumber: Data Potensi September.xlsx
--- Total: ${validCount} kendaraan unik (${seenNopol.size} nopol)
--- Tanggal: ${new Date().toISOString()}
+  openFile()
 
-`
-  fs.writeFileSync(OUTPUT_SQL, header + statements.join("\n\n") + "\n")
+  // Baca per blok supaya workbook besar tidak membuat array 955 ribu objek tambahan.
+  const READ_CHUNK_SIZE = 10_000
+  for (let startRow = 1; startRow <= range.e.r; startRow += READ_CHUNK_SIZE) {
+    const endRow = Math.min(startRow + READ_CHUNK_SIZE - 1, range.e.r)
+    const rawChunk = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      range: { s: { r: startRow, c: range.s.c }, e: { r: endRow, c: range.e.c } },
+      raw: true,
+      defval: null,
+      blankrows: false,
+    })
+    const chunk = rawChunk.map((cells) =>
+      Object.fromEntries(excelHeaders.map((header, index) => [header, cells[index] ?? null]))
+    )
 
-  console.log(`\n✅ Selesai!`)
-  console.log(`   Valid     : ${validCount} baris`)
-  console.log(`   Dilewati  : ${skipCount} baris`)
-  console.log(`   Nopol unik: ${seenNopol.size}`)
-  console.log(`   Output    : ${OUTPUT_SQL}`)
-  console.log(`\nLangkah selanjutnya:`)
-  console.log(`  npx wrangler d1 execute kalkulator-pajak-db --file=./schema.sql --remote`)
-  console.log(`  npx wrangler d1 execute kalkulator-pajak-db --file=./seed/vehicles.sql --remote`)
+    for (const row of chunk) {
+      const value = rowToValues(row, headers)
+      if (!value) {
+        skippedRows++
+        continue
+      }
+
+      values.push(value)
+      fileRows++
+      validRows++
+
+      if (values.length === ROWS_PER_INSERT) flushInsert()
+      if (fileRows === ROWS_PER_FILE) {
+        closeFile()
+        openFile()
+      }
+    }
+  }
+
+  closeFile()
+
+  const manifest = {
+    source: path.relative(path.resolve(__dirname, ".."), EXCEL_PATH),
+    generatedAt: new Date().toISOString(),
+    validRows,
+    skippedRows,
+    sqlFiles: fileIndex - 1,
+    importCommand: "Get-ChildItem ./seed/vehicles/*.sql | Sort-Object Name | ForEach-Object { npx wrangler d1 execute kalkulator-pajak-db --remote --file=$_.FullName }",
+  }
+  fs.writeFileSync(
+    path.join(OUTPUT_DIR, "manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`
+  )
+
+  console.log("\nSeed SQL selesai dibuat.")
+  console.log(`  Valid: ${validRows.toLocaleString("id-ID")}`)
+  console.log(`  Dilewati: ${skippedRows.toLocaleString("id-ID")}`)
+  console.log(`  File SQL: ${manifest.sqlFiles}`)
+  console.log("\nImport remote D1:")
+  console.log(manifest.importCommand)
 }
 
 main()

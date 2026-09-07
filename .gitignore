@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+/data-kendaraan
+/seed/vehicles/
+/seed/vehicles.sql
