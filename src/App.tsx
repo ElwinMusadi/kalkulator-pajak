@@ -27,7 +27,7 @@ export default function App() {
           <Card
             className={cn(
               "w-full transition-transform duration-500 ease-out lg:w-2/3",
-              !result && "lg:translate-x-1/4"
+              !result && "lg:translate-x-1/4",
             )}
           >
             <CardHeader className="pb-4">
@@ -51,8 +51,11 @@ export default function App() {
         </div>
       </div>
 
-      <footer className="mt-16 lg:mt-38 border-t pt-8 text-center text-sm text-muted-foreground">
-        <p>© 2026 Elwin Musadi Bessiesura. Hak cipta dilindungi.</p>
+      <footer className="mt-12 lg:mt-20 text-center text-sm text-muted-foreground">
+        <p>
+          © 2026 Elwin Musadi Bessiesura • UPT Pendapatan Daerah Wilayah Kota
+          Kupang.
+        </p>
       </footer>
     </div>
   );

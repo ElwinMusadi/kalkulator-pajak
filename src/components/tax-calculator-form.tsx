@@ -70,6 +70,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [jatuhTempoStnk, setJatuhTempoStnk] = useState<Date | undefined>(undefined)
   const [tanggalBayar, setTanggalBayar] = useState<Date | undefined>(() => new Date())
   const [isDomisiliGempa, setIsDomisiliGempa] = useState(false)
+  const [isMutasiMasuk, setIsMutasiMasuk] = useState(false)
   const [isTembakRu, setIsTembakRu] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -131,6 +132,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       jatuhTempoStnk,
       tanggalBayar,
       isDomisiliGempa,
+      isMutasiMasuk,
       isTembakRu,
     })
 
@@ -306,6 +308,30 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             Domisili Wilayah Gempa{" "}
             <span className="text-muted-foreground">(Diskon Tunggakan 75%)</span>
           </Label>
+        </div>
+
+        {/* Switch Diskon Mutasi Masuk */}
+        <div className="md:col-span-2 lg:col-span-4">
+          <label
+            className={cn(
+              "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors",
+              isMutasiMasuk
+                ? "border-primary/30 bg-primary/5"
+                : "border-border bg-muted/30 hover:bg-muted/50"
+            )}
+          >
+            <Switch
+              id="is-mutasi-masuk"
+              checked={isMutasiMasuk}
+              onCheckedChange={setIsMutasiMasuk}
+            />
+            <div>
+              <p className="text-sm font-medium">Diskon PKB Mutasi Masuk Luar Daerah</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Pengurangan PKB berjalan 50%. Menggantikan diskon pembayaran awal.
+              </p>
+            </div>
+          </label>
         </div>
 
         {/* Switch Tembak RU */}

@@ -55,6 +55,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
   const {
     pkbBerjalan,
     pkbDiscount,
+    isMutasiMasuk,
     pkbTunggakanPra2025,
     pkbTunggakanPost2025,
     tahunTunggakanPra,
@@ -87,7 +88,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
         <Row
           label={
             pkbDiscount > 0
-              ? `PKB Berjalan (Diskon ${pkbDiscount * 100}%)`
+              ? `PKB Berjalan (${isMutasiMasuk ? "Diskon Mutasi Masuk" : "Diskon"} ${pkbDiscount * 100}%)`
               : "PKB Berjalan"
           }
           value={pkbBerjalan}

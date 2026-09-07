@@ -96,6 +96,7 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     jatuhTempoStnk,
     tanggalBayar,
     isDomisiliGempa,
+    isMutasiMasuk = false,
     isTembakRu,
   } = input
 
@@ -161,8 +162,10 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
       (1000 * 60 * 60 * 24)
   )
 
-  let pkbDiscount = 0
-  if (!adaTunggakan && hariMenujuJT >= 0) {
+  // Mutasi Masuk Luar Daerah: diskon PKB berjalan 50% sesuai Pergub.
+  // Diskon ini menggantikan diskon pembayaran awal 10%/15%/20%.
+  let pkbDiscount = isMutasiMasuk ? 0.5 : 0
+  if (!isMutasiMasuk && !adaTunggakan && hariMenujuJT >= 0) {
     if (isMotor) {
       if (hariMenujuJT <= 30) pkbDiscount = 0.1
       else if (hariMenujuJT <= 60) pkbDiscount = 0.15
@@ -252,6 +255,7 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   return {
     pkbBerjalan,
     pkbDiscount,
+    isMutasiMasuk,
     pkbTunggakanPra2025,
     pkbTunggakanPost2025,
     tahunTunggakanPra,

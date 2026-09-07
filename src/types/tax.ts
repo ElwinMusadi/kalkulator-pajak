@@ -47,6 +47,7 @@ export interface TaxCalculatorInput {
   jatuhTempoStnk: Date    // SD STNK — tanggal berakhir STNK
   tanggalBayar: Date
   isDomisiliGempa: boolean
+  isMutasiMasuk?: boolean // Pengurangan PKB berjalan 50% untuk Mutasi Masuk Luar Daerah
   isTembakRu: boolean
 }
 
@@ -54,7 +55,8 @@ export interface TaxCalculatorInput {
 export interface TaxCalculationResult {
   // PKB
   pkbBerjalan: number
-  pkbDiscount: number              // Persentase diskon PKB berjalan (0–0.2)
+  pkbDiscount: number              // Persentase diskon PKB berjalan (0–0.5)
+  isMutasiMasuk: boolean
   pkbTunggakanPra2025: number      // PKB tunggakan dengan tarif 1,5% (sebelum 5 Jan 2025)
   pkbTunggakanPost2025: number     // PKB tunggakan dengan tarif 1,2% (mulai 5 Jan 2025)
   tahunTunggakanPra: number        // Jumlah tahun tunggakan pra-cutoff

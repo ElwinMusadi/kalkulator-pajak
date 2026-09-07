@@ -245,4 +245,29 @@ const innoBase: Omit<TaxCalculatorInput, "jatuhTempoPajak" | "jatuhTempoStnk"> =
   pass("NJUB – masuk dasar pengenaan")
 }
 
+// ---------------------------------------------------------------------------
+// Mutasi Masuk Luar Daerah: diskon PKB berjalan 50%.
+// Diskon ini menggantikan diskon pembayaran awal.
+// ---------------------------------------------------------------------------
+{
+  const r = calculateTax({
+    njkb: 100_000_000,
+    njub: 0,
+    bobot: 1.05,
+    jenisKendaraan: "MINIBUS",
+    jatuhTempoPajak: new Date("2026-12-01T00:00:00"),
+    jatuhTempoStnk: new Date("2027-12-01T00:00:00"),
+    tanggalBayar: new Date("2026-09-03T00:00:00"),
+    isDomisiliGempa: false,
+    isMutasiMasuk: true,
+    isTembakRu: false,
+  })
+  // (100.000.000 × 1,05 × 82,5%) × 1,2% × 50% = 519.750
+  assert.equal(r.pkbDiscount, 0.5, "Mutasi - diskon harus 50%")
+  assert.equal(r.isMutasiMasuk, true, "Mutasi - flag tersimpan di hasil")
+  assert.equal(r.pkbBerjalan, 519_750, "Mutasi - PKB berjalan diskon 50%")
+  assert.equal(r.opsenBerjalan, 343_035, "Mutasi - Opsen dari PKB setelah diskon")
+  pass("Mutasi Masuk – diskon PKB berjalan 50%")
+}
+
 console.log("\nSemua regression test: PASS ✓\n")
