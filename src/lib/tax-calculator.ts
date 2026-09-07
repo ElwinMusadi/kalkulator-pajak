@@ -57,16 +57,6 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   const berjalanStart = new Date(jatuhTempoPajak)
   berjalanStart.setFullYear(tahunBayar)
 
-  // SWDKLLJ tetap memakai siklus anniversary terakhir yang sudah dimulai.
-  // Pemisahan ini menjaga tabel denda SWDKLLJ dari rumus sebelumnya saat
-  // tunggakan dihitung menggunakan tahun pajak kalender.
-  let periodeSwdklljBerjalan = new Date(jatuhTempoPajak)
-  while (true) {
-    const periodeBerikutnya = new Date(periodeSwdklljBerjalan)
-    periodeBerikutnya.setFullYear(periodeBerikutnya.getFullYear() + 1)
-    if (periodeBerikutnya > tanggalBayar) break
-    periodeSwdklljBerjalan = periodeBerikutnya
-  }
 
   // -----------------------------------------------------------------------
   // PKB & Opsen Tunggakan
@@ -131,26 +121,9 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   const swdklljBerjalan = swdklljBase
   const swdklljTunggakan = tunggakanYears.length * swdklljBase
 
-  // Denda SWDKLLJ — berdasarkan keterlambatan pada siklus anniversary.
-  const delayDays = Math.floor(
-    (tanggalBayar.getTime() - periodeSwdklljBerjalan.getTime()) /
-      (1000 * 60 * 60 * 24)
-  )
-
-  let dendaSwdkllj = 0
-  if (delayDays > 0) {
-    const delayMonths = Math.ceil(delayDays / 30)
-    if (isMotor) {
-      if (delayMonths <= 3) dendaSwdkllj = 8_000
-      else if (delayMonths <= 6) dendaSwdkllj = 16_000
-      else if (delayMonths <= 9) dendaSwdkllj = 24_000
-      else dendaSwdkllj = 32_000
-    } else {
-      if (delayMonths <= 3) dendaSwdkllj = 35_000
-      else if (delayMonths <= 6) dendaSwdkllj = 70_000
-      else dendaSwdkllj = 100_000
-    }
-  }
+  // Tax Amnesty Pergub 54/2026 menghapus seluruh denda SWDKLLJ atas
+  // tunggakan. Pokok SWDKLLJ berjalan dan tunggakan tetap ditagihkan.
+  const dendaSwdkllj = 0
 
   // -----------------------------------------------------------------------
   // PNBP STNK & TNKB

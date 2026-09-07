@@ -22,5 +22,8 @@ assert.equal(result.pkbTunggakan, 1_360_800)
 assert.equal(result.pkbBerjalan, 1_209_600)
 assert.equal(result.opsenBerjalan, 798_336)
 assert.equal(result.opsenTunggakan, 399_168)
+// Seluruh denda SWDKLLJ tunggakan dibebaskan melalui Tax Amnesty.
+assert.equal(result.dendaSwdkllj, 0)
+assert.equal(result.total, 4_496_904)
 
 console.log("Tax calculator regression: PASS")

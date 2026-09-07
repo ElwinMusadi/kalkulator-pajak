@@ -103,12 +103,11 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
             value={formatRupiah(swdklljTunggakan)}
           />
         )}
-        {dendaSwdkllj > 0 && (
-          <ResultRow
-            label="Denda SWDKLLJ"
-            value={formatRupiah(dendaSwdkllj)}
-          />
-        )}
+        <ResultRow
+          label="Denda SWDKLLJ (Tax Amnesty)"
+          value={formatRupiah(dendaSwdkllj)}
+          isGreen
+        />
 
         {/* PNBP */}
         {(biayaStnk > 0 || biayaTnkb > 0) && (
