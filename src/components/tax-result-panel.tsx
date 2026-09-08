@@ -100,7 +100,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
 
         {pkbTunggakanPost2025 > 0 && (
           <Row
-            label={`PKB Tunggakan >=2025 (${tahunTunggakanPost} thn, Diskon ${result.tahunTunggakanPra + result.tahunTunggakanPost > 0 && result.tahunTunggakanPra === 0 ? "" : ""}50%)`}
+            label={`PKB Tunggakan ≥2025 (${tahunTunggakanPost} thn, Diskon ${result.tahunTunggakanPra + result.tahunTunggakanPost > 0 && result.tahunTunggakanPra === 0 ? "" : ""}50%)`}
             value={pkbTunggakanPost2025}
           />
         )}
@@ -113,7 +113,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
         )}
 
         <Row
-          label="Denda PKB & Opsen (Hapus 100%)"
+          label="Denda PKB & Opsen (Diskon 100%)"
           value={formatRupiah(dendaPkb)}
           isGreen
         />
@@ -127,7 +127,7 @@ export function TaxResultPanel({ result }: TaxResultPanelProps) {
 
         {adaOpsenTunggakan && (
           <Row
-            label={`Opsen PKB Tunggakan (${tahunTunggakanPost} thn ≥5 Jan 2025)`}
+            label={`Opsen PKB Tunggakan (${tahunTunggakanPost} thn ≥2025)`}
             value={opsenTunggakan}
           />
         )}

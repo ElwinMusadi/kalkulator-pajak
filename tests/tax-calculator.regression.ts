@@ -270,4 +270,31 @@ const innoBase: Omit<TaxCalculatorInput, "jatuhTempoPajak" | "jatuhTempoStnk"> =
   pass("Mutasi Masuk – diskon PKB berjalan 50%")
 }
 
+// ---------------------------------------------------------------------------
+// Tembak RU/STNK: biaya dan total berubah sesuai kategori kendaraan
+// ---------------------------------------------------------------------------
+{
+  const input: TaxCalculatorInput = {
+    njkb: 10_000_000,
+    njub: 0,
+    bobot: 1,
+    jenisKendaraan: "SEPEDA MOTOR",
+    jatuhTempoPajak: new Date("2026-09-03T00:00:00"),
+    jatuhTempoStnk: new Date("2027-09-03T00:00:00"),
+    tanggalBayar: new Date("2026-09-03T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+  }
+  const tanpaTembakRu = calculateTax(input)
+  const denganTembakRu = calculateTax({ ...input, isTembakRu: true })
+
+  assert.equal(denganTembakRu.biayaTembakRu, 150_000, "Tembak RU motor - biaya")
+  assert.equal(
+    denganTembakRu.total - tanpaTembakRu.total,
+    150_000,
+    "Tembak RU motor - total bertambah sesuai biaya"
+  )
+  pass("Tembak RU/STNK – biaya dan total motor")
+}
+
 console.log("\nSemua regression test: PASS ✓\n")

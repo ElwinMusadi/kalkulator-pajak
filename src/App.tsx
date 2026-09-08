@@ -4,6 +4,7 @@ import { TaxResultPanel } from "@/components/tax-result-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { TaxCalculationResult } from "@/types/tax";
+import { Separator } from "@radix-ui/react-select";
 
 export default function App() {
   const [result, setResult] = useState<TaxCalculationResult | null>(null);
@@ -16,7 +17,7 @@ export default function App() {
           <h1 className="text-3xl font-black! tracking-normal text-primary">
             • KALKULATOR PAJAK •
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm mt-1 tracking-wide">
             Berdasarkan Pergub NTT No. 54 Tahun 2026 — UPTD Kota Kupang
           </p>
         </div>
@@ -31,7 +32,7 @@ export default function App() {
             )}
           >
             <CardHeader className="pb-4">
-              <CardTitle className="text-base">
+              <CardTitle className="text-base border-b pb-2">
                 Data Kendaraan &amp; Pembayaran
               </CardTitle>
             </CardHeader>
@@ -51,9 +52,9 @@ export default function App() {
         </div>
       </div>
 
-      <footer className="mt-8 md:mt-14 text-center text-[13px] md:text-sm text-muted-foreground">
+      <footer className="mt-8 md:mt-12 text-center text-[13px] md:text-sm text-muted-foreground">
         <p>
-          © 2026 Elwin Musadi Bessiesura • UPT Pendapatan Daerah Wilayah Kota
+          © 2026 • Elwin Musadi Bessiesura • UPT Pendapatan Daerah Wilayah Kota
           Kupang.
         </p>
       </footer>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { parseISO } from "date-fns";
 import { CheckCircle2, HelpCircle, Loader2, XCircle } from "lucide-react";
 import { DatePickerField } from "@/components/date-picker-field";
@@ -23,14 +23,14 @@ import type { JenisKendaraan, TaxCalculationResult } from "@/types/tax";
 import { cn } from "@/lib/utils";
 
 const JENIS_OPTIONS: { value: JenisKendaraan; label: string }[] = [
-  { value: "SEPEDA MOTOR", label: "Sepeda Motor (Bobot 1.0)" },
-  { value: "MINIBUS", label: "Minibus (Bobot 1.05)" },
-  { value: "PICK UP", label: "Pick Up (Bobot 1.085)" },
-  { value: "SEDAN", label: "Sedan (Bobot 1.025)" },
-  { value: "JEEP", label: "Jeep (Bobot 1.05)" },
-  { value: "LIGHT TRUCK", label: "Light Truck (Bobot 1.3)" },
-  { value: "MICROBUS", label: "Microbus (Bobot 1.085)" },
-  { value: "TRUCK", label: "Truck (Bobot 1.4)" },
+  { value: "SEPEDA MOTOR", label: "Sepeda Motor (1.0)" },
+  { value: "MINIBUS", label: "Minibus (1.05)" },
+  { value: "PICK UP", label: "Pick Up (1.085)" },
+  { value: "SEDAN", label: "Sedan (1.025)" },
+  { value: "JEEP", label: "Jeep (1.05)" },
+  { value: "LIGHT TRUCK", label: "Light Truck (1.3)" },
+  { value: "MICROBUS", label: "Microbus (1.085)" },
+  { value: "TRUCK", label: "Truck (1.4)" },
 ];
 
 /** Petakan jenis dari D1 (uppercase) ke JenisKendaraan yang valid */
@@ -76,6 +76,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
   const [isTembakRu, setIsTembakRu] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const hasCalculated = useRef(false);
 
   const { vehicleData, status: lookupStatus } = useNopolLookup(nopol);
 
@@ -100,6 +101,33 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const effectiveBobot =
     bobot ?? (jenisKendaraan ? BOBOT_MAP[jenisKendaraan] : 1.0);
 
+  function getCalculatorInput() {
+    const njkbNum = parseFloat(njkb);
+    if (!njkb || isNaN(njkbNum) || njkbNum <= 0) return null;
+    if (!jenisKendaraan || !jatuhTempoPajak || !jatuhTempoStnk || !tanggalBayar)
+      return null;
+
+    return {
+      njkb: njkbNum,
+      njub: parseFloat(njub) || 0,
+      bobot: effectiveBobot,
+      jenisKendaraan,
+      jatuhTempoPajak,
+      jatuhTempoStnk,
+      tanggalBayar,
+      isDomisiliGempa,
+      isMutasiMasuk,
+      isTembakRu,
+    };
+  }
+
+  useEffect(() => {
+    if (!hasCalculated.current) return;
+
+    const input = getCalculatorInput();
+    if (input) onResult(calculateTax(input));
+  }, [isMutasiMasuk, isTembakRu]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setValidationError(null);
@@ -109,7 +137,6 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       setValidationError("NJKB harus diisi dengan nilai lebih dari 0.");
       return;
     }
-    const njubNum = parseFloat(njub) || 0;
     if (!jenisKendaraan) {
       setValidationError("Jenis kendaraan harus dipilih.");
       return;
@@ -127,20 +154,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       return;
     }
 
-    const result = calculateTax({
-      njkb: njkbNum,
-      njub: njubNum,
-      bobot: effectiveBobot,
-      jenisKendaraan,
-      jatuhTempoPajak,
-      jatuhTempoStnk,
-      tanggalBayar,
-      isDomisiliGempa,
-      isMutasiMasuk,
-      isTembakRu,
-    });
+    const input = getCalculatorInput();
+    if (!input) return;
 
-    onResult(result);
+    hasCalculated.current = true;
+    onResult(calculateTax(input));
   }
 
   // Status indicator Nopol
@@ -170,11 +188,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               value={nopol}
               onChange={(e) => {
                 setNopol(e.target.value.toUpperCase());
+                hasCalculated.current = false;
                 // Reset auto-fill jika user ganti nopol
                 onResult(null);
               }}
               placeholder="Contoh: DH6096KS"
-              className="uppercase pr-8"
+              className="uppercase pr-8 font-semibold"
               maxLength={12}
             />
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
@@ -334,7 +353,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               <p className="text-sm font-medium">
                 Diskon PKB Mutasi Masuk Luar Daerah
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-px">
                 Pengurangan PKB berjalan 50%. Menggantikan diskon pembayaran
                 awal.
               </p>
@@ -359,7 +378,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             />
             <div>
               <p className="text-sm font-medium">Tambah Biaya Tembak RU/STNK</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-px">
                 Motor: Rp150.000 &middot; Mobil: Rp250.000
               </p>
             </div>
