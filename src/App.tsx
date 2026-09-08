@@ -4,7 +4,6 @@ import { TaxResultPanel } from "@/components/tax-result-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { TaxCalculationResult } from "@/types/tax";
-import { Separator } from "@radix-ui/react-select";
 
 export default function App() {
   const [result, setResult] = useState<TaxCalculationResult | null>(null);
