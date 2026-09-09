@@ -36,6 +36,13 @@
   --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
   --sidebar-border: oklch(0.923 0.003 48.717);
   --sidebar-ring: oklch(0.709 0.01 56.259);
+  /* Token status semantik — turunan keluarga hue Vega */
+  --success: oklch(0.527 0.117 163.225);
+  --success-foreground: oklch(0.985 0.014 180.72);
+  --warning: oklch(0.646 0.138 75.834);
+  --warning-foreground: oklch(0.147 0.004 49.25);
+  --info: oklch(0.511 0.096 186.391);
+  --info-foreground: oklch(0.984 0.014 180.72);
 }
 
 .dark {
@@ -70,6 +77,12 @@
   --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.553 0.013 58.071);
+  --success: oklch(0.696 0.17 162.48);
+  --success-foreground: oklch(0.147 0.004 49.25);
+  --warning: oklch(0.769 0.155 84.429);
+  --warning-foreground: oklch(0.147 0.004 49.25);
+  --info: oklch(0.704 0.14 182.503);
+  --info-foreground: oklch(0.147 0.004 49.25);
 }
 
 @theme inline {
@@ -108,6 +121,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
@@ -130,6 +149,19 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: "Manrope", system-ui, sans-serif;
+  line-height: 1.55;
+}
+
+.numeric {
+  font-family: "Inter", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.app-background {
+  background:
+    radial-gradient(circle at 10% 0%, color-mix(in oklch, var(--primary) 8%, transparent) 0, transparent 28rem),
+    radial-gradient(circle at 92% 16%, color-mix(in oklch, var(--primary) 5%, transparent) 0, transparent 24rem),
+    var(--background);
 }
 
 @keyframes result-panel-in {
@@ -145,11 +177,97 @@ body {
 }
 
 .animate-result-panel-in {
-  animation: result-panel-in 500ms ease-out both;
+  animation: result-panel-in 240ms ease-out both;
+}
+
+/* ── Utility token classes (Tailwind v4 custom token bridge) ── */
+
+.text-success {
+  color: var(--success);
+}
+
+.text-warning {
+  color: var(--warning);
+}
+
+.bg-success-subtle {
+  background-color: color-mix(in oklch, var(--success) 10%, transparent);
+}
+
+.border-success-subtle {
+  border-color: color-mix(in oklch, var(--success) 30%, transparent);
+}
+
+.step-badge {
+  background-color: color-mix(in oklch, var(--primary) 10%, transparent);
+  border-color: color-mix(in oklch, var(--primary) 28%, transparent);
+  color: var(--primary);
+}
+
+.amnesty-badge {
+  background-color: color-mix(in oklch, var(--success) 9%, transparent);
+  border-color: color-mix(in oklch, var(--success) 28%, transparent);
+}
+
+.facility-active {
+  background-color: color-mix(in oklch, var(--primary) 6%, transparent);
+  border-color: color-mix(in oklch, var(--primary) 38%, transparent);
+}
+
+.total-block {
+  background-color: color-mix(in oklch, var(--primary) 8%, transparent);
+  border-color: color-mix(in oklch, var(--primary) 22%, transparent);
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+
+  to {
+    height: 0;
+  }
+}
+
+.animate-accordion-down {
+  animation: accordion-down 200ms ease-out;
+}
+
+.animate-accordion-up {
+  animation: accordion-up 200ms ease-out;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 220ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-result-panel-in {
+  .animate-result-panel-in,
+  .animate-fade-up,
+  .animate-accordion-down,
+  .animate-accordion-up {
     animation: none;
   }
 }

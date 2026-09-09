@@ -1,24 +1,22 @@
-import { format } from "date-fns";
-import { id as idLocale } from "date-fns/locale";
-import { CalendarIcon } from "lucide-react";
-import type { SelectSingleEventHandler } from "react-day-picker";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { format } from "date-fns"
+import { id as idLocale } from "date-fns/locale"
+import { CalendarIcon } from "lucide-react"
+import type { SelectSingleEventHandler } from "react-day-picker"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 interface DatePickerFieldProps {
-  id: string;
-  label: string;
-  value: Date | undefined;
-  onChange: (date: Date | undefined) => void;
-  required?: boolean;
-  placeholder?: string;
+  id: string
+  label: string
+  value: Date | undefined
+  onChange: (date: Date | undefined) => void
+  required?: boolean
+  placeholder?: string
+  description?: string
+  invalid?: boolean
 }
 
 export function DatePickerField({
@@ -28,29 +26,40 @@ export function DatePickerField({
   onChange,
   required,
   placeholder = "Pilih tanggal",
+  description,
+  invalid = false,
 }: DatePickerFieldProps) {
   const handleSelect: SelectSingleEventHandler = (day) => {
-    onChange(day);
-  };
+    onChange(day)
+  }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>
+    <Field data-invalid={invalid || undefined}>
+      <FieldLabel htmlFor={id}>
         {label}
-        {required && <span className="text-destructive ml-0.5">*</span>}
-      </Label>
+        {required && (
+          <span className="text-destructive" aria-hidden="true">
+            *
+          </span>
+        )}
+      </FieldLabel>
       <Popover>
         <PopoverTrigger asChild>
           <Button
             id={id}
+            type="button"
             variant="outline"
+            aria-invalid={invalid || undefined}
             className={cn(
-              "w-full justify-start text-left font-normal",
+              "h-10 w-full justify-start px-3 text-left font-normal",
               !value && "text-muted-foreground",
+              invalid && "border-destructive",
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {value ? format(value, "dd/MM/yyyy") : placeholder}
+            <CalendarIcon data-icon="inline-start" aria-hidden="true" />
+            <span className={cn(value && "numeric font-medium text-foreground")}>
+              {value ? format(value, "dd/MM/yyyy") : placeholder}
+            </span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
@@ -66,6 +75,7 @@ export function DatePickerField({
           />
         </PopoverContent>
       </Popover>
-    </div>
-  );
+      {description && <FieldDescription>{description}</FieldDescription>}
+    </Field>
+  )
 }
