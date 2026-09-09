@@ -3,34 +3,62 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion"
-import { formatRupiah } from "@/lib/format"
-import type { TaxCalculationResult } from "@/types/tax"
+} from "@/components/ui/accordion";
+import { formatRupiah } from "@/lib/format";
+import type { TaxCalculationResult } from "@/types/tax";
 
-function DetailRow({ label, value, waived = false }: { label: string; value: number; waived?: boolean }) {
+function DetailRow({
+  label,
+  value,
+  waived = false,
+}: {
+  label: string;
+  value: number;
+  waived?: boolean;
+}) {
   return (
-    <div className="flex min-w-0 items-start justify-between gap-3 py-1.5">
-      <span className="min-w-0 text-sm leading-snug text-muted-foreground">{label}</span>
-      <span className={waived ? "numeric shrink-0 text-sm font-semibold text-success" : "numeric shrink-0 text-sm font-semibold text-foreground"}>
+    <div className="flex min-w-0 items-start justify-between gap-3 py-0.5">
+      <span className="min-w-0 text-sm leading-none text-muted-foreground">
+        {label}
+      </span>
+      <span
+        className={
+          waived
+            ? "numeric shrink-0 text-sm font-semibold text-success"
+            : "numeric shrink-0 text-sm font-semibold text-foreground"
+        }
+      >
         {formatRupiah(value)}
       </span>
     </div>
-  )
+  );
 }
 
 export function ResultBreakdown({ result }: { result: TaxCalculationResult }) {
   return (
-    <Accordion type="multiple" defaultValue={["pkb", "opsen"]} className="w-full min-w-0">
+    <Accordion
+      type="multiple"
+      defaultValue={[]}
+      className="w-full min-w-0 transition-all duration-200"
+    >
       <AccordionItem value="pkb">
         <AccordionTrigger className="text-sm hover:no-underline">
           <span>PKB</span>
           <span className="numeric ml-auto mr-3 text-sm font-semibold text-foreground">
-            {formatRupiah(result.pkbBerjalan + result.pkbTunggakanPra2025 + result.pkbTunggakanPost2025)}
+            {formatRupiah(
+              result.pkbBerjalan +
+                result.pkbTunggakanPra2025 +
+                result.pkbTunggakanPost2025,
+            )}
           </span>
         </AccordionTrigger>
         <AccordionContent className="flex flex-col gap-0">
           <DetailRow
-            label={result.pkbDiscount > 0 ? `PKB berjalan · diskon ${result.pkbDiscount * 100}%` : "PKB berjalan"}
+            label={
+              result.pkbDiscount > 0
+                ? `PKB berjalan · diskon ${result.pkbDiscount * 100}%`
+                : "PKB berjalan"
+            }
             value={result.pkbBerjalan}
           />
           {result.pkbTunggakanPost2025 > 0 && (
@@ -45,7 +73,11 @@ export function ResultBreakdown({ result }: { result: TaxCalculationResult }) {
               value={result.pkbTunggakanPra2025}
             />
           )}
-          <DetailRow label="Denda PKB · dibebaskan 100%" value={result.dendaPkb} waived />
+          <DetailRow
+            label="Denda PKB · dibebaskan 100%"
+            value={result.dendaPkb}
+            waived
+          />
         </AccordionContent>
       </AccordionItem>
 
@@ -64,7 +96,11 @@ export function ResultBreakdown({ result }: { result: TaxCalculationResult }) {
               value={result.opsenTunggakan}
             />
           )}
-          <DetailRow label="Denda Opsen · dibebaskan 100%" value={result.dendaOpsen} waived />
+          <DetailRow
+            label="Denda Opsen · dibebaskan 100%"
+            value={result.dendaOpsen}
+            waived
+          />
         </AccordionContent>
       </AccordionItem>
 
@@ -72,7 +108,11 @@ export function ResultBreakdown({ result }: { result: TaxCalculationResult }) {
         <AccordionTrigger className="text-sm hover:no-underline">
           <span>SWDKLLJ</span>
           <span className="numeric ml-auto mr-3 text-sm font-semibold text-foreground">
-            {formatRupiah(result.swdklljBerjalan + result.swdklljTunggakan + result.dendaSwdkllj)}
+            {formatRupiah(
+              result.swdklljBerjalan +
+                result.swdklljTunggakan +
+                result.dendaSwdkllj,
+            )}
           </span>
         </AccordionTrigger>
         <AccordionContent className="flex flex-col gap-0">
@@ -92,21 +132,31 @@ export function ResultBreakdown({ result }: { result: TaxCalculationResult }) {
         </AccordionContent>
       </AccordionItem>
 
-      {(result.biayaStnk > 0 || result.biayaTnkb > 0 || result.biayaTembakRu > 0) && (
-        <AccordionItem value="biaya">
-          <AccordionTrigger className="text-sm hover:no-underline">
-            <span>PNBP & biaya tambahan</span>
+      {(result.biayaStnk > 0 ||
+        result.biayaTnkb > 0 ||
+        result.biayaTembakRu > 0) && (
+        <AccordionItem value="biaya" className="transition-all duration-200">
+          <AccordionTrigger className="text-sm hover:no-underline transition-all duration-200">
+            <span>PNBP & Biaya Tambahan</span>
             <span className="numeric ml-auto mr-3 text-sm font-semibold text-foreground">
-              {formatRupiah(result.biayaStnk + result.biayaTnkb + result.biayaTembakRu)}
+              {formatRupiah(
+                result.biayaStnk + result.biayaTnkb + result.biayaTembakRu,
+              )}
             </span>
           </AccordionTrigger>
           <AccordionContent className="flex flex-col gap-0">
-            {result.biayaStnk > 0 && <DetailRow label="PNBP STNK" value={result.biayaStnk} />}
-            {result.biayaTnkb > 0 && <DetailRow label="PNBP TNKB" value={result.biayaTnkb} />}
-            {result.biayaTembakRu > 0 && <DetailRow label="Tembak RU/STNK" value={result.biayaTembakRu} />}
+            {result.biayaStnk > 0 && (
+              <DetailRow label="PNBP STNK" value={result.biayaStnk} />
+            )}
+            {result.biayaTnkb > 0 && (
+              <DetailRow label="PNBP TNKB" value={result.biayaTnkb} />
+            )}
+            {result.biayaTembakRu > 0 && (
+              <DetailRow label="Tembak RU/STNK" value={result.biayaTembakRu} />
+            )}
           </AccordionContent>
         </AccordionItem>
       )}
     </Accordion>
-  )
+  );
 }

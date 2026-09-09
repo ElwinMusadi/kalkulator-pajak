@@ -1,23 +1,34 @@
-import { CheckCircle2, CircleAlert, Loader2, SearchX } from "lucide-react"
-import { cn } from "@/lib/utils"
-import type { NopolLookupStatus, VehicleData } from "@/types/tax"
+import { CheckCircle2, CircleAlert, Loader2, SearchX } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { NopolLookupStatus, VehicleData } from "@/types/tax";
 
 interface NopolLookupStatusProps {
-  status: NopolLookupStatus
-  vehicleData: VehicleData | null
-  errorMessage: string | null
+  status: NopolLookupStatus;
+  vehicleData: VehicleData | null;
+  errorMessage: string | null;
 }
 
-export function NopolLookupIndicator({ status }: { status: NopolLookupStatus }) {
+export function NopolLookupIndicator({
+  status,
+}: {
+  status: NopolLookupStatus;
+}) {
   if (status === "loading")
-    return <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
+    return (
+      <Loader2
+        className="size-4 animate-spin text-muted-foreground"
+        aria-hidden="true"
+      />
+    );
   if (status === "found")
-    return <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
+    return <CheckCircle2 className="size-4 text-success" aria-hidden="true" />;
   if (status === "not_found")
-    return <SearchX className="size-4 text-warning" aria-hidden="true" />
+    return <SearchX className="size-4 text-warning" aria-hidden="true" />;
   if (status === "error")
-    return <CircleAlert className="size-4 text-destructive" aria-hidden="true" />
-  return null
+    return (
+      <CircleAlert className="size-4 text-destructive" aria-hidden="true" />
+    );
+  return null;
 }
 
 export function NopolLookupMessage({
@@ -30,11 +41,13 @@ export function NopolLookupMessage({
       <p className="text-sm text-muted-foreground">
         Data kendaraan terisi otomatis bila Nopol terdaftar.
       </p>
-    )
+    );
   }
 
   if (status === "loading") {
-    return <p className="text-sm text-muted-foreground">Memeriksa data kendaraan…</p>
+    return (
+      <p className="text-sm text-muted-foreground">Memeriksa data kendaraan…</p>
+    );
   }
 
   if (status === "found" && vehicleData) {
@@ -50,11 +63,11 @@ export function NopolLookupMessage({
         <p className="mt-0.5 truncate text-sm font-medium text-foreground">
           {vehicleData.nama ?? "Nama pemilik tidak tersedia"}
         </p>
-        <p className="text-xs text-muted-foreground">
+        {/* <p className="text-xs text-muted-foreground">
           {vehicleData.jenis ?? "Jenis tidak tersedia"}
-        </p>
+        </p> */}
       </div>
-    )
+    );
   }
 
   if (status === "not_found") {
@@ -62,7 +75,7 @@ export function NopolLookupMessage({
       <p className="text-sm text-warning">
         Nopol belum terdaftar. Lengkapi data secara manual.
       </p>
-    )
+    );
   }
 
   if (status === "error") {
@@ -70,8 +83,8 @@ export function NopolLookupMessage({
       <p className="text-sm text-destructive">
         {errorMessage ?? "Pemeriksaan gagal. Lengkapi data secara manual."}
       </p>
-    )
+    );
   }
 
-  return null
+  return null;
 }

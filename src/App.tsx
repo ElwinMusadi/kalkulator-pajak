@@ -69,7 +69,7 @@ export default function App() {
             </aside>
           </main>
 
-          <footer className="border-t border-border/70 pt-5 text-center text-[13px] text-muted-foreground md:text-sm">
+          <footer className="border-t border-border/70 py-2 text-center text-xs leading-tight text-muted-foreground md:py-2.5 md:text-sm">
             <p>
               © 2026 Elwin Musadi Bessiesura · UPT Pendapatan Daerah Wilayah
               Kota Kupang

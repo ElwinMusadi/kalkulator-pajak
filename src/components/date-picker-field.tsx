@@ -1,21 +1,25 @@
-import { format } from "date-fns"
-import { id as idLocale } from "date-fns/locale"
-import { CalendarIcon } from "lucide-react"
-import type { SelectSingleEventHandler } from "react-day-picker"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { format } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
+import { CalendarIcon } from "lucide-react";
+import type { SelectSingleEventHandler } from "react-day-picker";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface DatePickerFieldProps {
-  id: string
-  label: string
-  value: Date | undefined
-  onChange: (date: Date | undefined) => void
-  required?: boolean
-  placeholder?: string
-  invalid?: boolean
+  id: string;
+  label: string;
+  value: Date | undefined;
+  onChange: (date: Date | undefined) => void;
+  required?: boolean;
+  placeholder?: string;
+  invalid?: boolean;
 }
 
 export function DatePickerField({
@@ -28,8 +32,8 @@ export function DatePickerField({
   invalid = false,
 }: DatePickerFieldProps) {
   const handleSelect: SelectSingleEventHandler = (day) => {
-    onChange(day)
-  }
+    onChange(day);
+  };
 
   return (
     <Field data-invalid={invalid || undefined}>
@@ -59,9 +63,16 @@ export function DatePickerField({
               Teks tanggal harus ikut warna hover tombol (putih).
               Gunakan `inherit` bukan warna tetap, supaya hover state bekerja.
             */}
-            <span className={cn("inherit leading-none", !value && "text-muted-foreground")}>
+            <span
+              className={cn(
+                "inherit leading-none",
+                !value && "text-muted-foreground",
+              )}
+            >
               {value ? (
-                <span className="numeric font-medium">{format(value, "dd/MM/yyyy")}</span>
+                <span className="numeric font-medium">
+                  {format(value, "dd/MM/yyyy")}
+                </span>
               ) : (
                 placeholder
               )}
@@ -75,12 +86,12 @@ export function DatePickerField({
             locale={idLocale}
             onSelect={handleSelect}
             captionLayout="dropdown-buttons"
-            fromYear={2000}
-            toYear={new Date().getFullYear() + 10}
+            fromYear={2005}
+            toYear={new Date().getFullYear() + 5}
             initialFocus
           />
         </PopoverContent>
       </Popover>
     </Field>
-  )
+  );
 }

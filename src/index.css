@@ -222,29 +222,37 @@ body {
 @keyframes accordion-down {
   from {
     height: 0;
+    opacity: 0;
+    transform: translateY(-0.25rem);
   }
 
   to {
     height: var(--radix-accordion-content-height);
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
 @keyframes accordion-up {
   from {
     height: var(--radix-accordion-content-height);
+    opacity: 1;
+    transform: translateY(0);
   }
 
   to {
     height: 0;
+    opacity: 0;
+    transform: translateY(-0.25rem);
   }
 }
 
 .animate-accordion-down {
-  animation: accordion-down 200ms ease-out;
+  animation: accordion-down 200ms ease-out both;
 }
 
 .animate-accordion-up {
-  animation: accordion-up 200ms ease-out;
+  animation: accordion-up 200ms ease-out both;
 }
 
 @keyframes fade-up {

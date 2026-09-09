@@ -144,18 +144,64 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     errorMessage: lookupError,
   } = useNopolLookup(nopol);
 
+  /** Mengosongkan seluruh data kendaraan saat Nopol berubah. */
+  function resetVehicleFields() {
+    setNjkb("");
+    setNjub("0");
+    setBobot(undefined);
+    setJenisKendaraan(undefined);
+    setJatuhTempoPajak(undefined);
+    setJatuhTempoStnk(undefined);
+    setIsDomisiliGempa(false);
+    setIsMutasiMasuk(false);
+    setIsTembakRu(false);
+    setFacilityOpen(false);
+    setValidationError(null);
+    setInvalidField(null);
+    hasCalculated.current = false;
+    onResult(null);
+  }
+
   useEffect(() => {
     if (!vehicleData) return;
+
+    const jenisNormal = normalizeJenis(vehicleData.jenis);
+    const stnkDate = isoToDate(vehicleData.jatuhTempoStnk);
+    const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
+
     if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb));
     setNjub(String(vehicleData.njub ?? 0));
     if (vehicleData.bobot) setBobot(vehicleData.bobot);
-    const jenisNormal = normalizeJenis(vehicleData.jenis);
     if (jenisNormal) setJenisKendaraan(jenisNormal);
-    const stnkDate = isoToDate(vehicleData.jatuhTempoStnk);
     if (stnkDate) setJatuhTempoStnk(stnkDate);
-    const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
     if (pajakDate) setJatuhTempoPajak(pajakDate);
-  }, [vehicleData]);
+
+    // Data Nopol lengkap langsung menghasilkan ringkasan penetapan.
+    // Fasilitas tambahan sengaja tetap nonaktif sampai pengguna mengaktifkannya.
+    if (
+      vehicleData.njkb > 0 &&
+      jenisNormal &&
+      stnkDate &&
+      pajakDate &&
+      tanggalBayar
+    ) {
+      hasCalculated.current = true;
+      onResult(
+        calculateTax({
+          njkb: vehicleData.njkb,
+          njub: vehicleData.njub ?? 0,
+          bobot: vehicleData.bobot || BOBOT_MAP[jenisNormal],
+          jenisKendaraan: jenisNormal,
+          jatuhTempoPajak: pajakDate,
+          jatuhTempoStnk: stnkDate,
+          tanggalBayar,
+          isDomisiliGempa: false,
+          isMutasiMasuk: false,
+          isTembakRu: false,
+        }),
+      );
+    }
+  }, [vehicleData, tanggalBayar, onResult]);
 
   const effectiveBobot =
     bobot ?? (jenisKendaraan ? BOBOT_MAP[jenisKendaraan] : 1.0);
@@ -241,9 +287,10 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 id="nopol"
                 value={nopol}
                 onChange={(e) => {
+                  // Setiap perubahan karakter Nopol mengosongkan data sebelumnya.
+                  // Tanggal Pembayaran sengaja tidak di-reset.
+                  resetVehicleFields();
                   setNopol(e.target.value.toUpperCase());
-                  hasCalculated.current = false;
-                  onResult(null);
                 }}
                 placeholder="DH1234AB"
                 autoComplete="off"
@@ -272,7 +319,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           title="Dasar Pengenaan"
           hint="Nilai jual dan bobot menentukan besaran PKB."
         />
-        <div className={cn("grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3", INDENT)}>
+        <div
+          className={cn(
+            "grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3",
+            INDENT,
+          )}
+        >
           <Field data-invalid={invalidField === "njkb" || undefined}>
             <FieldLabel htmlFor="njkb">
               NJKB{" "}
@@ -358,7 +410,6 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   <Badge variant="secondary" className="numeric font-medium">
                     Bobot Data {bobot.toLocaleString("id-ID")}
                   </Badge>
-                  <span>dari basis data penetapan.</span>
                 </>
               ) : (
                 <span>Bobot mengikuti jenis kendaraan.</span>
@@ -366,7 +417,6 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             </FieldDescription>
           </Field>
         </div>
-
       </FieldSet>
 
       {/* ── 3 · Masa Pajak ── */}
@@ -376,7 +426,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           title="Masa Pajak"
           hint="Tanggal jatuh tempo dan pembayaran menentukan tunggakan dan diskon."
         />
-        <div className={cn("grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3", INDENT)}>
+        <div
+          className={cn(
+            "grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3",
+            INDENT,
+          )}
+        >
           <DatePickerField
             id="jatuh-tempo-pajak"
             label="Jatuh Tempo Pajak"
