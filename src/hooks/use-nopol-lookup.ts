@@ -52,7 +52,12 @@ export function useNopolLookup(nopol: string): UseNopolLookupResult {
         if ((err as Error).name === "AbortError") return
         setVehicleData(null)
         setStatus("error")
-        setErrorMessage((err as Error).message ?? "Gagal mengambil data.")
+        const offline = typeof navigator !== "undefined" && !navigator.onLine
+        setErrorMessage(
+          offline
+            ? "Sedang offline. Nopol ini belum tersimpan di perangkat; isi data manual."
+            : ((err as Error).message ?? "Gagal mengambil data.")
+        )
       })
 
     return () => controller.abort()

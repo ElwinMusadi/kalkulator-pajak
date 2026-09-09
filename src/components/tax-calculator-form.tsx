@@ -78,7 +78,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [validationError, setValidationError] = useState<string | null>(null);
   const hasCalculated = useRef(false);
 
-  const { vehicleData, status: lookupStatus } = useNopolLookup(nopol);
+  const {
+    vehicleData,
+    status: lookupStatus,
+    errorMessage: lookupError,
+  } = useNopolLookup(nopol);
 
   // Auto-fill saat data kendaraan ditemukan
   useEffect(() => {
@@ -211,6 +215,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             <p className="text-xs text-amber-600 dark:text-amber-400">
               Data tidak ditemukan — isi manual
             </p>
+          )}
+          {lookupStatus === "error" && lookupError && (
+            <p className="text-xs text-destructive">{lookupError}</p>
           )}
         </div>
 
