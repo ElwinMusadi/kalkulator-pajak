@@ -1,21 +1,26 @@
-import { useState } from "react"
-import { WifiOff } from "lucide-react"
-import { AppHeader } from "@/components/app-header"
-import { MobileResultBar } from "@/components/mobile-result-bar"
-import { PwaInstallPrompt } from "@/components/pwa-install-prompt"
-import { PwaUpdateNotice } from "@/components/pwa-update-notice"
-import { ResultEmpty } from "@/components/result-empty"
-import { TaxCalculatorForm } from "@/components/tax-calculator-form"
-import { TaxResultPanel } from "@/components/tax-result-panel"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { useOnlineStatus } from "@/hooks/use-online-status"
-import type { TaxCalculationResult } from "@/types/tax"
+import { useState } from "react";
+import { WifiOff } from "lucide-react";
+import { AppHeader } from "@/components/app-header";
+import { MobileResultBar } from "@/components/mobile-result-bar";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { PwaUpdateNotice } from "@/components/pwa-update-notice";
+import { ResultEmpty } from "@/components/result-empty";
+import { TaxCalculatorForm } from "@/components/tax-calculator-form";
+import { TaxResultPanel } from "@/components/tax-result-panel";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import type { TaxCalculationResult } from "@/types/tax";
 
 export default function App() {
-  const [result, setResult] = useState<TaxCalculationResult | null>(null)
-  const isOnline = useOnlineStatus()
+  const [result, setResult] = useState<TaxCalculationResult | null>(null);
+  const isOnline = useOnlineStatus();
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -28,7 +33,8 @@ export default function App() {
               <WifiOff aria-hidden="true" />
               <AlertTitle>Anda sedang offline</AlertTitle>
               <AlertDescription>
-                Kalkulasi manual tetap tersedia. Pencarian Nopol baru memerlukan koneksi internet.
+                Kalkulasi manual tetap tersedia. Pencarian Nopol baru memerlukan
+                koneksi internet.
               </AlertDescription>
             </Alert>
           )}
@@ -38,10 +44,10 @@ export default function App() {
           <main className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]">
             <Card className="shadow-sm">
               <CardHeader className="border-b pb-5">
-                <CardTitle className="text-lg">Data penetapan</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-xl pb-0!">Data Penetapan</CardTitle>
+                {/* <CardDescription className="pt-0!">
                   Empat langkah untuk menghitung PKB, Opsen, SWDKLLJ, dan PNBP.
-                </CardDescription>
+                </CardDescription> */}
               </CardHeader>
               <CardContent className="pt-6">
                 <TaxCalculatorForm onResult={setResult} />
@@ -64,7 +70,10 @@ export default function App() {
           </main>
 
           <footer className="border-t border-border/70 pt-5 text-center text-[13px] text-muted-foreground md:text-sm">
-            <p>© 2026 Elwin Musadi Bessiesura · UPT Pendapatan Daerah Wilayah Kota Kupang</p>
+            <p>
+              © 2026 Elwin Musadi Bessiesura · UPT Pendapatan Daerah Wilayah
+              Kota Kupang
+            </p>
           </footer>
         </div>
 
@@ -72,5 +81,5 @@ export default function App() {
         <PwaUpdateNotice />
       </div>
     </TooltipProvider>
-  )
+  );
 }

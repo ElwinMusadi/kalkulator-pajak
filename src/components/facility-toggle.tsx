@@ -1,15 +1,15 @@
-import type { ReactNode } from "react"
-import { Switch } from "@/components/ui/switch"
-import { cn } from "@/lib/utils"
+import type { ReactNode } from "react";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 interface FacilityToggleProps {
-  id: string
-  title: string
-  description: string
-  impact: string
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
-  icon: ReactNode
+  id: string;
+  title: string;
+  description: string;
+  impact: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  icon: ReactNode;
 }
 
 export function FacilityToggle({
@@ -25,15 +25,15 @@ export function FacilityToggle({
     <div
       className={cn(
         "flex items-start gap-3 rounded-lg border p-3.5 transition-colors duration-200",
-        checked
-          ? "facility-active"
-          : "border-border bg-card hover:bg-muted/40",
+        checked ? "facility-active" : "border-border bg-card hover:bg-muted/40",
       )}
     >
       <span
         className={cn(
           "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border transition-colors duration-200 [&_svg]:size-4",
-          checked ? "step-badge" : "border-border bg-muted/50 text-muted-foreground",
+          checked
+            ? "step-badge"
+            : "border-border bg-muted/50 text-muted-foreground",
         )}
         aria-hidden="true"
       >
@@ -49,7 +49,9 @@ export function FacilityToggle({
           </label>
           <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
         </div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+        <p className="mt-1 text-xs leading-none text-muted-foreground">
+          {description}
+        </p>
         <p
           className={cn(
             "mt-1.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
@@ -60,5 +62,5 @@ export function FacilityToggle({
         </p>
       </div>
     </div>
-  )
+  );
 }

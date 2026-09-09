@@ -1,30 +1,30 @@
-import { useEffect, useRef, useState } from "react"
-import { parseISO } from "date-fns"
+import { useEffect, useRef, useState } from "react";
+import { parseISO } from "date-fns";
 import {
   ArrowLeftRight,
   Calculator,
+  ChevronDown,
   CircleAlert,
   Landmark,
   ShieldCheck,
-} from "lucide-react"
-import { DatePickerField } from "@/components/date-picker-field"
-import { FacilityToggle } from "@/components/facility-toggle"
+} from "lucide-react";
+import { DatePickerField } from "@/components/date-picker-field";
+import { FacilityToggle } from "@/components/facility-toggle";
 import {
   NopolLookupIndicator,
   NopolLookupMessage,
-} from "@/components/nopol-lookup-status"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+} from "@/components/nopol-lookup-status";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
-  FieldGroup,
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -32,108 +32,139 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { useNopolLookup } from "@/hooks/use-nopol-lookup"
-import { calculateTax } from "@/lib/tax-calculator"
-import { formatRupiah } from "@/lib/format"
-import { BOBOT_MAP } from "@/types/tax"
-import type { JenisKendaraan, TaxCalculationResult } from "@/types/tax"
+} from "@/components/ui/select";
+import { useNopolLookup } from "@/hooks/use-nopol-lookup";
+import { calculateTax } from "@/lib/tax-calculator";
+import { formatRupiah } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { BOBOT_MAP } from "@/types/tax";
+import type { JenisKendaraan, TaxCalculationResult } from "@/types/tax";
 
 const JENIS_OPTIONS: { value: JenisKendaraan; label: string }[] = [
-  { value: "SEPEDA MOTOR", label: "Sepeda Motor · bobot 1,00" },
-  { value: "MINIBUS", label: "Minibus · bobot 1,05" },
-  { value: "PICK UP", label: "Pick Up · bobot 1,085" },
-  { value: "SEDAN", label: "Sedan · bobot 1,025" },
-  { value: "JEEP", label: "Jeep · bobot 1,05" },
-  { value: "LIGHT TRUCK", label: "Light Truck · bobot 1,30" },
-  { value: "MICROBUS", label: "Microbus · bobot 1,085" },
-  { value: "TRUCK", label: "Truck · bobot 1,40" },
-]
+  { value: "SEPEDA MOTOR", label: "Sepeda Motor · 1,00" },
+  { value: "MINIBUS", label: "Minibus · 1,05" },
+  { value: "PICK UP", label: "Pick Up · 1,085" },
+  { value: "SEDAN", label: "Sedan · 1,025" },
+  { value: "JEEP", label: "Jeep · 1,05" },
+  { value: "LIGHT TRUCK", label: "Light Truck · 1,30" },
+  { value: "MICROBUS", label: "Microbus · 1,085" },
+  { value: "TRUCK", label: "Truck · 1,40" },
+];
 
-type FieldKey = "njkb" | "jenis" | "jatuhTempoPajak" | "jatuhTempoStnk" | "tanggalBayar"
+type FieldKey =
+  | "njkb"
+  | "jenis"
+  | "jatuhTempoPajak"
+  | "jatuhTempoStnk"
+  | "tanggalBayar";
 
-/** Petakan jenis dari D1 (uppercase) ke JenisKendaraan yang valid */
 function normalizeJenis(raw: string | null): JenisKendaraan | undefined {
-  if (!raw) return undefined
-  const upper = raw.toUpperCase().trim()
-  const match = Object.keys(BOBOT_MAP).find((k) => k === upper)
-  return match as JenisKendaraan | undefined
+  if (!raw) return undefined;
+  const upper = raw.toUpperCase().trim();
+  const match = Object.keys(BOBOT_MAP).find((k) => k === upper);
+  return match as JenisKendaraan | undefined;
 }
 
-/** Parse "YYYY-MM-DD" ke Date, return undefined jika invalid */
 function isoToDate(iso: string | null | undefined): Date | undefined {
-  if (!iso) return undefined
+  if (!iso) return undefined;
   try {
-    return parseISO(iso)
+    return parseISO(iso);
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
-function SectionLegend({ step, title, hint }: { step: string; title: string; hint: string }) {
+/** Angka langkah + judul + hint — layout: nomor | konten */
+function SectionLegend({
+  step,
+  title,
+  hint,
+}: {
+  step: string;
+  title: string;
+  hint: string;
+}) {
   return (
     <FieldLegend className="mb-1 flex w-full min-w-0 items-start gap-3">
       <span
-        className="numeric step-badge mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
+        className="numeric step-badge mt-0! flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
         aria-hidden="true"
       >
         {step}
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-base font-semibold tracking-tight">{title}</span>
-        <span className="text-sm font-normal leading-snug text-muted-foreground">{hint}</span>
+        <span className="text-sm font-normal leading-snug text-muted-foreground">
+          {hint}
+        </span>
       </span>
     </FieldLegend>
-  )
+  );
 }
 
+/**
+ * Konten section diindentasi sejajar teks judul tahap.
+ * `padding-left` dipakai, bukan `margin-left`, agar elemen `w-full`
+ * tetap berada di dalam batas Card pada seluruh ukuran viewport.
+ */
+const INDENT = "pl-[calc(1.75rem+0.75rem)]"; // size-7 (28px) + gap-3 (12px)
+
 interface TaxCalculatorFormProps {
-  onResult: (result: TaxCalculationResult | null) => void
+  onResult: (result: TaxCalculationResult | null) => void;
 }
 
 export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
-  const [nopol, setNopol] = useState("")
-  const [njkb, setNjkb] = useState("")
-  const [njub, setNjub] = useState("0")
-  const [bobot, setBobot] = useState<number | undefined>(undefined)
-  const [jenisKendaraan, setJenisKendaraan] = useState<JenisKendaraan | undefined>(undefined)
-  const [jatuhTempoPajak, setJatuhTempoPajak] = useState<Date | undefined>(undefined)
-  const [jatuhTempoStnk, setJatuhTempoStnk] = useState<Date | undefined>(undefined)
-  const [tanggalBayar, setTanggalBayar] = useState<Date | undefined>(() => new Date())
-  const [isDomisiliGempa, setIsDomisiliGempa] = useState(false)
-  const [isMutasiMasuk, setIsMutasiMasuk] = useState(false)
-  const [isTembakRu, setIsTembakRu] = useState(false)
-  const [validationError, setValidationError] = useState<string | null>(null)
-  const [invalidField, setInvalidField] = useState<FieldKey | null>(null)
-  const hasCalculated = useRef(false)
+  const [nopol, setNopol] = useState("");
+  const [njkb, setNjkb] = useState("");
+  const [njub, setNjub] = useState("0");
+  const [bobot, setBobot] = useState<number | undefined>(undefined);
+  const [jenisKendaraan, setJenisKendaraan] = useState<
+    JenisKendaraan | undefined
+  >(undefined);
+  const [jatuhTempoPajak, setJatuhTempoPajak] = useState<Date | undefined>(
+    undefined,
+  );
+  const [jatuhTempoStnk, setJatuhTempoStnk] = useState<Date | undefined>(
+    undefined,
+  );
+  const [tanggalBayar, setTanggalBayar] = useState<Date | undefined>(
+    () => new Date(),
+  );
+  const [isDomisiliGempa, setIsDomisiliGempa] = useState(false);
+  const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
+  const [isTembakRu, setIsTembakRu] = useState(false);
+  const [facilityOpen, setFacilityOpen] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [invalidField, setInvalidField] = useState<FieldKey | null>(null);
+  const hasCalculated = useRef(false);
 
-  const { vehicleData, status: lookupStatus, errorMessage: lookupError } = useNopolLookup(nopol)
+  const {
+    vehicleData,
+    status: lookupStatus,
+    errorMessage: lookupError,
+  } = useNopolLookup(nopol);
 
-  // Auto-fill saat data kendaraan ditemukan
   useEffect(() => {
-    if (!vehicleData) return
-    if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb))
-    setNjub(String(vehicleData.njub ?? 0))
-    if (vehicleData.bobot) setBobot(vehicleData.bobot)
+    if (!vehicleData) return;
+    if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb));
+    setNjub(String(vehicleData.njub ?? 0));
+    if (vehicleData.bobot) setBobot(vehicleData.bobot);
+    const jenisNormal = normalizeJenis(vehicleData.jenis);
+    if (jenisNormal) setJenisKendaraan(jenisNormal);
+    const stnkDate = isoToDate(vehicleData.jatuhTempoStnk);
+    if (stnkDate) setJatuhTempoStnk(stnkDate);
+    const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
+    if (pajakDate) setJatuhTempoPajak(pajakDate);
+  }, [vehicleData]);
 
-    const jenisNormal = normalizeJenis(vehicleData.jenis)
-    if (jenisNormal) setJenisKendaraan(jenisNormal)
-
-    const stnkDate = isoToDate(vehicleData.jatuhTempoStnk)
-    if (stnkDate) setJatuhTempoStnk(stnkDate)
-
-    const pajakDate = isoToDate(vehicleData.jatuhTempoPajak)
-    if (pajakDate) setJatuhTempoPajak(pajakDate)
-  }, [vehicleData])
-
-  // Hitung bobot aktual: prioritaskan dari database, lalu dari pilihan jenis
-  const effectiveBobot = bobot ?? (jenisKendaraan ? BOBOT_MAP[jenisKendaraan] : 1.0)
+  const effectiveBobot =
+    bobot ?? (jenisKendaraan ? BOBOT_MAP[jenisKendaraan] : 1.0);
 
   function getCalculatorInput() {
-    const njkbNum = parseFloat(njkb)
-    if (!njkb || isNaN(njkbNum) || njkbNum <= 0) return null
-    if (!jenisKendaraan || !jatuhTempoPajak || !jatuhTempoStnk || !tanggalBayar) return null
-
+    const njkbNum = parseFloat(njkb);
+    if (!njkb || isNaN(njkbNum) || njkbNum <= 0) return null;
+    if (!jenisKendaraan || !jatuhTempoPajak || !jatuhTempoStnk || !tanggalBayar)
+      return null;
     return {
       njkb: njkbNum,
       njub: parseFloat(njub) || 0,
@@ -145,73 +176,80 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       isDomisiliGempa,
       isMutasiMasuk,
       isTembakRu,
-    }
+    };
   }
 
   useEffect(() => {
-    if (!hasCalculated.current) return
-    const input = getCalculatorInput()
-    if (input) onResult(calculateTax(input))
-  }, [isMutasiMasuk, isTembakRu, isDomisiliGempa])
+    if (!hasCalculated.current) return;
+    const input = getCalculatorInput();
+    if (input) onResult(calculateTax(input));
+  }, [isMutasiMasuk, isTembakRu, isDomisiliGempa]);
+
+  // Buka accordion fasilitas otomatis saat salah satu toggle aktif
+  const anyFacilityActive = isDomisiliGempa || isMutasiMasuk || isTembakRu;
+  useEffect(() => {
+    if (anyFacilityActive) setFacilityOpen(true);
+  }, [anyFacilityActive]);
 
   function fail(field: FieldKey, message: string) {
-    setInvalidField(field)
-    setValidationError(message)
+    setInvalidField(field);
+    setValidationError(message);
   }
 
   function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setValidationError(null)
-    setInvalidField(null)
-
-    const njkbNum = parseFloat(njkb)
+    e.preventDefault();
+    setValidationError(null);
+    setInvalidField(null);
+    const njkbNum = parseFloat(njkb);
     if (!njkb || isNaN(njkbNum) || njkbNum <= 0)
-      return fail("njkb", "NJKB harus diisi dengan nilai lebih dari 0.")
-    if (!jenisKendaraan) return fail("jenis", "Pilih jenis kendaraan.")
-    if (!jatuhTempoPajak) return fail("jatuhTempoPajak", "Isi tanggal jatuh tempo pajak.")
-    if (!jatuhTempoStnk) return fail("jatuhTempoStnk", "Isi tanggal jatuh tempo STNK.")
-    if (!tanggalBayar) return fail("tanggalBayar", "Isi tanggal pembayaran.")
-
-    const input = getCalculatorInput()
-    if (!input) return
-
-    hasCalculated.current = true
-    onResult(calculateTax(input))
+      return fail("njkb", "NJKB harus diisi dengan nilai lebih dari 0.");
+    if (!jenisKendaraan) return fail("jenis", "Pilih jenis kendaraan.");
+    if (!jatuhTempoPajak)
+      return fail("jatuhTempoPajak", "Isi tanggal jatuh tempo pajak.");
+    if (!jatuhTempoStnk)
+      return fail("jatuhTempoStnk", "Isi tanggal jatuh tempo STNK.");
+    if (!tanggalBayar) return fail("tanggalBayar", "Isi tanggal pembayaran.");
+    const input = getCalculatorInput();
+    if (!input) return;
+    hasCalculated.current = true;
+    onResult(calculateTax(input));
   }
 
-  const njkbNumber = parseFloat(njkb)
-  const njubNumber = parseFloat(njub)
-  const dasarPengenaan =
-    !isNaN(njkbNumber) && njkbNumber > 0
-      ? (njkbNumber + (isNaN(njubNumber) ? 0 : njubNumber)) * effectiveBobot
-      : null
+  const njkbNumber = parseFloat(njkb);
+  const njubNumber = parseFloat(njub);
+
+  const activeFacilityCount = [
+    isDomisiliGempa,
+    isMutasiMasuk,
+    isTembakRu,
+  ].filter(Boolean).length;
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-8">
-      {/* ── 1 · Identitas kendaraan ── */}
-      <FieldSet className="gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
+      {/* ── 1 · Identitas Kendaraan ── */}
+      <FieldSet className="gap-3">
         <SectionLegend
           step="1"
-          title="Identitas kendaraan"
+          title="Identitas Kendaraan"
           hint="Masukkan nomor polisi untuk mengisi data secara otomatis."
         />
-        <FieldGroup className="gap-3">
+        <div className={cn("w-full min-w-0", INDENT)}>
           <Field>
-            <FieldLabel htmlFor="nopol">Nomor polisi</FieldLabel>
+            <FieldLabel htmlFor="nopol">Nomor Polisi</FieldLabel>
             <div className="relative">
               <Input
                 id="nopol"
                 value={nopol}
                 onChange={(e) => {
-                  setNopol(e.target.value.toUpperCase())
-                  hasCalculated.current = false
-                  onResult(null)
+                  setNopol(e.target.value.toUpperCase());
+                  hasCalculated.current = false;
+                  onResult(null);
                 }}
-                placeholder="Contoh: DH1234AB"
+                placeholder="DH1234AB"
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellCheck={false}
-                className="numeric h-11 pr-10 text-base font-semibold uppercase tracking-[0.08em]"
+                className="numeric h-10 pr-10 text-base font-medium uppercase tracking-normal"
                 maxLength={12}
               />
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
@@ -224,21 +262,23 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               errorMessage={lookupError}
             />
           </Field>
-        </FieldGroup>
+        </div>
       </FieldSet>
 
-      {/* ── 2 · Dasar pengenaan ── */}
-      <FieldSet className="gap-4">
+      {/* ── 2 · Dasar Pengenaan ── */}
+      <FieldSet className="gap-3">
         <SectionLegend
           step="2"
-          title="Dasar pengenaan"
+          title="Dasar Pengenaan"
           hint="Nilai jual dan bobot menentukan besaran PKB."
         />
-        <FieldGroup className="grid gap-4 md:grid-cols-3">
+        <div className={cn("grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3", INDENT)}>
           <Field data-invalid={invalidField === "njkb" || undefined}>
             <FieldLabel htmlFor="njkb">
-              NJKB
-              <span className="text-destructive" aria-hidden="true">*</span>
+              NJKB{" "}
+              <span className="text-destructive" aria-hidden="true">
+                *
+              </span>
             </FieldLabel>
             <Input
               id="njkb"
@@ -246,8 +286,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               inputMode="numeric"
               value={njkb}
               onChange={(e) => {
-                setNjkb(e.target.value)
-                setBobot(undefined)
+                setNjkb(e.target.value);
+                setBobot(undefined);
               }}
               placeholder="0"
               min={0}
@@ -284,18 +324,23 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
           <Field data-invalid={invalidField === "jenis" || undefined}>
             <FieldLabel htmlFor="jenis">
-              Jenis kendaraan
-              <span className="text-destructive" aria-hidden="true">*</span>
+              Jenis Kendaraan{" "}
+              <span className="text-destructive" aria-hidden="true">
+                *
+              </span>
             </FieldLabel>
             <Select
               value={jenisKendaraan}
               onValueChange={(v) => {
-                setJenisKendaraan(v as JenisKendaraan)
-                setBobot(undefined)
+                setJenisKendaraan(v as JenisKendaraan);
+                setBobot(undefined);
               }}
             >
-              <SelectTrigger id="jenis" aria-invalid={invalidField === "jenis" || undefined}>
-                <SelectValue placeholder="Pilih jenis" />
+              <SelectTrigger
+                id="jenis"
+                aria-invalid={invalidField === "jenis" || undefined}
+              >
+                <SelectValue placeholder="Pilih Jenis" />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -311,7 +356,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               {bobot !== undefined ? (
                 <>
                   <Badge variant="secondary" className="numeric font-medium">
-                    Bobot data {bobot.toLocaleString("id-ID")}
+                    Bobot Data {bobot.toLocaleString("id-ID")}
                   </Badge>
                   <span>dari basis data penetapan.</span>
                 </>
@@ -320,108 +365,146 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               )}
             </FieldDescription>
           </Field>
-        </FieldGroup>
+        </div>
 
-        {dasarPengenaan !== null && (
-          <div className="animate-fade-up flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-dashed border-border bg-muted/30 px-4 py-3">
-            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Dasar pengenaan PKB
-            </span>
-            <span className="numeric text-base font-semibold text-foreground">
-              {formatRupiah(dasarPengenaan)}
-            </span>
-          </div>
-        )}
       </FieldSet>
 
-      {/* ── 3 · Masa pajak ── */}
-      <FieldSet className="gap-4">
+      {/* ── 3 · Masa Pajak ── */}
+      <FieldSet className="gap-3">
         <SectionLegend
           step="3"
-          title="Masa pajak"
+          title="Masa Pajak"
           hint="Tanggal jatuh tempo dan pembayaran menentukan tunggakan dan diskon."
         />
-        <FieldGroup className="grid gap-4 md:grid-cols-3">
+        <div className={cn("grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3", INDENT)}>
           <DatePickerField
             id="jatuh-tempo-pajak"
-            label="Jatuh tempo pajak"
+            label="Jatuh Tempo Pajak"
             value={jatuhTempoPajak}
             onChange={setJatuhTempoPajak}
             required
-            description="Tanggal SKPD / notice."
             invalid={invalidField === "jatuhTempoPajak"}
           />
           <DatePickerField
             id="jatuh-tempo-stnk"
-            label="Jatuh tempo STNK"
+            label="Jatuh Tempo STNK"
             value={jatuhTempoStnk}
             onChange={setJatuhTempoStnk}
             required
-            description="Masa berlaku plat."
             invalid={invalidField === "jatuhTempoStnk"}
           />
           <DatePickerField
             id="tanggal-bayar"
-            label="Tanggal pembayaran"
+            label="Tanggal Pembayaran"
             value={tanggalBayar}
             onChange={setTanggalBayar}
             required
-            description="Tanggal penetapan dan bayar."
             invalid={invalidField === "tanggalBayar"}
-          />
-        </FieldGroup>
-      </FieldSet>
-
-      {/* ── 4 · Fasilitas & biaya tambahan ── */}
-      <FieldSet className="gap-4">
-        <SectionLegend
-          step="4"
-          title="Fasilitas dan biaya tambahan"
-          hint="Aktifkan yang berlaku bagi wajib pajak ini."
-        />
-        <div className="grid gap-3 md:grid-cols-3">
-          <FacilityToggle
-            id="is-gempa"
-            title="Wilayah terdampak gempa"
-            description="Sikka, Ende, Nagekeo, Ngada, Manggarai, Manggarai Timur, Manggarai Barat."
-            impact="Diskon tunggakan 75%"
-            checked={isDomisiliGempa}
-            onCheckedChange={setIsDomisiliGempa}
-            icon={<ShieldCheck />}
-          />
-          <FacilityToggle
-            id="is-mutasi-masuk"
-            title="Mutasi masuk luar daerah"
-            description="Menggantikan diskon pembayaran awal pada PKB berjalan."
-            impact="Diskon PKB berjalan 50%"
-            checked={isMutasiMasuk}
-            onCheckedChange={setIsMutasiMasuk}
-            icon={<ArrowLeftRight />}
-          />
-          <FacilityToggle
-            id="is-tembak-ru"
-            title="Biaya tembak RU/STNK"
-            description="Motor Rp150.000 · Mobil Rp250.000."
-            impact="Biaya pengurusan"
-            checked={isTembakRu}
-            onCheckedChange={setIsTembakRu}
-            icon={<Landmark />}
           />
         </div>
       </FieldSet>
 
+      {/* ── 4 · Fasilitas & Biaya Tambahan (Accordion) ── */}
+      <FieldSet className="gap-0">
+        {/* Header accordion — klik membuka/menutup */}
+        <button
+          type="button"
+          onClick={() => setFacilityOpen((prev) => !prev)}
+          aria-expanded={facilityOpen}
+          aria-controls="facility-options"
+          className="flex w-full min-w-0 items-start gap-3 text-left"
+        >
+          <span
+            className="numeric step-badge mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
+            aria-hidden="true"
+          >
+            4
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="flex min-w-0 items-center justify-between gap-2">
+              <span className="text-base font-semibold tracking-tight">
+                Fasilitas &amp; Biaya Tambahan
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5">
+                {activeFacilityCount > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {activeFacilityCount} Aktif
+                  </Badge>
+                )}
+                <ChevronDown
+                  className={cn(
+                    "size-4 text-muted-foreground transition-transform duration-200",
+                    facilityOpen && "rotate-180",
+                  )}
+                  aria-hidden="true"
+                />
+              </span>
+            </span>
+            <span className="text-sm font-normal leading-snug text-muted-foreground">
+              Aktifkan yang berlaku bagi wajib pajak ini.
+            </span>
+          </span>
+        </button>
+
+        {/* Konten accordion */}
+        <div
+          id="facility-options"
+          className={cn(
+            "overflow-hidden transition-all duration-200",
+            facilityOpen
+              ? "mt-3 max-h-160 opacity-100"
+              : "max-h-0 opacity-0 pointer-events-none",
+          )}
+          aria-hidden={!facilityOpen}
+        >
+          <div className={cn("flex flex-col gap-2.5", INDENT)}>
+            <FacilityToggle
+              id="is-gempa"
+              title="Wilayah Terdampak Gempa (Diskon tunggakan 75%)"
+              description="Sikka, Ende, Nagekeo, Ngada, Manggarai, Manggarai Timur, Manggarai Barat."
+              impact=""
+              checked={isDomisiliGempa}
+              onCheckedChange={setIsDomisiliGempa}
+              icon={<ShieldCheck />}
+            />
+            <FacilityToggle
+              id="is-mutasi-masuk"
+              title="Mutasi Masuk Luar Daerah (Diskon PKB berjalan 50%)"
+              description="Menggantikan diskon pembayaran awal pada PKB berjalan."
+              impact=""
+              checked={isMutasiMasuk}
+              onCheckedChange={setIsMutasiMasuk}
+              icon={<ArrowLeftRight />}
+            />
+            <FacilityToggle
+              id="is-tembak-ru"
+              title="Biaya Tembak RU/STNK"
+              description="Motor Rp150.000 · Mobil Rp250.000."
+              impact=""
+              checked={isTembakRu}
+              onCheckedChange={setIsTembakRu}
+              icon={<Landmark />}
+            />
+          </div>
+        </div>
+      </FieldSet>
+
       {validationError && (
-        <Alert variant="destructive" className="animate-fade-up">
+        <Alert variant="destructive" className={cn("animate-fade-up", INDENT)}>
           <CircleAlert aria-hidden="true" />
-          <AlertTitle>Data belum lengkap</AlertTitle>
+          <AlertTitle>Data Belum Lengkap</AlertTitle>
           <AlertDescription>{validationError}</AlertDescription>
         </Alert>
       )}
 
-      <Button type="submit" size="lg" className="h-12 w-full text-base font-semibold">
+      <Button
+        type="submit"
+        size="lg"
+        className="h-11 w-full text-base font-semibold"
+      >
         <Calculator data-icon="inline-start" aria-hidden="true" />
-        Hitung penetapan
+        Hitung Penetapan
       </Button>
     </form>
-  )
+  );
 }

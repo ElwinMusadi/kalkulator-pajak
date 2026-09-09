@@ -61,7 +61,7 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
           </p>
         </div>
         <Badge variant={result.tahunTunggakan > 0 ? "secondary" : "outline"} className="shrink-0">
-          {result.tahunTunggakan > 0 ? "Ada tunggakan" : "Tahun berjalan"}
+          {result.tahunTunggakan > 0 ? "Ada Tunggakan" : "Tahun Berjalan"}
         </Badge>
       </div>
 
@@ -69,7 +69,7 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         <div className="flex min-w-0 items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-              Total bayar
+              Total Bayar
             </p>
             <p className="numeric mt-1 whitespace-nowrap text-[clamp(1.5rem,7vw,2.25rem)] font-bold leading-none tracking-tight text-primary">
               {formatRupiah(result.total)}
@@ -101,13 +101,13 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
             <SummaryLine label="Opsen PKB" value={pokokOpsen} />
             <SummaryLine label="SWDKLLJ" value={swdkllj} />
             <SummaryLine label="PNBP STNK & TNKB" value={pnbp} />
-            <SummaryLine label="Biaya tambahan" value={result.biayaTembakRu} />
+            <SummaryLine label="Biaya Tambahan" value={result.biayaTembakRu} />
           </div>
 
           <div className="amnesty-badge flex items-start gap-2.5 rounded-md border px-3 py-2.5">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
             <div>
-              <p className="text-sm font-medium text-foreground">Fasilitas Tax Amnesty aktif</p>
+              <p className="text-sm font-medium text-foreground">Fasilitas Tax Amnesty Aktif</p>
               <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                 Denda keterlambatan PKB dan Opsen dibebaskan 100%. Pokok pajak dan SWDKLLJ tetap diperhitungkan.
               </p>

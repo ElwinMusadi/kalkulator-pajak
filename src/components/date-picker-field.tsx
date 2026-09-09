@@ -4,7 +4,7 @@ import { CalendarIcon } from "lucide-react"
 import type { SelectSingleEventHandler } from "react-day-picker"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
@@ -15,7 +15,6 @@ interface DatePickerFieldProps {
   onChange: (date: Date | undefined) => void
   required?: boolean
   placeholder?: string
-  description?: string
   invalid?: boolean
 }
 
@@ -25,8 +24,7 @@ export function DatePickerField({
   value,
   onChange,
   required,
-  placeholder = "Pilih tanggal",
-  description,
+  placeholder = "Pilih Tanggal",
   invalid = false,
 }: DatePickerFieldProps) {
   const handleSelect: SelectSingleEventHandler = (day) => {
@@ -57,8 +55,16 @@ export function DatePickerField({
             )}
           >
             <CalendarIcon data-icon="inline-start" aria-hidden="true" />
-            <span className={cn(value && "numeric font-medium text-foreground")}>
-              {value ? format(value, "dd/MM/yyyy") : placeholder}
+            {/*
+              Teks tanggal harus ikut warna hover tombol (putih).
+              Gunakan `inherit` bukan warna tetap, supaya hover state bekerja.
+            */}
+            <span className={cn("inherit leading-none", !value && "text-muted-foreground")}>
+              {value ? (
+                <span className="numeric font-medium">{format(value, "dd/MM/yyyy")}</span>
+              ) : (
+                placeholder
+              )}
             </span>
           </Button>
         </PopoverTrigger>
@@ -75,7 +81,6 @@ export function DatePickerField({
           />
         </PopoverContent>
       </Popover>
-      {description && <FieldDescription>{description}</FieldDescription>}
     </Field>
   )
 }
