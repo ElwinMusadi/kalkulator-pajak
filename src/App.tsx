@@ -64,8 +64,8 @@ export default function App() {
             </aside>
           </main>
 
-          <footer className="border-t border-border/70 text-center text-xs leading-tight text-muted-foreground md:text-sm">
-            <div className="flex items-center justify-center">
+          <footer className="border-t border-border/70 py-6 text-center text-sm leading-normal text-muted-foreground">
+            <div className="md:flex items-center justify-center">
               <p>© 2026 &nbsp;·&nbsp; Elwin Musadi Bessiesura &nbsp;</p>
               <p>·&nbsp; UPT Pendapatan Daerah Wilayah Kota Kupang</p>
             </div>

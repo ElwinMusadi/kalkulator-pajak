@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Copy, ShieldCheck } from "lucide-react";
 // import { Badge } from "@/components/ui/badge";
+import { ResultBreakdown } from "@/components/result-breakdown";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -13,18 +14,6 @@ import type { TaxCalculationResult } from "@/types/tax";
 interface ResultSummaryProps {
   result: TaxCalculationResult;
   compact?: boolean;
-}
-
-function SummaryLine({ label, value }: { label: string; value: number }) {
-  if (value <= 0) return null;
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="numeric text-sm font-semibold text-foreground">
-        {formatRupiah(value)}
-      </span>
-    </div>
-  );
 }
 
 export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
@@ -102,15 +91,10 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <SummaryLine label="Pokok PKB" value={pokokPkb} />
-            <SummaryLine label="Opsen PKB" value={pokokOpsen} />
-            <SummaryLine label="SWDKLLJ" value={swdkllj} />
-            <SummaryLine label="PNBP STNK & TNKB" value={pnbp} />
-            <SummaryLine label="Tembak RU/STNK" value={result.biayaTembakRu} />
-          </div>
         </>
       )}
+
+      <ResultBreakdown result={result} />
 
       <div className="total-block min-w-0 rounded-lg border p-4">
         <div className="flex min-w-0 items-end justify-between gap-3">

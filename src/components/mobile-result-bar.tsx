@@ -1,5 +1,4 @@
 import { ChevronUp } from "lucide-react"
-import { ResultBreakdown } from "@/components/result-breakdown"
 import { ResultSummary } from "@/components/result-summary"
 import { Button } from "@/components/ui/button"
 import {
@@ -39,9 +38,6 @@ export function MobileResultBar({ result }: { result: TaxCalculationResult }) {
         </DrawerHeader>
         <div className="overflow-y-auto px-4 py-5">
           <ResultSummary result={result} compact />
-          <div className="mt-5">
-            <ResultBreakdown result={result} />
-          </div>
         </div>
         <DrawerFooter className="border-t">
           <DrawerClose asChild>
