@@ -8,12 +8,7 @@ import { ResultEmpty } from "@/components/result-empty";
 import { TaxCalculatorForm } from "@/components/tax-calculator-form";
 import { TaxResultPanel } from "@/components/tax-result-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import type { TaxCalculationResult } from "@/types/tax";
@@ -24,7 +19,7 @@ export default function App() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="app-background min-h-screen overflow-x-hidden pb-28 lg:pb-12">
+      <div className="app-background min-h-screen overflow-x-hidden pb-0!">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-8 sm:px-6 lg:px-8">
           <AppHeader />
 
@@ -69,11 +64,11 @@ export default function App() {
             </aside>
           </main>
 
-          <footer className="border-t border-border/70 py-2 text-center text-xs leading-tight text-muted-foreground md:py-2.5 md:text-sm">
-            <p>
-              © 2026 Elwin Musadi Bessiesura · UPT Pendapatan Daerah Wilayah
-              Kota Kupang
-            </p>
+          <footer className="border-t border-border/70 text-center text-xs leading-tight text-muted-foreground md:text-sm">
+            <div className="flex items-center justify-center">
+              <p>© 2026 &nbsp;·&nbsp; Elwin Musadi Bessiesura &nbsp;</p>
+              <p>·&nbsp; UPT Pendapatan Daerah Wilayah Kota Kupang</p>
+            </div>
           </footer>
         </div>
 
