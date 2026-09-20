@@ -64,7 +64,13 @@ export default function App() {
             </aside>
           </main>
 
-          <footer className="border-t border-border/70 py-6 text-center text-sm leading-normal text-muted-foreground">
+          <footer
+            className={
+              result
+                ? "border-t border-border/70 pt-6 pb-24 text-center text-sm leading-normal text-muted-foreground lg:pb-6"
+                : "border-t border-border/70 py-6 text-center text-sm leading-normal text-muted-foreground"
+            }
+          >
             <div className="md:flex items-center justify-center">
               <p>© 2026 &nbsp;·&nbsp; Elwin Musadi Bessiesura &nbsp;</p>
               <p>·&nbsp; UPT Pendapatan Daerah Wilayah Kota Kupang</p>

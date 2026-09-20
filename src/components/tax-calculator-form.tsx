@@ -3,18 +3,19 @@ import { parseISO } from "date-fns";
 import {
   ArrowLeftRight,
   Calculator,
-  ChevronDown,
   CircleAlert,
   Landmark,
   ShieldCheck,
 } from "lucide-react";
 import { DatePickerField } from "@/components/date-picker-field";
 import { FacilityToggle } from "@/components/facility-toggle";
+import { FormStepAccordion } from "@/components/form-step-accordion";
 import {
   NopolLookupIndicator,
   NopolLookupMessage,
 } from "@/components/nopol-lookup-status";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +58,8 @@ type FieldKey =
   | "jatuhTempoPajak"
   | "jatuhTempoStnk"
   | "tanggalBayar";
+
+type FormSection = "assessment" | "tax-period" | "facilities";
 
 function normalizeJenis(raw: string | null): JenisKendaraan | undefined {
   if (!raw) return undefined;
@@ -133,7 +136,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [isDomisiliGempa, setIsDomisiliGempa] = useState(false);
   const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
   const [isTembakRu, setIsTembakRu] = useState(false);
-  const [facilityOpen, setFacilityOpen] = useState(false);
+  const [openSections, setOpenSections] = useState<FormSection[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidField, setInvalidField] = useState<FieldKey | null>(null);
   const hasCalculated = useRef(false);
@@ -155,12 +158,24 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setIsDomisiliGempa(false);
     setIsMutasiMasuk(false);
     setIsTembakRu(false);
-    setFacilityOpen(false);
+    setOpenSections([]);
     setValidationError(null);
     setInvalidField(null);
     hasCalculated.current = false;
     onResult(null);
   }
+
+  function openSection(section: FormSection) {
+    setOpenSections((current) =>
+      current.includes(section) ? current : [...current, section],
+    );
+  }
+
+  useEffect(() => {
+    if (lookupStatus === "not_found") {
+      setOpenSections(["assessment", "tax-period"]);
+    }
+  }, [lookupStatus]);
 
   useEffect(() => {
     if (!vehicleData) return;
@@ -175,6 +190,16 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     if (jenisNormal) setJenisKendaraan(jenisNormal);
     if (stnkDate) setJatuhTempoStnk(stnkDate);
     if (pajakDate) setJatuhTempoPajak(pajakDate);
+
+    // Data ditemukan tetapi tidak lengkap: buka tahap yang perlu dilengkapi.
+    const sectionsToOpen: FormSection[] = [];
+    if (vehicleData.njkb <= 0 || !jenisNormal || !vehicleData.bobot) {
+      sectionsToOpen.push("assessment");
+    }
+    if (!stnkDate || !pajakDate) {
+      sectionsToOpen.push("tax-period");
+    }
+    setOpenSections(sectionsToOpen);
 
     // Data Nopol lengkap langsung menghasilkan ringkasan penetapan.
     // Fasilitas tambahan sengaja tetap nonaktif sampai pengguna mengaktifkannya.
@@ -231,15 +256,21 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     if (input) onResult(calculateTax(input));
   }, [isMutasiMasuk, isTembakRu, isDomisiliGempa]);
 
-  // Buka accordion fasilitas otomatis saat salah satu toggle aktif
+  // Jaga tahap fasilitas tetap terbuka ketika salah satu toggle aktif.
   const anyFacilityActive = isDomisiliGempa || isMutasiMasuk || isTembakRu;
   useEffect(() => {
-    if (anyFacilityActive) setFacilityOpen(true);
+    if (anyFacilityActive) openSection("facilities");
   }, [anyFacilityActive]);
 
   function fail(field: FieldKey, message: string) {
     setInvalidField(field);
     setValidationError(message);
+
+    if (field === "njkb" || field === "jenis") {
+      openSection("assessment");
+    } else {
+      openSection("tax-period");
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -269,6 +300,29 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     isMutasiMasuk,
     isTembakRu,
   ].filter(Boolean).length;
+
+  const assessmentComplete =
+    Boolean(njkbNumber > 0 && jenisKendaraan && effectiveBobot > 0);
+  const taxPeriodComplete = Boolean(
+    jatuhTempoPajak && jatuhTempoStnk && tanggalBayar,
+  );
+
+  const assessmentStatus =
+    lookupStatus === "not_found"
+      ? "Isi Manual"
+      : lookupStatus === "found"
+        ? assessmentComplete
+          ? "Terisi Otomatis"
+          : "Belum Lengkap"
+        : undefined;
+  const taxPeriodStatus =
+    lookupStatus === "not_found"
+      ? "Isi Manual"
+      : lookupStatus === "found"
+        ? taxPeriodComplete
+          ? "Terisi Otomatis"
+          : "Belum Lengkap"
+        : undefined;
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
@@ -312,207 +366,156 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         </div>
       </FieldSet>
 
-      {/* ── 2 · Dasar Pengenaan ── */}
-      <FieldSet className="gap-3">
-        <SectionLegend
+      {/* ── Tahap 2–4 · Controlled Accordion ── */}
+      <Accordion
+        type="multiple"
+        value={openSections}
+        onValueChange={(values) => setOpenSections(values as FormSection[])}
+        className="flex w-full flex-col gap-6"
+      >
+        <FormStepAccordion
+          value="assessment"
           step="2"
           title="Dasar Pengenaan"
           hint="Nilai jual dan bobot menentukan besaran PKB."
-        />
-        <div
-          className={cn(
-            "grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3",
-            INDENT,
-          )}
+          status={assessmentStatus}
         >
-          <Field data-invalid={invalidField === "njkb" || undefined}>
-            <FieldLabel htmlFor="njkb">
-              NJKB{" "}
-              <span className="text-destructive" aria-hidden="true">
-                *
-              </span>
-            </FieldLabel>
-            <Input
-              id="njkb"
-              type="number"
-              inputMode="numeric"
-              value={njkb}
-              onChange={(e) => {
-                setNjkb(e.target.value);
-                setBobot(undefined);
-              }}
-              placeholder="0"
-              min={0}
-              step={1000}
-              aria-invalid={invalidField === "njkb" || undefined}
-              className="numeric"
-            />
-            <FieldDescription>
-              {!isNaN(njkbNumber) && njkbNumber > 0
-                ? formatRupiah(njkbNumber)
-                : "Nilai Jual Kendaraan Bermotor."}
-            </FieldDescription>
-          </Field>
+          <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
+            <Field data-invalid={invalidField === "njkb" || undefined}>
+              <FieldLabel htmlFor="njkb">
+                NJKB{" "}
+                <span className="text-destructive" aria-hidden="true">
+                  *
+                </span>
+              </FieldLabel>
+              <Input
+                id="njkb"
+                type="number"
+                inputMode="numeric"
+                value={njkb}
+                onChange={(e) => {
+                  setNjkb(e.target.value);
+                  setBobot(undefined);
+                }}
+                placeholder="0"
+                min={0}
+                step={1000}
+                aria-invalid={invalidField === "njkb" || undefined}
+                className="numeric"
+              />
+              <FieldDescription>
+                {!isNaN(njkbNumber) && njkbNumber > 0
+                  ? formatRupiah(njkbNumber)
+                  : "Nilai Jual Kendaraan Bermotor."}
+              </FieldDescription>
+            </Field>
 
-          <Field>
-            <FieldLabel htmlFor="njub">NJUB</FieldLabel>
-            <Input
-              id="njub"
-              type="number"
-              inputMode="numeric"
-              value={njub}
-              onChange={(e) => setNjub(e.target.value)}
-              placeholder="0"
-              min={0}
-              step={1000}
-              className="numeric"
-            />
-            <FieldDescription>
-              {!isNaN(njubNumber) && njubNumber > 0
-                ? `${formatRupiah(njubNumber)} ditambahkan ke dasar pengenaan.`
-                : "Nilai ubah bentuk, jika ada."}
-            </FieldDescription>
-          </Field>
+            <Field>
+              <FieldLabel htmlFor="njub">NJUB</FieldLabel>
+              <Input
+                id="njub"
+                type="number"
+                inputMode="numeric"
+                value={njub}
+                onChange={(e) => setNjub(e.target.value)}
+                placeholder="0"
+                min={0}
+                step={1000}
+                className="numeric"
+              />
+              <FieldDescription>
+                {!isNaN(njubNumber) && njubNumber > 0
+                  ? `${formatRupiah(njubNumber)} ditambahkan ke dasar pengenaan.`
+                  : "Nilai ubah bentuk, jika ada."}
+              </FieldDescription>
+            </Field>
 
-          <Field data-invalid={invalidField === "jenis" || undefined}>
-            <FieldLabel htmlFor="jenis">
-              Jenis Kendaraan{" "}
-              <span className="text-destructive" aria-hidden="true">
-                *
-              </span>
-            </FieldLabel>
-            <Select
-              value={jenisKendaraan}
-              onValueChange={(v) => {
-                setJenisKendaraan(v as JenisKendaraan);
-                setBobot(undefined);
-              }}
-            >
-              <SelectTrigger
-                id="jenis"
-                aria-invalid={invalidField === "jenis" || undefined}
+            <Field data-invalid={invalidField === "jenis" || undefined}>
+              <FieldLabel htmlFor="jenis">
+                Jenis Kendaraan{" "}
+                <span className="text-destructive" aria-hidden="true">
+                  *
+                </span>
+              </FieldLabel>
+              <Select
+                value={jenisKendaraan}
+                onValueChange={(v) => {
+                  setJenisKendaraan(v as JenisKendaraan);
+                  setBobot(undefined);
+                }}
               >
-                <SelectValue placeholder="Pilih Jenis" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {JENIS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <FieldDescription className="flex flex-wrap items-center gap-1.5">
-              {bobot !== undefined ? (
-                <>
+                <SelectTrigger
+                  id="jenis"
+                  aria-invalid={invalidField === "jenis" || undefined}
+                >
+                  <SelectValue placeholder="Pilih Jenis" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {JENIS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldDescription className="flex flex-wrap items-center gap-1.5">
+                {bobot !== undefined ? (
                   <Badge variant="secondary" className="numeric font-medium">
                     Bobot Data {bobot.toLocaleString("id-ID")}
                   </Badge>
-                </>
-              ) : (
-                <span>Bobot mengikuti jenis kendaraan.</span>
-              )}
-            </FieldDescription>
-          </Field>
-        </div>
-      </FieldSet>
+                ) : (
+                  <span>Bobot mengikuti jenis kendaraan.</span>
+                )}
+              </FieldDescription>
+            </Field>
+          </div>
+        </FormStepAccordion>
 
-      {/* ── 3 · Masa Pajak ── */}
-      <FieldSet className="gap-3">
-        <SectionLegend
+        <FormStepAccordion
+          value="tax-period"
           step="3"
           title="Masa Pajak"
           hint="Tanggal jatuh tempo dan pembayaran menentukan tunggakan dan diskon."
-        />
-        <div
-          className={cn(
-            "grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3",
-            INDENT,
-          )}
+          status={taxPeriodStatus}
         >
-          <DatePickerField
-            id="jatuh-tempo-pajak"
-            label="Jatuh Tempo Pajak"
-            value={jatuhTempoPajak}
-            onChange={setJatuhTempoPajak}
-            required
-            invalid={invalidField === "jatuhTempoPajak"}
-          />
-          <DatePickerField
-            id="jatuh-tempo-stnk"
-            label="Jatuh Tempo STNK"
-            value={jatuhTempoStnk}
-            onChange={setJatuhTempoStnk}
-            required
-            invalid={invalidField === "jatuhTempoStnk"}
-          />
-          <DatePickerField
-            id="tanggal-bayar"
-            label="Tanggal Pembayaran"
-            value={tanggalBayar}
-            onChange={setTanggalBayar}
-            required
-            invalid={invalidField === "tanggalBayar"}
-          />
-        </div>
-      </FieldSet>
+          <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
+            <DatePickerField
+              id="jatuh-tempo-pajak"
+              label="Jatuh Tempo Pajak"
+              value={jatuhTempoPajak}
+              onChange={setJatuhTempoPajak}
+              required
+              invalid={invalidField === "jatuhTempoPajak"}
+            />
+            <DatePickerField
+              id="jatuh-tempo-stnk"
+              label="Jatuh Tempo STNK"
+              value={jatuhTempoStnk}
+              onChange={setJatuhTempoStnk}
+              required
+              invalid={invalidField === "jatuhTempoStnk"}
+            />
+            <DatePickerField
+              id="tanggal-bayar"
+              label="Tanggal Pembayaran"
+              value={tanggalBayar}
+              onChange={setTanggalBayar}
+              required
+              invalid={invalidField === "tanggalBayar"}
+            />
+          </div>
+        </FormStepAccordion>
 
-      {/* ── 4 · Fasilitas & Biaya Tambahan (Accordion) ── */}
-      <FieldSet className="gap-0">
-        {/* Header accordion — klik membuka/menutup */}
-        <button
-          type="button"
-          onClick={() => setFacilityOpen((prev) => !prev)}
-          aria-expanded={facilityOpen}
-          aria-controls="facility-options"
-          className="flex w-full min-w-0 items-start gap-3 text-left"
+        <FormStepAccordion
+          value="facilities"
+          step="4"
+          title="Fasilitas & Biaya Tambahan"
+          hint="Aktifkan yang berlaku bagi wajib pajak ini."
+          status={activeFacilityCount > 0 ? `${activeFacilityCount} Aktif` : undefined}
         >
-          <span
-            className="numeric step-badge mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
-            aria-hidden="true"
-          >
-            4
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="flex min-w-0 items-center justify-between gap-2">
-              <span className="text-base font-semibold tracking-tight">
-                Fasilitas &amp; Biaya Tambahan
-              </span>
-              <span className="flex shrink-0 items-center gap-1.5">
-                {activeFacilityCount > 0 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {activeFacilityCount} Aktif
-                  </Badge>
-                )}
-                <ChevronDown
-                  className={cn(
-                    "size-4 text-muted-foreground transition-transform duration-200",
-                    facilityOpen && "rotate-180",
-                  )}
-                  aria-hidden="true"
-                />
-              </span>
-            </span>
-            <span className="text-sm font-normal leading-snug text-muted-foreground">
-              Aktifkan yang berlaku bagi wajib pajak ini.
-            </span>
-          </span>
-        </button>
-
-        {/* Konten accordion */}
-        <div
-          id="facility-options"
-          className={cn(
-            "overflow-hidden transition-all duration-200",
-            facilityOpen
-              ? "mt-3 max-h-160 opacity-100"
-              : "max-h-0 opacity-0 pointer-events-none",
-          )}
-          aria-hidden={!facilityOpen}
-        >
-          <div className={cn("flex flex-col gap-2.5", INDENT)}>
+          <div className="flex flex-col gap-2.5">
             <FacilityToggle
               id="is-gempa"
               title="Wilayah Terdampak Gempa (Diskon tunggakan 75%)"
@@ -541,8 +544,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               icon={<Landmark />}
             />
           </div>
-        </div>
-      </FieldSet>
+        </FormStepAccordion>
+      </Accordion>
 
       {validationError && (
         <Alert variant="destructive" className={cn("animate-fade-up", INDENT)}>

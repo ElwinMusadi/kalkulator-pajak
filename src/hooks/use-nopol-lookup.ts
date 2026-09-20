@@ -20,6 +20,16 @@ export function useNopolLookup(nopol: string): UseNopolLookupResult {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  // Hapus hasil lookup lama segera saat karakter Nopol berubah. Dengan begitu,
+  // status `found`/`not_found` sebelumnya tidak bertahan selama masa debounce.
+  useEffect(() => {
+    const normalized = nopol.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "")
+    abortRef.current?.abort()
+    setVehicleData(null)
+    setErrorMessage(null)
+    setStatus(normalized.length >= 4 ? "loading" : "idle")
+  }, [nopol])
+
   useEffect(() => {
     const normalized = debouncedNopol.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "")
 

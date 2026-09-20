@@ -137,7 +137,7 @@ export function ResultBreakdown({ result }: { result: TaxCalculationResult }) {
         result.biayaTembakRu > 0) && (
         <AccordionItem value="biaya" className="transition-all duration-200">
           <AccordionTrigger className="text-sm hover:no-underline transition-all duration-200">
-            <span>PNBP & Biaya Tambahan</span>
+            <span>STNK & TNKB</span>
             <span className="numeric ml-auto mr-3 text-sm font-semibold text-foreground">
               {formatRupiah(
                 result.biayaStnk + result.biayaTnkb + result.biayaTembakRu,
