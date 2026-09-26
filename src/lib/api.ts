@@ -2,22 +2,27 @@
  * src/lib/api.ts — Client untuk Cloudflare Pages Function
  */
 
-import type { VehicleData } from "@/types/tax"
+import type { VehicleData, VehicleDataSourceMode } from "@/types/tax"
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ""
+const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? ""
 
 export async function fetchVehicleByNopol(
   nopol: string,
+  source: VehicleDataSourceMode = "d1_then_api",
   signal?: AbortSignal
 ): Promise<VehicleData | null> {
   const normalized = nopol.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "")
 
   if (!normalized || normalized.length < 4) return null
 
-  const res = await fetch(`${BASE_URL}/api/njkb/${encodeURIComponent(normalized)}`, {
-    signal,
-    headers: { Accept: "application/json" },
-  })
+  const query = new URLSearchParams({ source })
+  const res = await fetch(
+    `${BASE_URL}/api/njkb/${encodeURIComponent(normalized)}?${query.toString()}`,
+    {
+      signal,
+      headers: { Accept: "application/json" },
+    },
+  )
 
   if (res.status === 404) return null
   if (!res.ok) {

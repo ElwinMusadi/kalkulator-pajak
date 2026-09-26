@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { PwaInstallButton } from "@/components/pwa-install-prompt";
+import { VehicleDataSourceSettings } from "@/components/vehicle-data-source-settings";
 
 export function AppHeader() {
   return (
@@ -24,6 +25,7 @@ export function AppHeader() {
       </div>
       <div className="col-start-2 flex shrink-0 items-center gap-2 md:col-start-3 md:row-start-1 md:self-end">
         <PwaInstallButton />
+        <VehicleDataSourceSettings />
         <Badge variant="secondary" className="w-fit font-medium">
           Pergub NTT No. 54 Tahun 2026
         </Badge>

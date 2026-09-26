@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from "react"
 import { fetchVehicleByNopol } from "@/lib/api"
-import type { NopolLookupStatus, VehicleData } from "@/types/tax"
+import type {
+  NopolLookupStatus,
+  VehicleData,
+  VehicleDataSourceMode,
+} from "@/types/tax"
 import { useDebounce } from "./use-debounce"
+import { useVehicleDataSourceSetting } from "./use-vehicle-data-source-setting"
 
 interface UseNopolLookupResult {
   vehicleData: VehicleData | null
+  lookupSource: Extract<VehicleDataSourceMode, "d1" | "api"> | null
   status: NopolLookupStatus
   errorMessage: string | null
 }
@@ -15,7 +21,9 @@ interface UseNopolLookupResult {
  */
 export function useNopolLookup(nopol: string): UseNopolLookupResult {
   const debouncedNopol = useDebounce(nopol, 450)
+  const { mode: sourceMode } = useVehicleDataSourceSetting()
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null)
+  const [lookupSource, setLookupSource] = useState<"d1" | "api" | null>(null)
   const [status, setStatus] = useState<NopolLookupStatus>("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -26,6 +34,7 @@ export function useNopolLookup(nopol: string): UseNopolLookupResult {
     const normalized = nopol.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "")
     abortRef.current?.abort()
     setVehicleData(null)
+    setLookupSource(null)
     setErrorMessage(null)
     setStatus(normalized.length >= 4 ? "loading" : "idle")
   }, [nopol])
@@ -36,6 +45,7 @@ export function useNopolLookup(nopol: string): UseNopolLookupResult {
     if (!normalized || normalized.length < 4) {
       setStatus("idle")
       setVehicleData(null)
+      setLookupSource(null)
       setErrorMessage(null)
       return
     }
@@ -48,19 +58,22 @@ export function useNopolLookup(nopol: string): UseNopolLookupResult {
     setStatus("loading")
     setErrorMessage(null)
 
-    fetchVehicleByNopol(normalized, controller.signal)
+    fetchVehicleByNopol(normalized, sourceMode, controller.signal)
       .then((data) => {
         if (data) {
           setVehicleData(data)
+          setLookupSource(data.source ?? null)
           setStatus("found")
         } else {
           setVehicleData(null)
+          setLookupSource(null)
           setStatus("not_found")
         }
       })
       .catch((err: unknown) => {
         if ((err as Error).name === "AbortError") return
         setVehicleData(null)
+        setLookupSource(null)
         setStatus("error")
         const offline = typeof navigator !== "undefined" && !navigator.onLine
         setErrorMessage(
@@ -71,7 +84,7 @@ export function useNopolLookup(nopol: string): UseNopolLookupResult {
       })
 
     return () => controller.abort()
-  }, [debouncedNopol])
+  }, [debouncedNopol, sourceMode])
 
-  return { vehicleData, status, errorMessage }
+  return { vehicleData, lookupSource, status, errorMessage }
 }

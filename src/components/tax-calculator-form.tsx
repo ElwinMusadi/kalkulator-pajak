@@ -143,6 +143,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
   const {
     vehicleData,
+    lookupSource,
     status: lookupStatus,
     errorMessage: lookupError,
   } = useNopolLookup(nopol);
@@ -360,6 +361,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             <NopolLookupMessage
               status={lookupStatus}
               vehicleData={vehicleData}
+              lookupSource={lookupSource}
               errorMessage={lookupError}
             />
           </Field>

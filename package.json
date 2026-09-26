@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "pages:dev": "wrangler pages dev dist --d1 DB",
     "seed": "tsx scripts/seed-d1.ts",
-    "test:tax": "tsx tests/tax-calculator.regression.ts"
+    "test:tax": "tsx tests/tax-calculator.regression.ts",
+    "test:vehicle": "tsx tests/vehicle-data-source.test.ts && tsx tests/njkb-endpoint.integration.test.ts && tsx tests/vehicle-data-source-settings.test.ts && tsx tests/vehicle-api-client.test.ts && tsx tests/vehicle-lookup-metadata.test.ts",
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.20",

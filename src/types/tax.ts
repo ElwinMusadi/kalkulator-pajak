@@ -35,7 +35,29 @@ export interface VehicleData {
   njkb: number
   njub: number
   bobot: number
+  source?: "d1" | "api"
+  njkbStatus?: "matched" | "not_found" | "reference_unavailable" | "conflict" | "ambiguous"
 }
+
+/** Mode sumber data kendaraan */
+export type VehicleDataSourceMode = "d1" | "api" | "d1_then_api"
+
+/** Hasil pencarian data kendaraan dari sumber data */
+export type VehicleLookupResult =
+  | {
+      status: "found"
+      data: VehicleData
+      source: "d1" | "api"
+    }
+  | {
+      status: "not_found"
+      message?: string
+    }
+  | {
+      status: "error"
+      error: Error | string
+      message?: string
+    }
 
 /** Input untuk fungsi calculateTax */
 export interface TaxCalculatorInput {
