@@ -139,8 +139,10 @@ export function mapApiResponseToVehicleData(
   }
 
   const nama = nullableString(payload.owner?.name)
-  const jenis = nullableString(payload.vehicle?.category)
+  // Form kalkulator menggunakan klasifikasi BPAD mentah (MINIBUS, SEPEDA MOTOR, dll.).
+  // `category` adalah kelompok umum seperti MOBIL PENUMPANG dan tidak cocok dengan opsi form.
   const categoryRaw = nullableString(payload.vehicle?.category_raw)
+  const jenis = categoryRaw ?? nullableString(payload.vehicle?.category)
   const jatuhTempoStnk = parseApiDate(payload.registration?.stnk_valid_until)
   const jatuhTempoPajak = parseApiDate(payload.tax?.notice_valid_until)
 

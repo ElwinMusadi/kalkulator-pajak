@@ -101,6 +101,11 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
     assert.equal(matched.data.bobot, 1.05)
     assert.equal(matched.data.njkbStatus, "matched")
     assert.equal(matched.data.nama, "PEMILIK CONTOH")
+    assert.equal(
+      matched.data.jenis,
+      "MINIBUS",
+      "Mapping response matched harus memprioritaskan category_raw",
+    )
   }
 
   // B. vehicle_status=found + njkb_status=not_found -> KENDARAAN DITEMUKAN, NJKB=0 (bukan vehicle not_found!)
@@ -131,7 +136,11 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
       "PEMILIK CONTOH",
       "Nama pemilik tetap diisi dari data kendaraan",
     )
-    assert.equal(vehicleFoundNjkbNotFound.data.jenis, "MOBIL PENUMPANG")
+    assert.equal(
+      vehicleFoundNjkbNotFound.data.jenis,
+      "MINIBUS",
+      "Jenis harus memakai category_raw agar cocok dengan opsi form",
+    )
     assert.equal(vehicleFoundNjkbNotFound.data.jatuhTempoStnk, "2031-12-31")
     assert.equal(vehicleFoundNjkbNotFound.data.jatuhTempoPajak, "2030-12-31")
     assert.equal(vehicleFoundNjkbNotFound.data.bobot, 1.05)

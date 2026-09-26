@@ -33,7 +33,7 @@ function officialApiResponse(nopol: string) {
     vehicle_status: "found",
     njkb_status: "matched",
     nopol,
-    vehicle: { category: "MOBIL PENUMPANG" },
+    vehicle: { category: "MOBIL PENUMPANG", category_raw: "MINIBUS" },
     registration: { stnk_valid_until: "2031-12-31" },
     tax: { notice_valid_until: "2030-12-31" },
     owner: { name: "API OWNER" },
@@ -153,6 +153,7 @@ try {
     const json = await body(response)
     assert.equal(response.status, 200)
     assert.equal(json.source, "api")
+    assert.equal(json.jenis, "MINIBUS")
     assert.equal(d1Calls, 0)
     assert.equal(
       requestedUrl,
