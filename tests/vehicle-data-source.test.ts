@@ -8,6 +8,9 @@ import {
   parseDecimalRupiahToInteger,
   parseOfficialWeight,
   parseRetryAfterSeconds,
+  discardResponseBody,
+  isValidNjkbBaseUrl,
+  sanitizeTimeoutMs,
   type D1DatabaseLike,
   type VehicleRow,
 } from "../src/services/vehicle-data/index.ts"
@@ -260,6 +263,248 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   }
 
   pass("Audit 2: timeout 8s tidak diretry, 502/503/504 & network error max 1 retry dengan backoff, error deterministik 0 retry")
+}
+
+// 3b. Regression HTTP 504: metadata typed, timeout client vs gateway, sanitasi config
+{
+  // sanitizeTimeoutMs: hanya integer finite 1..60000
+  assert.equal(sanitizeTimeoutMs(undefined), 8_000)
+  for (const bad of [0, -1, NaN, Infinity, -Infinity, 1.5, 60_001, "5000"]) {
+    assert.equal(sanitizeTimeoutMs(bad), 8_000, `timeout ${String(bad)} fallback 8000`)
+  }
+  for (const ok of [1, 20, 8_000, 60_000]) assert.equal(sanitizeTimeoutMs(ok), ok)
+
+  // Timeout config NaN tidak boleh menjadi setTimeout instan: delay terekam 8000 tanpa menunggu.
+  const originalSetTimeout = globalThis.setTimeout
+  const delays: unknown[] = []
+  globalThis.setTimeout = ((_fn: () => void, ms?: number) => {
+    delays.push(ms)
+    return originalSetTimeout(() => undefined, 0)
+  }) as typeof setTimeout
+  try {
+    const res = await new ApiVehicleDataSource({
+      ...API_CONFIG,
+      timeoutMs: NaN,
+      customFetch: async () => jsonResponse(officialMatchedResponse),
+    }).lookup("DH0001XX")
+    assert.equal(res.status, "found")
+  } finally {
+    globalThis.setTimeout = originalSetTimeout
+  }
+  assert.deepEqual(delays, [8_000])
+
+  // Upstream 504 persisten: 1 retry lalu error NJKB_UPSTREAM_TIMEOUT → httpStatus 504.
+  let calls504 = 0
+  const persistent504 = await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    sleepFn: async () => undefined,
+    customFetch: async () => {
+      calls504++
+      return new Response("<html>gateway secret detail</html>", { status: 504 })
+    },
+  }).lookup("DH0001XX")
+  assert.equal(calls504, 2)
+  assert.equal(persistent504.status, "error")
+  if (persistent504.status === "error") {
+    assert.equal(persistent504.code, "NJKB_UPSTREAM_TIMEOUT")
+    assert.equal(persistent504.httpStatus, 504)
+    assert.equal(persistent504.upstreamStatus, 504)
+    assert.match(String(persistent504.message), /Gateway NJKB/)
+    assert.doesNotMatch(String(persistent504.message), /timed out|secret/i)
+  }
+
+  // Abort client: kode berbeda, status 504, tanpa retry.
+  let abortCalls = 0
+  const aborted = await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    customFetch: async () => {
+      abortCalls++
+      throw Object.assign(new Error("aborted"), { name: "AbortError" })
+    },
+  }).lookup("DH0001XX")
+  assert.equal(abortCalls, 1)
+  if (aborted.status === "error") {
+    assert.equal(aborted.code, "NJKB_CLIENT_TIMEOUT")
+    assert.equal(aborted.httpStatus, 504)
+    assert.match(String(aborted.message), /timed out/i)
+  } else assert.fail("abort harus error")
+
+  // 502/503, 401/403, 500 dan 429 dipetakan aman (tidak meneruskan status auth).
+  const expected: Record<number, number> = { 502: 502, 503: 503, 401: 502, 403: 502, 500: 502, 429: 502 }
+  for (const [status, httpStatus] of Object.entries(expected)) {
+    const res = await new ApiVehicleDataSource({
+      ...API_CONFIG,
+      sleepFn: async () => undefined,
+      customFetch: async () => jsonResponse({ status: "error" }, Number(status)),
+    }).lookup("DH0001XX")
+    assert.equal(res.status, "error")
+    if (res.status === "error") {
+      assert.equal(res.httpStatus, httpStatus, `upstream ${status}`)
+      assert.equal(res.upstreamStatus, Number(status))
+      assert.equal(res.code, "NJKB_UPSTREAM_HTTP_ERROR")
+    }
+  }
+
+  // Network error persisten dan payload invalid → 502.
+  const net = await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    sleepFn: async () => undefined,
+    customFetch: async () => {
+      throw new TypeError("redirect or network failure")
+    },
+  }).lookup("DH0001XX")
+  assert.ok(net.status === "error" && net.code === "NJKB_NETWORK_ERROR" && net.httpStatus === 502)
+  const invalid = await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    customFetch: async () => new Response("<html></html>", { status: 200 }),
+  }).lookup("DH0001XX")
+  assert.ok(invalid.status === "error" && invalid.code === "NJKB_INVALID_PAYLOAD" && invalid.httpStatus === 502)
+
+  // Base URL invalid: config error, tidak ada fetch.
+  for (const baseUrl of [
+    "not a url",
+    "http://api.example.test",
+    "https://user:pass@api.example.test",
+    "https://api.example.test?token=x",
+    "https://api.example.test#frag",
+    "ftp://api.example.test",
+  ]) {
+    let fetched = 0
+    const res = await new ApiVehicleDataSource({
+      ...API_CONFIG,
+      baseUrl,
+      customFetch: async () => {
+        fetched++
+        return jsonResponse(officialMatchedResponse)
+      },
+    }).lookup("DH0001XX")
+    assert.equal(fetched, 0, `${baseUrl} tidak boleh fetch`)
+    assert.ok(res.status === "error" && res.code === "NJKB_CONFIG_ERROR" && res.httpStatus === 500)
+    assert.doesNotMatch(String(res.message), /pass|token|example/)
+  }
+  assert.equal(isValidNjkbBaseUrl("http://localhost:8787"), true)
+  assert.equal(isValidNjkbBaseUrl("https://api.uptdpenda-kupang.web.id/"), true)
+
+  // Headers Access, URL kontrak, dan redirect: "manual" dikirim.
+  let init: RequestInit | undefined
+  let requestedUrl = ""
+  await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    customFetch: async (input, requestInit) => {
+      requestedUrl = String(input)
+      init = requestInit
+      return jsonResponse(officialMatchedResponse)
+    },
+  }).lookup("DH0001XX")
+  assert.equal(requestedUrl, "https://api.uptdpenda-kupang.web.id/api/v1/vehicle/DH0001XX")
+  assert.equal(init?.redirect, "manual")
+  assert.equal(init?.method, "GET")
+  const sentHeaders = init?.headers as Record<string, string>
+  assert.equal(sentHeaders["CF-Access-Client-Id"], "test-client.access")
+  assert.equal(sentHeaders["CF-Access-Client-Secret"], "test-secret")
+
+  pass("Regression 504: metadata typed, client timeout ≠ gateway 504, timeout/base URL tervalidasi, redirect manual")
+}
+
+// 3c. Redirect manual 3xx dan pembatalan body yang tidak dibaca
+{
+  // Response dengan body yang pembatalannya terekam; isi body tidak pernah dibaca.
+  function spiedResponse(
+    status: number,
+    headers: Record<string, string> = {},
+    cancelThrows = false,
+  ) {
+    const spy = { cancelled: 0, pulled: 0 }
+    const stream = new ReadableStream<Uint8Array>({
+      pull() {
+        spy.pulled++
+      },
+      cancel() {
+        spy.cancelled++
+        if (cancelThrows) throw new Error("cancel failure")
+      },
+    })
+    return { response: new Response(stream, { status, headers }), spy }
+  }
+
+  for (const status of [301, 302, 307, 308]) {
+    let calls = 0
+    let slept = false
+    let spy = { cancelled: 0, pulled: 0 }
+    const res = await new ApiVehicleDataSource({
+      ...API_CONFIG,
+      sleepFn: async () => {
+        slept = true
+      },
+      customFetch: async (_input, init) => {
+        calls++
+        assert.equal(init?.redirect, "manual")
+        const spied = spiedResponse(status, {
+          Location: "https://evil.example.test/steal?token=abc",
+        })
+        spy = spied.spy
+        return spied.response
+      },
+    }).lookup("DH0001XX")
+    assert.equal(calls, 1, `HTTP ${status} tidak diikuti/diretry`)
+    assert.equal(slept, false)
+    assert.equal(spy.cancelled, 1, `HTTP ${status} body dibatalkan`)
+    assert.ok(res.status === "error")
+    if (res.status === "error") {
+      assert.equal(res.code, "NJKB_UPSTREAM_HTTP_ERROR")
+      assert.equal(res.httpStatus, 502)
+      assert.equal(res.upstreamStatus, status)
+      assert.doesNotMatch(JSON.stringify(res), /evil|token|Location/i)
+    }
+  }
+
+  // Body dibatalkan pada 404, 429, non-ok (termasuk sebelum retry 504), dan non-JSON.
+  const cases: Array<{ statuses: number[]; contentType?: string; expectedCancels: number }> = [
+    { statuses: [404], expectedCancels: 1 },
+    { statuses: [429], expectedCancels: 1 },
+    { statuses: [500], expectedCancels: 1 },
+    { statuses: [504, 504], expectedCancels: 2 },
+    { statuses: [200], contentType: "text/html", expectedCancels: 1 },
+  ]
+  for (const { statuses, contentType, expectedCancels } of cases) {
+    let calls = 0
+    let cancels = 0
+    await new ApiVehicleDataSource({
+      ...API_CONFIG,
+      sleepFn: async () => undefined,
+      customFetch: async () => {
+        const spied = spiedResponse(
+          statuses[calls++],
+          contentType ? { "Content-Type": contentType } : {},
+        )
+        const original = spied.response.body!.cancel.bind(spied.response.body)
+        spied.response.body!.cancel = async (reason?: unknown) => {
+          cancels++
+          return original(reason)
+        }
+        return spied.response
+      },
+    }).lookup("DH0001XX")
+    assert.equal(calls, statuses.length)
+    assert.equal(cancels, expectedCancels, `cancel body untuk ${statuses.join(",")}`)
+  }
+
+  // Kegagalan cancel tidak mengubah hasil error aman.
+  const failing = spiedResponse(500, {}, true)
+  const failingRes = await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    customFetch: async () => failing.response,
+  }).lookup("DH0001XX")
+  assert.ok(failingRes.status === "error" && failingRes.httpStatus === 502)
+  assert.equal(failing.spy.cancelled, 1)
+
+  // Helper aman untuk body null dan body yang sudah terpakai.
+  await discardResponseBody(new Response(null, { status: 204 }))
+  const used = new Response("x")
+  await used.text()
+  await discardResponseBody(used)
+
+  pass("Redirect 301/302/307/308 → 502 aman tanpa retry/Location; body tak terpakai dibatalkan")
 }
 
 // 4. Point 3 Audit: HTTP 429 dan Retry-After handling

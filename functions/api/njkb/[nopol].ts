@@ -41,6 +41,8 @@ interface Env {
   NJKB_API_TIMEOUT_MS?: string
 }
 
+const DEFAULT_ERROR_MESSAGE = "Terjadi kesalahan server. Coba lagi."
+
 const VEHICLE_DATA_SOURCE_MODES: readonly VehicleDataSourceMode[] = [
   "d1",
   "api",
@@ -85,6 +87,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   }
   const mode: VehicleDataSourceMode = sourceParam ?? "d1_then_api"
 
+  const startedAt = Date.now()
+
   try {
     const d1Source = new D1VehicleDataSource(ctx.env.DB)
     const apiSource = ctx.env.NJKB_API_BASE_URL
@@ -92,9 +96,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           baseUrl: ctx.env.NJKB_API_BASE_URL,
           accessClientId: ctx.env.NJKB_ACCESS_CLIENT_ID,
           accessClientSecret: ctx.env.NJKB_ACCESS_CLIENT_SECRET,
-          timeoutMs: ctx.env.NJKB_API_TIMEOUT_MS
-            ? parseInt(ctx.env.NJKB_API_TIMEOUT_MS, 10)
-            : undefined,
+          // Number (bukan parseInt) agar "10abc" ditolak; adapter menyanitasi ke default 8000.
+          timeoutMs:
+            ctx.env.NJKB_API_TIMEOUT_MS === undefined
+              ? undefined
+              : Number(ctx.env.NJKB_API_TIMEOUT_MS.trim()),
         })
       : undefined
 
@@ -117,17 +123,42 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       )
     }
 
+    // Prioritaskan message aman; Error mentah (mis. D1) tidak pernah diteruskan.
     const errorMessage =
-      typeof result.error === "string"
-        ? result.error
-        : (result.error as Error)?.message ??
-          result.message ??
-          "Terjadi kesalahan server. Coba lagi."
+      result.message ??
+      (typeof result.error === "string" ? result.error : undefined) ??
+      DEFAULT_ERROR_MESSAGE
+    const httpStatus = result.httpStatus ?? 500
 
-    return jsonResponse({ message: errorMessage }, 500)
+    // Satu entri diagnostik terstruktur tanpa NOPOL, URL, host, credential, atau body.
+    console.warn(
+      JSON.stringify({
+        event: "njkb_lookup_failed",
+        code: result.code ?? "NJKB_LOOKUP_ERROR",
+        httpStatus,
+        ...(result.upstreamStatus !== undefined
+          ? { upstreamStatus: result.upstreamStatus }
+          : {}),
+        elapsedMs: Date.now() - startedAt,
+      }),
+    )
+
+    return jsonResponse(
+      result.code
+        ? { message: errorMessage, code: result.code }
+        : { message: errorMessage },
+      httpStatus,
+    )
   } catch (err) {
-    console.error("[/api/njkb] Resolver error:", err)
-    return jsonResponse({ message: "Terjadi kesalahan server. Coba lagi." }, 500)
+    // Hanya typeof; name/message/stack dapat dikontrol pihak lain dan memuat detail sensitif.
+    console.error(
+      JSON.stringify({
+        event: "njkb_resolver_exception",
+        errorType: typeof err,
+        elapsedMs: Date.now() - startedAt,
+      }),
+    )
+    return jsonResponse({ message: DEFAULT_ERROR_MESSAGE }, 500)
   }
 }
 

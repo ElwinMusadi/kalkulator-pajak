@@ -42,6 +42,15 @@ export interface VehicleData {
 /** Mode sumber data kendaraan */
 export type VehicleDataSourceMode = "d1" | "api" | "d1_then_api"
 
+/** Metadata aman untuk kegagalan lookup; bukan detail error upstream mentah. */
+export type VehicleLookupErrorCode =
+  | "NJKB_CONFIG_ERROR"
+  | "NJKB_CLIENT_TIMEOUT"
+  | "NJKB_UPSTREAM_TIMEOUT"
+  | "NJKB_UPSTREAM_HTTP_ERROR"
+  | "NJKB_NETWORK_ERROR"
+  | "NJKB_INVALID_PAYLOAD"
+
 /** Hasil pencarian data kendaraan dari sumber data */
 export type VehicleLookupResult =
   | {
@@ -57,6 +66,9 @@ export type VehicleLookupResult =
       status: "error"
       error: Error | string
       message?: string
+      code?: VehicleLookupErrorCode
+      httpStatus?: 500 | 502 | 503 | 504
+      upstreamStatus?: number
     }
 
 /** Input untuk fungsi calculateTax */

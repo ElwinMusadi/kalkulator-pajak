@@ -100,6 +100,8 @@ export function mapApiResponseToVehicleData(
   if (json === null || typeof json !== "object" || Array.isArray(json)) {
     return {
       status: "error",
+      code: "NJKB_INVALID_PAYLOAD",
+      httpStatus: 502,
       error: "Response NJKB API tidak valid.",
       message: "Response NJKB API tidak valid.",
     }
@@ -133,6 +135,8 @@ export function mapApiResponseToVehicleData(
   if (!nopol || nopol.length < 4) {
     return {
       status: "error",
+      code: "NJKB_INVALID_PAYLOAD",
+      httpStatus: 502,
       error: "Response NJKB API tidak valid: nomor polisi tidak valid.",
       message: "Response NJKB API tidak valid: nomor polisi tidak valid.",
     }
@@ -154,6 +158,8 @@ export function mapApiResponseToVehicleData(
     if (!payload.njkb || typeof payload.njkb !== "object") {
       return {
         status: "error",
+        code: "NJKB_INVALID_PAYLOAD",
+        httpStatus: 502,
         error: "Response NJKB API tidak valid: data NJKB tidak tersedia.",
         message: "Response NJKB API tidak valid: data NJKB tidak tersedia.",
       }
@@ -165,6 +171,8 @@ export function mapApiResponseToVehicleData(
     if (!njkb || !bobot) {
       return {
         status: "error",
+        code: "NJKB_INVALID_PAYLOAD",
+        httpStatus: 502,
         error:
           "Response NJKB API tidak valid: nilai NJKB atau bobot tidak valid.",
         message:
@@ -241,6 +249,8 @@ export function mapApiResponseToVehicleData(
   // Kasus D: status NJKB tidak dikenali
   return {
     status: "error",
+    code: "NJKB_INVALID_PAYLOAD",
+    httpStatus: 502,
     error: "Response NJKB API tidak valid: njkb_status tidak dikenali.",
     message: "Response NJKB API tidak valid: njkb_status tidak dikenali.",
   }
