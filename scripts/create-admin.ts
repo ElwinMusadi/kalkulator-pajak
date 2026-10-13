@@ -82,7 +82,8 @@ async function withTempSql<T>(sql: string, fn: (file: string) => Promise<T>): Pr
   }
 }
 
-function d1Execute(sql: string, target: Target, json: boolean): Promise<RunResult> {
+/** Menjalankan SQL tulis dari file sementara (password hash tidak masuk argumen proses). */
+function d1ExecuteFile(sql: string, target: Target): Promise<RunResult> {
   return withTempSql(sql, (file) =>
     runWrangler([
       "d1",
@@ -91,18 +92,25 @@ function d1Execute(sql: string, target: Target, json: boolean): Promise<RunResul
       `--${target}`,
       "--file",
       file,
-      ...(json ? ["--json"] : []),
       ...(target === "remote" ? ["--yes"] : []),
     ]),
   )
 }
 
 async function findExistingUser(username: string, target: Target): Promise<ExistingUser | null> {
-  const result = await d1Execute(
+  // Wajib --command, bukan --file: pada D1 remote, `--file` memakai mode import
+  // yang hanya mengembalikan statistik eksekusi, bukan baris hasil SELECT.
+  // Username sudah lolos USERNAME_PATTERN ([a-z0-9._-]) dan tetap di-escape.
+  const result = await runWrangler([
+    "d1",
+    "execute",
+    DATABASE_NAME,
+    `--${target}`,
+    "--json",
+    "--command",
     `SELECT id, role FROM users WHERE username = ${sqlString(username)} COLLATE NOCASE;`,
-    target,
-    true,
-  )
+    ...(target === "remote" ? ["--yes"] : []),
+  ])
   if (result.code !== 0) {
     console.error(redact(result.stderr || result.stdout))
     fail("Gagal memeriksa user. Pastikan migration sudah diterapkan (npm run db:migrate:local).")
@@ -205,7 +213,7 @@ async function main(): Promise<void> {
     newId: randomUUID(),
   })
 
-  const result = await d1Execute(sql, options.target, false)
+  const result = await d1ExecuteFile(sql, options.target)
   if (result.code !== 0) {
     console.error(redact(result.stderr || result.stdout))
     fail("Gagal menulis user admin.")
