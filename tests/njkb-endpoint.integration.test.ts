@@ -120,25 +120,75 @@ console.log("Menjalankan NJKB endpoint integration tests...\n")
 const originalFetch = globalThis.fetch
 
 try {
-  // Default d1_then_api: D1 found, API tidak dipanggil.
+  // Default api_then_d1: API found → D1 tidak disentuh.
   {
     let apiCalls = 0
+    let d1Calls = 0
     globalThis.fetch = async () => {
       apiCalls++
-      return new Response(null, { status: 500 })
+      return new Response(JSON.stringify(officialApiResponse("DH2506KA")), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
     }
     const response = await callEndpoint({
-      DB: mockDb({ DH2506KA: d1Row }),
+      DB: mockDb({ DH2506KA: d1Row }, false, () => d1Calls++),
       ...API_ENV,
     })
     const json = await body(response)
     assert.equal(response.status, 200)
-    assert.equal(json.source, "d1")
-    assert.equal(apiCalls, 0)
+    assert.equal(json.source, "api")
+    assert.equal(apiCalls, 1)
+    assert.equal(d1Calls, 0)
     // Kebijakan baru: data per-user, tanpa CORS wildcard dan tanpa cache publik.
     assert.equal(response.headers.get("Cache-Control"), "private, no-store")
     assert.equal(response.headers.get("Access-Control-Allow-Origin"), null)
-    pass("default d1_then_api: D1 found → API tidak dipanggil (private, no-store, tanpa CORS)")
+    pass("default api_then_d1: API found → D1 tidak disentuh (private, no-store, tanpa CORS)")
+  }
+
+  // Default api_then_d1: API not_found / 504 persisten / network error → fallback D1.
+  for (const apiFailure of ["not_found", "http_504", "network"] as const) {
+    let apiCalls = 0
+    globalThis.fetch = async () => {
+      apiCalls++
+      if (apiFailure === "network") throw new TypeError("fetch failed")
+      if (apiFailure === "http_504") return new Response("gateway", { status: 504 })
+      return new Response(
+        JSON.stringify({
+          status: "vehicle_not_found",
+          vehicle_status: "not_found",
+          njkb_status: null,
+          nopol: "DH2506KA",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )
+    }
+    const originalWarn = console.warn
+    console.warn = () => undefined
+    try {
+      const response = await callEndpoint({ DB: mockDb({ DH2506KA: d1Row }), ...API_ENV })
+      assert.equal(response.status, 200, `apiFailure=${apiFailure}`)
+      assert.equal((await body(response)).source, "d1")
+      assert.ok(apiCalls >= 1)
+    } finally {
+      console.warn = originalWarn
+    }
+  }
+  pass("default api_then_d1: API not_found/504/network error → fallback D1 (200, source=d1)")
+
+  // Default api_then_d1: API 504 + D1 miss → 504 dari API (bukan 404 menyesatkan).
+  {
+    globalThis.fetch = async () => new Response("gateway", { status: 504 })
+    const originalWarn = console.warn
+    console.warn = () => undefined
+    try {
+      const response = await callEndpoint({ DB: mockDb(), ...API_ENV })
+      assert.equal(response.status, 504)
+      assert.equal((await body(response)).code, "NJKB_UPSTREAM_TIMEOUT")
+    } finally {
+      console.warn = originalWarn
+    }
+    pass("default api_then_d1: API 504 + D1 miss → 504 NJKB_UPSTREAM_TIMEOUT")
   }
 
   // Tanpa auth pada ctx.data → 401 defensif, tanpa query D1/API.
@@ -178,7 +228,10 @@ try {
       { source: "api", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
       { source: "d1_then_api", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
       { source: "d1_then_api", permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
+      { source: "api_then_d1", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
+      { source: "api_then_d1", permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
       { source: undefined, permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
+      { source: undefined, permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
     ]
     for (const testCase of cases) {
       const response = await callEndpoint(
@@ -199,6 +252,7 @@ try {
       ["d1", ["calculator", "vehicle_lookup.d1"], "d1"],
       ["api", ["calculator", "vehicle_lookup.api"], "api"],
       ["d1_then_api", ["calculator", "vehicle_lookup.d1", "vehicle_lookup.api"], "d1"],
+      ["api_then_d1", ["calculator", "vehicle_lookup.d1", "vehicle_lookup.api"], "api"],
     ] as const) {
       const response = await callEndpoint(env, "DH2506KA", source, petugasAuth([...permissions]))
       assert.equal(response.status, 200, `source=${source}`)

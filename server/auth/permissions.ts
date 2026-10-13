@@ -21,6 +21,7 @@ export function requiredModulesForVehicleSource(mode: VehicleDataSourceMode): Mo
     case "api":
       return ["calculator", "vehicle_lookup.api"]
     case "d1_then_api":
+    case "api_then_d1":
       return ["calculator", "vehicle_lookup.d1", "vehicle_lookup.api"]
   }
 }

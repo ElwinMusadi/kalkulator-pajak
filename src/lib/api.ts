@@ -2,12 +2,17 @@
  * src/lib/api.ts — Client untuk Cloudflare Pages Function
  */
 
-import type { VehicleData, VehicleDataSourceMode } from "@/types/tax"
+// Relatif (bukan alias "@/"): modul ini juga diimpor test Node via tsx.
+import {
+  DEFAULT_VEHICLE_DATA_SOURCE_MODE,
+  type VehicleData,
+  type VehicleDataSourceMode,
+} from "../types/tax"
 import { API_BASE_URL, notifyUnauthenticated, readApiError } from "./http"
 
 export async function fetchVehicleByNopol(
   nopol: string,
-  source: VehicleDataSourceMode = "d1_then_api",
+  source: VehicleDataSourceMode = DEFAULT_VEHICLE_DATA_SOURCE_MODE,
   signal?: AbortSignal
 ): Promise<VehicleData | null> {
   const normalized = nopol.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "")

@@ -22,18 +22,11 @@ interface SourceOption {
 
 const SOURCE_OPTIONS: SourceOption[] = [
   {
-    value: "d1",
-    label: "Database D1",
+    value: "api_then_d1",
+    label: "NJKB API + Database D1",
     description:
-      "Gunakan data kendaraan yang tersimpan di database Cloudflare D1 saja.",
-    icon: Database,
-  },
-  {
-    value: "api",
-    label: "NJKB API NTT",
-    description:
-      "Cari data kendaraan langsung melalui layanan NJKB API NTT.",
-    icon: Globe2,
+      "Default. Cari melalui NJKB API terlebih dahulu, lalu gunakan Database D1 bila data tidak ditemukan atau koneksi API bermasalah.",
+    icon: Layers,
   },
   {
     value: "d1_then_api",
@@ -41,6 +34,20 @@ const SOURCE_OPTIONS: SourceOption[] = [
     description:
       "Cari di Database D1 terlebih dahulu, lalu gunakan NJKB API bila data tidak ditemukan atau D1 bermasalah.",
     icon: Layers,
+  },
+  {
+    value: "api",
+    label: "NJKB API NTT",
+    description:
+      "Cari data kendaraan langsung melalui layanan NJKB API NTT saja.",
+    icon: Globe2,
+  },
+  {
+    value: "d1",
+    label: "Database D1",
+    description:
+      "Gunakan data kendaraan yang tersimpan di database Cloudflare D1 saja.",
+    icon: Database,
   },
 ]
 

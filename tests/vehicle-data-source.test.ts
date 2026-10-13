@@ -12,6 +12,7 @@ import {
   isValidNjkbBaseUrl,
   sanitizeTimeoutMs,
   type D1DatabaseLike,
+  type VehicleLookupResult,
   type VehicleRow,
 } from "../src/services/vehicle-data/index.ts"
 
@@ -573,7 +574,11 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
       )
     },
   })
-  const resolver = new VehicleDataResolver({ d1Source: source, apiSource: api })
+  const resolver = new VehicleDataResolver({
+    d1Source: source,
+    apiSource: api,
+    mode: "d1_then_api",
+  })
   assert.equal((await resolver.resolve("DH2506KA")).status, "found")
   assert.equal(apiCalls, 0)
 
@@ -581,7 +586,128 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   assert.equal((await resolver.resolve("DH0001XX")).status, "found")
   assert.equal(apiCalls, 1)
 
-  pass("Invarian D1 & Resolver Phase 1/3 tetap terjaga")
+  pass("Invarian D1 & Resolver Phase 1/3 tetap terjaga (mode d1_then_api)")
+}
+
+// 6. Default api_then_d1: NJKB API dahulu, D1 hanya sebagai fallback.
+{
+  type Script = VehicleLookupResult | (() => VehicleLookupResult)
+  function scripted(name: "d1" | "api", script: Script) {
+    const state = { calls: 0 }
+    return {
+      state,
+      source: {
+        name,
+        async lookup() {
+          state.calls++
+          return typeof script === "function" ? script() : script
+        },
+      },
+    }
+  }
+  const d1Data = { ...d1Row, nopol: "DH2506KA" }
+  const foundD1: VehicleLookupResult = {
+    status: "found",
+    source: "d1",
+    data: {
+      nopol: d1Data.nopol,
+      nama: d1Data.nama,
+      jenis: d1Data.jenis,
+      jatuhTempoStnk: d1Data.jatuh_tempo_stnk,
+      jatuhTempoPajak: d1Data.jatuh_tempo_pajak,
+      njkb: d1Data.njkb,
+      njub: d1Data.njub,
+      bobot: d1Data.bobot,
+      source: "d1",
+    },
+  }
+  const foundApi = mapApiResponseToVehicleData(
+    { ...officialMatchedResponse, nopol: "DH2506KA" },
+    "DH2506KA",
+  )
+  assert.equal(foundApi.status, "found")
+  const apiNotFound: VehicleLookupResult = { status: "not_found", message: "API not found" }
+  const d1NotFound: VehicleLookupResult = { status: "not_found", message: "D1 not found" }
+  const apiTimeout: VehicleLookupResult = {
+    status: "error",
+    error: "timeout",
+    message: "Gateway NJKB timeout.",
+    code: "NJKB_UPSTREAM_TIMEOUT",
+    httpStatus: 504,
+  }
+  const d1Error: VehicleLookupResult = {
+    status: "error",
+    error: "db",
+    message: "Terjadi kesalahan server saat membaca database D1.",
+  }
+
+  // Default mode resolver kini api_then_d1.
+  assert.equal(new VehicleDataResolver().getMode(), "api_then_d1")
+
+  // a) API found → D1 tidak disentuh.
+  {
+    const api = scripted("api", foundApi)
+    const d1 = scripted("d1", foundD1)
+    const result = await new VehicleDataResolver({ apiSource: api.source, d1Source: d1.source }).resolve("DH2506KA")
+    assert.equal(result.status, "found")
+    if (result.status === "found") assert.equal(result.source, "api")
+    assert.equal(api.state.calls, 1)
+    assert.equal(d1.state.calls, 0)
+  }
+
+  // b) API not_found → fallback D1 found.
+  // c) API error (timeout/jaringan/HTTP) → fallback D1 found.
+  for (const apiOutcome of [apiNotFound, apiTimeout]) {
+    const api = scripted("api", apiOutcome)
+    const d1 = scripted("d1", foundD1)
+    const result = await new VehicleDataResolver({ apiSource: api.source, d1Source: d1.source }).resolve("DH2506KA")
+    assert.equal(result.status, "found", `apiOutcome=${apiOutcome.status}`)
+    if (result.status === "found") assert.equal(result.source, "d1")
+    assert.equal(api.state.calls, 1)
+    assert.equal(d1.state.calls, 1)
+  }
+
+  // d) Keduanya not_found → not_found.
+  {
+    const result = await new VehicleDataResolver({
+      apiSource: scripted("api", apiNotFound).source,
+      d1Source: scripted("d1", d1NotFound).source,
+    }).resolve("DH2506KA")
+    assert.equal(result.status, "not_found")
+  }
+
+  // e) API error + D1 not_found → error API dipertahankan (bukan "tidak ditemukan").
+  {
+    const result = await new VehicleDataResolver({
+      apiSource: scripted("api", apiTimeout).source,
+      d1Source: scripted("d1", d1NotFound).source,
+    }).resolve("DH2506KA")
+    assert.equal(result.status, "error")
+    if (result.status === "error") {
+      assert.equal(result.code, "NJKB_UPSTREAM_TIMEOUT")
+      assert.equal(result.httpStatus, 504)
+    }
+  }
+
+  // f) API not_found + D1 error → error D1.
+  {
+    const result = await new VehicleDataResolver({
+      apiSource: scripted("api", apiNotFound).source,
+      d1Source: scripted("d1", d1Error).source,
+    }).resolve("DH2506KA")
+    assert.equal(result.status, "error")
+    if (result.status === "error") assert.equal(result.message, d1Error.message)
+  }
+
+  // g) API tidak dikonfigurasi → langsung D1.
+  {
+    const d1 = scripted("d1", foundD1)
+    const result = await new VehicleDataResolver({ d1Source: d1.source }).resolve("DH2506KA")
+    assert.equal(result.status, "found")
+    if (result.status === "found") assert.equal(result.source, "d1")
+  }
+
+  pass("Default api_then_d1: API dahulu; fallback D1 saat not_found/error; error API dipertahankan bila D1 kosong")
 }
 
 console.log("\nSemua Phase 7 NJKB API contract & source tests: PASS ✓\n")

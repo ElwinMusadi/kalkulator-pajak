@@ -4,7 +4,7 @@
  * Cloudflare Pages Function — GET /api/njkb/:nopol
  *
  * Menggunakan VehicleDataResolver dengan D1VehicleDataSource dan ApiVehicleDataSource (NJKB API NTT).
- * Default mode: d1_then_api.
+ * Default mode: api_then_d1 (NJKB API dahulu, fallback D1).
  *
  * Respons sukses (200):
  * {
@@ -34,21 +34,20 @@ import {
 } from "../../../src/services/vehicle-data/index.ts"
 import { hasModules, requiredModulesForVehicleSource } from "../../../server/auth/permissions.ts"
 import type { AppFunction } from "../../../server/types.ts"
+import {
+  DEFAULT_VEHICLE_DATA_SOURCE_MODE,
+  VEHICLE_DATA_SOURCE_MODES,
+} from "../../../src/types/tax.ts"
 
 /*
  * Akses (auth via _middleware.ts → ctx.data.auth):
  * - 401 UNAUTHENTICATED bila tidak ada sesi.
  * - 403 FORBIDDEN bila tidak memiliki modul calculator + modul sumber:
- *   d1 → vehicle_lookup.d1, api → vehicle_lookup.api, d1_then_api → keduanya.
+ *   d1 → vehicle_lookup.d1, api → vehicle_lookup.api,
+ *   d1_then_api / api_then_d1 → keduanya.
  */
 
 const DEFAULT_ERROR_MESSAGE = "Terjadi kesalahan server. Coba lagi."
-
-const VEHICLE_DATA_SOURCE_MODES: readonly VehicleDataSourceMode[] = [
-  "d1",
-  "api",
-  "d1_then_api",
-]
 
 function isVehicleDataSourceMode(value: string): value is VehicleDataSourceMode {
   return VEHICLE_DATA_SOURCE_MODES.includes(value as VehicleDataSourceMode)
@@ -89,12 +88,12 @@ export const onRequestGet: AppFunction<"nopol"> = async (ctx) => {
     return jsonResponse(
       {
         message:
-          "Source tidak valid. Gunakan salah satu: d1, api, atau d1_then_api.",
+          "Source tidak valid. Gunakan salah satu: d1, api, d1_then_api, atau api_then_d1.",
       },
       400
     )
   }
-  const mode: VehicleDataSourceMode = sourceParam ?? "d1_then_api"
+  const mode: VehicleDataSourceMode = sourceParam ?? DEFAULT_VEHICLE_DATA_SOURCE_MODE
 
   if (!hasModules(auth.user, requiredModulesForVehicleSource(mode))) {
     return jsonResponse(

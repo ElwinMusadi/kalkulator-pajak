@@ -25,13 +25,21 @@ function pass(name: string) {
 
 console.log("Menjalankan Vehicle Data Source Settings tests...\n")
 
-// Default selalu d1_then_api jika storage kosong/tidak tersedia.
+// Default selalu api_then_d1 jika storage kosong/tidak tersedia.
 {
   const storage = new MemoryStorage()
-  assert.equal(DEFAULT_VEHICLE_DATA_SOURCE_MODE, "d1_then_api")
-  assert.equal(readVehicleDataSourceMode(storage), "d1_then_api")
-  assert.equal(readVehicleDataSourceMode(undefined), "d1_then_api")
-  pass("Default mode selalu d1_then_api")
+  assert.equal(DEFAULT_VEHICLE_DATA_SOURCE_MODE, "api_then_d1")
+  assert.equal(readVehicleDataSourceMode(storage), "api_then_d1")
+  assert.equal(readVehicleDataSourceMode(undefined), "api_then_d1")
+  pass("Default mode selalu api_then_d1")
+}
+
+// Pilihan lama (key v1, saat default masih D1) diabaikan → default baru berlaku.
+{
+  const storage = new MemoryStorage()
+  storage.setItem("kalkulator-pajak.vehicle-data-source", "d1")
+  assert.equal(readVehicleDataSourceMode(storage), "api_then_d1")
+  pass("Preferensi key lama diabaikan; perangkat lama memakai default baru")
 }
 
 // Pilihan tersimpan dan dapat dibaca kembali setelah simulasi reload.
@@ -46,6 +54,9 @@ console.log("Menjalankan Vehicle Data Source Settings tests...\n")
 
   writeVehicleDataSourceMode("d1_then_api", storage)
   assert.equal(readVehicleDataSourceMode(storage), "d1_then_api")
+
+  writeVehicleDataSourceMode("api_then_d1", storage)
+  assert.equal(readVehicleDataSourceMode(storage), "api_then_d1")
   pass("Pilihan user persisten di storage dan bertahan setelah reload")
 }
 
@@ -53,10 +64,11 @@ console.log("Menjalankan Vehicle Data Source Settings tests...\n")
 {
   const storage = new MemoryStorage()
   storage.setItem(VEHICLE_DATA_SOURCE_STORAGE_KEY, "invalid-mode")
-  assert.equal(readVehicleDataSourceMode(storage), "d1_then_api")
+  assert.equal(readVehicleDataSourceMode(storage), "api_then_d1")
   assert.equal(isVehicleDataSourceMode("d1"), true)
   assert.equal(isVehicleDataSourceMode("api"), true)
   assert.equal(isVehicleDataSourceMode("d1_then_api"), true)
+  assert.equal(isVehicleDataSourceMode("api_then_d1"), true)
   assert.equal(isVehicleDataSourceMode("invalid-mode"), false)
   pass("Invalid stored mode aman kembali ke default")
 }
@@ -72,7 +84,7 @@ console.log("Menjalankan Vehicle Data Source Settings tests...\n")
     },
   }
 
-  assert.equal(readVehicleDataSourceMode(brokenStorage), "d1_then_api")
+  assert.equal(readVehicleDataSourceMode(brokenStorage), "api_then_d1")
   pass("Storage read failure aman kembali ke default")
 }
 

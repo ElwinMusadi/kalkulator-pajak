@@ -72,8 +72,9 @@ export function ModulePermissionList({
         <Info className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <div className="flex flex-col gap-1">
           <p>
-            Mode sumber data <span className="font-medium">Database D1 + NJKB API</span>{" "}
-            hanya tersedia bila kedua izin pencarian Nopol diaktifkan.
+            Mode default <span className="font-medium">NJKB API + Database D1</span>{" "}
+            (dan mode gabungan lainnya) hanya tersedia bila kedua izin pencarian Nopol
+            diaktifkan.
             {hasD1 !== hasApi && (
               <span className="text-muted-foreground">
                 {" "}

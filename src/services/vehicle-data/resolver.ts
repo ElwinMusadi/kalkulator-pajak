@@ -1,3 +1,4 @@
+import { DEFAULT_VEHICLE_DATA_SOURCE_MODE } from "../../types/tax"
 import type {
   VehicleDataResolverOptions,
   VehicleDataSource,
@@ -6,12 +7,19 @@ import type {
 } from "./types"
 import { normalizeNopol } from "./utils"
 
+const INVALID_NOPOL_MESSAGE = "Nopol tidak valid."
+
+function isInvalidNopol(result: VehicleLookupResult): boolean {
+  return result.status === "error" && result.message === INVALID_NOPOL_MESSAGE
+}
+
 /**
  * Resolver untuk mengorkestrasi pencarian data kendaraan berdasarkan mode sumber data.
  * Mendukung mode:
  * - "d1": hanya mencari ke Cloudflare D1.
  * - "api": hanya mencari ke NJKB API NTT.
- * - "d1_then_api": mencari ke D1 terlebih dahulu, jika tidak ditemukan fallback ke API. (Default)
+ * - "d1_then_api": D1 terlebih dahulu, fallback ke API bila tidak ditemukan/error.
+ * - "api_then_d1": API terlebih dahulu, fallback ke D1 bila tidak ditemukan/error. (Default)
  */
 export class VehicleDataResolver {
   private d1Source?: VehicleDataSource
@@ -21,8 +29,7 @@ export class VehicleDataResolver {
   constructor(options: VehicleDataResolverOptions = {}) {
     this.d1Source = options.d1Source
     this.apiSource = options.apiSource
-    // Default mode: d1_then_api
-    this.mode = options.mode ?? "d1_then_api"
+    this.mode = options.mode ?? DEFAULT_VEHICLE_DATA_SOURCE_MODE
   }
 
   getMode(): VehicleDataSourceMode {
@@ -42,8 +49,8 @@ export class VehicleDataResolver {
     if (!nopol || nopol.length < 4 || nopol.length > 12) {
       return {
         status: "error",
-        error: "Nopol tidak valid.",
-        message: "Nopol tidak valid.",
+        error: INVALID_NOPOL_MESSAGE,
+        message: INVALID_NOPOL_MESSAGE,
       }
     }
 
@@ -55,8 +62,10 @@ export class VehicleDataResolver {
       case "api":
         return this.resolveApiOnly(nopol)
       case "d1_then_api":
-      default:
         return this.resolveD1ThenApi(nopol)
+      case "api_then_d1":
+      default:
+        return this.resolveApiThenD1(nopol)
     }
   }
 
@@ -93,7 +102,7 @@ export class VehicleDataResolver {
       }
 
       // Jika D1 menghasilkan error validasi input nopol, return langsung tanpa fallback
-      if (d1Result.status === "error" && d1Result.message === "Nopol tidak valid.") {
+      if (isInvalidNopol(d1Result)) {
         return d1Result
       }
     }
@@ -107,5 +116,39 @@ export class VehicleDataResolver {
       status: "not_found",
       message: "Data NJKB untuk Nopol tersebut tidak ditemukan.",
     }
+  }
+
+  /**
+   * NJKB API terlebih dahulu; D1 hanya dipakai bila API tidak menemukan data
+   * atau gagal (timeout, jaringan, HTTP error, payload/status NJKB tidak valid).
+   *
+   * Bila kedua sumber tidak memberi data:
+   * - API error → hasil error API dikembalikan agar user tahu sumber utama
+   *   bermasalah (bukan "tidak ditemukan" yang menyesatkan).
+   * - API not_found → hasil D1 (not_found, atau error D1).
+   */
+  private async resolveApiThenD1(nopol: string): Promise<VehicleLookupResult> {
+    let apiResult: VehicleLookupResult | undefined
+
+    if (this.apiSource) {
+      apiResult = await this.apiSource.lookup(nopol)
+      if (apiResult.status === "found" || isInvalidNopol(apiResult)) {
+        return apiResult
+      }
+    }
+
+    if (!this.d1Source) {
+      return (
+        apiResult ?? {
+          status: "not_found",
+          message: "Data NJKB untuk Nopol tersebut tidak ditemukan.",
+        }
+      )
+    }
+
+    const d1Result = await this.d1Source.lookup(nopol)
+    if (d1Result.status === "found") return d1Result
+    if (apiResult?.status === "error") return apiResult
+    return d1Result
   }
 }

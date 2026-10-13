@@ -1,24 +1,29 @@
 import { useSyncExternalStore } from "react"
-import type { VehicleDataSourceMode } from "@/types/tax"
+// Relatif (bukan alias "@/"): modul ini juga diimpor test Node via tsx.
+import {
+  DEFAULT_VEHICLE_DATA_SOURCE_MODE,
+  VEHICLE_DATA_SOURCE_MODES,
+  type VehicleDataSourceMode,
+} from "../types/tax"
 
+export { DEFAULT_VEHICLE_DATA_SOURCE_MODE }
+
+/**
+ * Versi v2: default berubah menjadi api_then_d1. Key baru membuat pilihan lama
+ * (yang tersimpan saat default masih D1) diabaikan sekali, sehingga semua
+ * perangkat memakai default baru; pilihan berikutnya tersimpan seperti biasa.
+ */
 export const VEHICLE_DATA_SOURCE_STORAGE_KEY =
-  "kalkulator-pajak.vehicle-data-source"
-export const DEFAULT_VEHICLE_DATA_SOURCE_MODE: VehicleDataSourceMode =
-  "d1_then_api"
+  "kalkulator-pajak.vehicle-data-source.v2"
 
 const SOURCE_CHANGED_EVENT = "vehicle-data-source-changed"
-const VALID_MODES: readonly VehicleDataSourceMode[] = [
-  "d1",
-  "api",
-  "d1_then_api",
-]
 
 export function isVehicleDataSourceMode(
   value: unknown,
 ): value is VehicleDataSourceMode {
   return (
     typeof value === "string" &&
-    VALID_MODES.includes(value as VehicleDataSourceMode)
+    VEHICLE_DATA_SOURCE_MODES.includes(value as VehicleDataSourceMode)
   )
 }
 

@@ -39,8 +39,22 @@ export interface VehicleData {
   njkbStatus?: "matched" | "not_found" | "reference_unavailable" | "conflict" | "ambiguous"
 }
 
-/** Mode sumber data kendaraan */
-export type VehicleDataSourceMode = "d1" | "api" | "d1_then_api"
+/**
+ * Mode sumber data kendaraan.
+ * - api_then_d1 (default): NJKB API dahulu, fallback D1 bila tidak ditemukan/error.
+ * - d1_then_api: D1 dahulu, fallback NJKB API.
+ */
+export type VehicleDataSourceMode = "d1" | "api" | "d1_then_api" | "api_then_d1"
+
+/** Mode default untuk frontend dan endpoint bila `source` tidak dikirim. */
+export const DEFAULT_VEHICLE_DATA_SOURCE_MODE: VehicleDataSourceMode = "api_then_d1"
+
+export const VEHICLE_DATA_SOURCE_MODES: readonly VehicleDataSourceMode[] = [
+  "d1",
+  "api",
+  "d1_then_api",
+  "api_then_d1",
+]
 
 /** Metadata aman untuk kegagalan lookup; bukan detail error upstream mentah. */
 export type VehicleLookupErrorCode =

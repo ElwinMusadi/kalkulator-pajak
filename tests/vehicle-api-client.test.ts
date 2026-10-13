@@ -10,7 +10,7 @@ console.log("Menjalankan vehicle API client source query tests...\n")
 const originalFetch = globalThis.fetch
 
 try {
-  for (const source of ["d1", "api", "d1_then_api"] as const) {
+  for (const source of ["d1", "api", "d1_then_api", "api_then_d1"] as const) {
     let requestedUrl = ""
     globalThis.fetch = async (input) => {
       requestedUrl = String(input)
@@ -25,9 +25,9 @@ try {
     assert.equal(url.searchParams.get("source"), source)
   }
 
-  pass("fetchVehicleByNopol mengirim query source untuk ketiga mode")
+  pass("fetchVehicleByNopol mengirim query source untuk keempat mode")
 
-  // Default function argument harus d1_then_api.
+  // Default function argument harus api_then_d1.
   {
     let requestedUrl = ""
     globalThis.fetch = async (input) => {
@@ -37,8 +37,8 @@ try {
 
     await fetchVehicleByNopol("DH2506KA")
     const url = new URL(requestedUrl, "https://frontend.test")
-    assert.equal(url.searchParams.get("source"), "d1_then_api")
-    pass("fetchVehicleByNopol default source adalah d1_then_api")
+    assert.equal(url.searchParams.get("source"), "api_then_d1")
+    pass("fetchVehicleByNopol default source adalah api_then_d1")
   }
 } finally {
   globalThis.fetch = originalFetch
