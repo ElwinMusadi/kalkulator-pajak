@@ -3,6 +3,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Varian tinggi viewport — dipakai layar penuh (login, status sesi) agar tetap
+   muat tanpa scroll pada layar pendek dan ponsel landscape. */
+@custom-variant short (@media (max-height: 640px));
+@custom-variant xshort (@media (max-height: 500px));
+@custom-variant short-wide (@media (max-height: 500px) and (min-width: 560px));
+@custom-variant tiny (@media (max-height: 420px));
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.147 0.004 49.25);
@@ -162,6 +169,22 @@ body {
     radial-gradient(circle at 10% 0%, color-mix(in oklch, var(--primary) 8%, transparent) 0, transparent 28rem),
     radial-gradient(circle at 92% 16%, color-mix(in oklch, var(--primary) 5%, transparent) 0, transparent 24rem),
     var(--background);
+}
+
+/* Layar penuh setinggi viewport yang terlihat; tidak pernah scroll.
+   100vh adalah fallback untuk browser tanpa dukungan satuan dvh. */
+.viewport-screen {
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.info-subtle {
+  background-color: color-mix(in oklch, var(--primary) 6%, transparent);
+  border-color: color-mix(in oklch, var(--primary) 28%, transparent);
 }
 
 @keyframes result-panel-in {

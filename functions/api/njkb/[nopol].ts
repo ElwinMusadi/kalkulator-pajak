@@ -32,14 +32,15 @@ import {
   VehicleDataResolver,
   type VehicleDataSourceMode,
 } from "../../../src/services/vehicle-data/index.ts"
+import { hasModules, requiredModulesForVehicleSource } from "../../../server/auth/permissions.ts"
+import type { AppFunction } from "../../../server/types.ts"
 
-interface Env {
-  DB: D1Database
-  NJKB_API_BASE_URL?: string
-  NJKB_ACCESS_CLIENT_ID?: string
-  NJKB_ACCESS_CLIENT_SECRET?: string
-  NJKB_API_TIMEOUT_MS?: string
-}
+/*
+ * Akses (auth via _middleware.ts → ctx.data.auth):
+ * - 401 UNAUTHENTICATED bila tidak ada sesi.
+ * - 403 FORBIDDEN bila tidak memiliki modul calculator + modul sumber:
+ *   d1 → vehicle_lookup.d1, api → vehicle_lookup.api, d1_then_api → keduanya.
+ */
 
 const DEFAULT_ERROR_MESSAGE = "Terjadi kesalahan server. Coba lagi."
 
@@ -58,13 +59,21 @@ function jsonResponse(body: unknown, status: number = 200): Response {
     status,
     headers: {
       "Content-Type": "application/json;charset=UTF-8",
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": status === 200 ? "public, max-age=300" : "no-store",
+      // Data per-user di balik autentikasi: jangan pernah di-cache shared/browser.
+      "Cache-Control": status === 200 ? "private, no-store" : "no-store",
     },
   })
 }
 
-export const onRequestGet: PagesFunction<Env> = async (ctx) => {
+export const onRequestGet: AppFunction<"nopol"> = async (ctx) => {
+  const auth = ctx.data.auth
+  if (!auth) {
+    return jsonResponse(
+      { message: "Sesi tidak valid. Silakan login kembali.", code: "UNAUTHENTICATED" },
+      401,
+    )
+  }
+
   const rawNopol = ctx.params["nopol"]
   const nopolParam = Array.isArray(rawNopol) ? rawNopol[0] : rawNopol ?? ""
 
@@ -86,6 +95,16 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     )
   }
   const mode: VehicleDataSourceMode = sourceParam ?? "d1_then_api"
+
+  if (!hasModules(auth.user, requiredModulesForVehicleSource(mode))) {
+    return jsonResponse(
+      {
+        message: "Anda tidak memiliki akses ke sumber data kendaraan ini.",
+        code: "FORBIDDEN",
+      },
+      403,
+    )
+  }
 
   const startedAt = Date.now()
 
@@ -160,16 +179,4 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     )
     return jsonResponse({ message: DEFAULT_ERROR_MESSAGE }, 500)
   }
-}
-
-// Handle OPTIONS untuk CORS preflight
-export const onRequestOptions: PagesFunction = async () => {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  })
 }

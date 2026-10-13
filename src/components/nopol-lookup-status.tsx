@@ -5,6 +5,7 @@ import {
   Globe2,
   Loader2,
   SearchX,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -20,6 +21,8 @@ interface NopolLookupStatusProps {
   vehicleData: VehicleData | null;
   lookupSource: VehicleLookupSource | null;
   errorMessage: string | null;
+  /** Lookup ditolak server karena izin (HTTP 403). */
+  forbidden?: boolean;
 }
 
 export function NopolLookupIndicator({
@@ -45,11 +48,28 @@ export function NopolLookupIndicator({
   return null;
 }
 
+/** Ditampilkan saat akun tidak memiliki izin sumber data mana pun. */
+export function NopolLookupDisabledMessage() {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+      <ShieldAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div>
+        <p className="font-medium">Pencarian Nopol Tidak Diizinkan</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          Akun Anda belum memiliki akses sumber data kendaraan. Lengkapi Dasar
+          Pengenaan dan Masa Pajak secara manual, atau hubungi Admin.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function NopolLookupMessage({
   status,
   vehicleData,
   lookupSource,
   errorMessage,
+  forbidden = false,
 }: NopolLookupStatusProps) {
   if (status === "idle") {
     return (
@@ -110,6 +130,21 @@ export function NopolLookupMessage({
           <p className="font-medium">Kendaraan Tidak Ditemukan</p>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
             {VEHICLE_NOT_FOUND_MESSAGE}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "error" && forbidden) {
+    return (
+      <div className="animate-fade-up flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
+        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+        <div>
+          <p className="font-medium">Akses Pencarian Ditolak</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            {errorMessage ?? "Akun Anda tidak memiliki izin untuk sumber data ini."}{" "}
+            Lengkapi data secara manual atau hubungi Admin.
           </p>
         </div>
       </div>

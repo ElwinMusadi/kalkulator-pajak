@@ -1,4 +1,5 @@
-import { Database, Globe2, Settings } from "lucide-react"
+import { Database, Globe2, Layers, Settings } from "lucide-react"
+import { useAuth } from "@/auth/auth-context"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -8,8 +9,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { useEffectiveVehicleDataSource } from "@/hooks/use-effective-vehicle-data-source"
 import { cn } from "@/lib/utils"
-import { useVehicleDataSourceSetting } from "@/hooks/use-vehicle-data-source-setting"
 import type { VehicleDataSourceMode } from "@/types/tax"
 
 interface SourceOption {
@@ -39,12 +40,26 @@ const SOURCE_OPTIONS: SourceOption[] = [
     label: "Database D1 + NJKB API",
     description:
       "Cari di Database D1 terlebih dahulu, lalu gunakan NJKB API bila data tidak ditemukan atau D1 bermasalah.",
-    icon: Database,
+    icon: Layers,
   },
 ]
 
+/**
+ * Tombol pengaturan sumber data. Hanya dirender bila user memiliki izin
+ * `vehicle_source.settings` dan setidaknya satu sumber data yang diizinkan;
+ * dialog hanya menampilkan mode yang diizinkan.
+ */
 export function VehicleDataSourceSettings() {
-  const { mode, setMode } = useVehicleDataSourceSetting()
+  const { hasPermission } = useAuth()
+  const { effectiveMode, allowedModes, setMode } = useEffectiveVehicleDataSource()
+
+  if (!hasPermission("vehicle_source.settings") || allowedModes.length === 0) {
+    return null
+  }
+
+  const options = SOURCE_OPTIONS.filter((option) =>
+    allowedModes.includes(option.value),
+  )
 
   return (
     <Dialog>
@@ -58,7 +73,7 @@ export function VehicleDataSourceSettings() {
           <Settings aria-hidden="true" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Sumber Data Kendaraan</DialogTitle>
           <DialogDescription>
@@ -72,9 +87,9 @@ export function VehicleDataSourceSettings() {
           aria-label="Pilih sumber data kendaraan"
           className="grid gap-3"
         >
-          {SOURCE_OPTIONS.map((option) => {
+          {options.map((option) => {
             const Icon = option.icon
-            const selected = mode === option.value
+            const selected = effectiveMode === option.value
 
             return (
               <button
@@ -84,7 +99,7 @@ export function VehicleDataSourceSettings() {
                 aria-checked={selected}
                 onClick={() => setMode(option.value)}
                 className={cn(
-                  "flex min-h-20 w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors",
+                  "flex min-h-20 w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   selected
                     ? "border-primary bg-primary/5 ring-1 ring-primary"
                     : "border-border bg-card hover:bg-muted/50",
@@ -123,6 +138,13 @@ export function VehicleDataSourceSettings() {
             )
           })}
         </div>
+
+        {options.length < SOURCE_OPTIONS.length && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Sumber data lain tidak ditampilkan karena belum diizinkan untuk akun
+            Anda.
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   )

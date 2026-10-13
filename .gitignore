@@ -26,3 +26,7 @@ dist-ssr
 /data-kendaraan
 /seed/vehicles/
 /seed/vehicles.sql
+
+# Cloudflare local state & secrets
+.wrangler/
+.dev.vars*

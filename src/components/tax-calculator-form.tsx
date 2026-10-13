@@ -11,9 +11,11 @@ import { DatePickerField } from "@/components/date-picker-field";
 import { FacilityToggle } from "@/components/facility-toggle";
 import { FormStepAccordion } from "@/components/form-step-accordion";
 import {
+  NopolLookupDisabledMessage,
   NopolLookupIndicator,
   NopolLookupMessage,
 } from "@/components/nopol-lookup-status";
+import { useAuth } from "@/auth/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useEffectiveVehicleDataSource } from "@/hooks/use-effective-vehicle-data-source";
 import { useNopolLookup } from "@/hooks/use-nopol-lookup";
 import { calculateTax } from "@/lib/tax-calculator";
 import { formatRupiah } from "@/lib/format";
@@ -135,8 +138,21 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   );
   const [isDomisiliGempa, setIsDomisiliGempa] = useState(false);
   const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
-  const [isTembakRu, setIsTembakRu] = useState(false);
-  const [openSections, setOpenSections] = useState<FormSection[]>([]);
+  const { hasPermission } = useAuth();
+  const { effectiveMode: sourceMode, lookupEnabled } =
+    useEffectiveVehicleDataSource();
+  const canUseTembakRu = hasPermission("facility.tembak_ru");
+
+  // Tanpa izin pencarian Nopol, tahap 2 dan 3 dibuka untuk pengisian manual.
+  const defaultOpenSections: FormSection[] = lookupEnabled
+    ? []
+    : ["assessment", "tax-period"];
+
+  const [isTembakRuState, setIsTembakRu] = useState(false);
+  // Fasilitas Tembak RU dipaksa nonaktif bila user tidak memiliki izin.
+  const isTembakRu = canUseTembakRu && isTembakRuState;
+  const [openSections, setOpenSections] =
+    useState<FormSection[]>(defaultOpenSections);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidField, setInvalidField] = useState<FieldKey | null>(null);
   const hasCalculated = useRef(false);
@@ -146,7 +162,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     lookupSource,
     status: lookupStatus,
     errorMessage: lookupError,
-  } = useNopolLookup(nopol);
+    forbidden: lookupForbidden,
+  } = useNopolLookup(nopol, sourceMode);
 
   /** Mengosongkan seluruh data kendaraan saat Nopol berubah. */
   function resetVehicleFields() {
@@ -159,7 +176,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setIsDomisiliGempa(false);
     setIsMutasiMasuk(false);
     setIsTembakRu(false);
-    setOpenSections([]);
+    setOpenSections(defaultOpenSections);
     setValidationError(null);
     setInvalidField(null);
     hasCalculated.current = false;
@@ -173,10 +190,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   }
 
   useEffect(() => {
-    if (lookupStatus === "not_found") {
+    // Nopol tidak ditemukan atau lookup ditolak (403): lanjutkan secara manual.
+    if (lookupStatus === "not_found" || lookupForbidden) {
       setOpenSections(["assessment", "tax-period"]);
     }
-  }, [lookupStatus]);
+  }, [lookupStatus, lookupForbidden]);
 
   useEffect(() => {
     if (!vehicleData) return;
@@ -308,8 +326,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     jatuhTempoPajak && jatuhTempoStnk && tanggalBayar,
   );
 
+  const manualEntry =
+    !lookupEnabled || lookupStatus === "not_found" || lookupForbidden;
+
   const assessmentStatus =
-    lookupStatus === "not_found"
+    manualEntry
       ? "Isi Manual"
       : lookupStatus === "found"
         ? assessmentComplete
@@ -317,7 +338,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           : "Belum Lengkap"
         : undefined;
   const taxPeriodStatus =
-    lookupStatus === "not_found"
+    manualEntry
       ? "Isi Manual"
       : lookupStatus === "found"
         ? taxPeriodComplete
@@ -332,7 +353,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         <SectionLegend
           step="1"
           title="Identitas Kendaraan"
-          hint="Masukkan nomor polisi untuk mengisi data secara otomatis."
+          hint={
+            lookupEnabled
+              ? "Masukkan nomor polisi untuk mengisi data secara otomatis."
+              : "Catat nomor polisi, lalu lengkapi data kendaraan secara manual."
+          }
         />
         <div className={cn("w-full min-w-0", INDENT)}>
           <Field>
@@ -340,6 +365,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             <div className="relative">
               <Input
                 id="nopol"
+                aria-describedby="nopol-lookup-message"
                 value={nopol}
                 onChange={(e) => {
                   // Setiap perubahan karakter Nopol mengosongkan data sebelumnya.
@@ -358,12 +384,19 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 <NopolLookupIndicator status={lookupStatus} />
               </span>
             </div>
-            <NopolLookupMessage
-              status={lookupStatus}
-              vehicleData={vehicleData}
-              lookupSource={lookupSource}
-              errorMessage={lookupError}
-            />
+            <div id="nopol-lookup-message" aria-live="polite">
+              {lookupEnabled ? (
+                <NopolLookupMessage
+                  status={lookupStatus}
+                  vehicleData={vehicleData}
+                  lookupSource={lookupSource}
+                  errorMessage={lookupError}
+                  forbidden={lookupForbidden}
+                />
+              ) : (
+                <NopolLookupDisabledMessage />
+              )}
+            </div>
           </Field>
         </div>
       </FieldSet>
@@ -536,15 +569,17 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               onCheckedChange={setIsMutasiMasuk}
               icon={<ArrowLeftRight />}
             />
-            <FacilityToggle
-              id="is-tembak-ru"
-              title="Biaya Tembak RU/STNK"
-              description="Motor Rp150.000 · Mobil Rp250.000."
-              impact=""
-              checked={isTembakRu}
-              onCheckedChange={setIsTembakRu}
-              icon={<Landmark />}
-            />
+            {canUseTembakRu && (
+              <FacilityToggle
+                id="is-tembak-ru"
+                title="Biaya Tembak RU/STNK"
+                description="Motor Rp150.000 · Mobil Rp250.000."
+                impact=""
+                checked={isTembakRu}
+                onCheckedChange={setIsTembakRu}
+                icon={<Landmark />}
+              />
+            )}
           </div>
         </FormStepAccordion>
       </Accordion>

@@ -8,7 +8,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: "prompt",
+      // autoUpdate + skipWaiting/clientsClaim: perangkat dengan versi lama
+      // (tanpa login) langsung beralih ke versi baru tanpa menunggu prompt.
+      registerType: "autoUpdate",
       injectRegister: false,
       includeAssets: [
         "favicon.svg",
@@ -52,27 +54,22 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
+        // Menghapus cache lookup kendaraan versi lama saat worker aktif.
+        importScripts: ["/sw-cleanup.js"],
+        // sw-cleanup.js harus selalu diambil dari jaringan, bukan precache.
+        globIgnores: ["**/node_modules/**/*", "sw-cleanup.js"],
         navigateFallback: "/index.html",
+        // Endpoint /api selalu langsung ke jaringan: data sesi, user, dan
+        // kendaraan tidak boleh disimpan di cache Service Worker.
+        navigateFallbackDenylist: [/^\/api\//],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/njkb/"),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "vehicle-lookup-cache",
-              networkTimeoutSeconds: 5,
-              cacheableResponse: {
-                statuses: [200],
-              },
-              expiration: {
-                maxEntries: 300,
-                maxAgeSeconds: 7 * 24 * 60 * 60,
-                purgeOnQuotaError: true,
-              },
-            },
-          },
-          {
-            urlPattern: ({ request }) => request.destination === "image",
+            urlPattern: ({ request, url }) =>
+              request.destination === "image" &&
+              !url.pathname.startsWith("/api/"),
             handler: "CacheFirst",
             options: {
               cacheName: "image-cache",

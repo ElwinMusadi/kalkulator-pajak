@@ -3,8 +3,7 @@
  */
 
 import type { VehicleData, VehicleDataSourceMode } from "@/types/tax"
-
-const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? ""
+import { API_BASE_URL, notifyUnauthenticated, readApiError } from "./http"
 
 export async function fetchVehicleByNopol(
   nopol: string,
@@ -17,17 +16,22 @@ export async function fetchVehicleByNopol(
 
   const query = new URLSearchParams({ source })
   const res = await fetch(
-    `${BASE_URL}/api/njkb/${encodeURIComponent(normalized)}?${query.toString()}`,
+    `${API_BASE_URL}/api/njkb/${encodeURIComponent(normalized)}?${query.toString()}`,
     {
       signal,
       headers: { Accept: "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
     },
   )
 
   if (res.status === 404) return null
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: "Unknown error" }))
-    throw new Error((err as { message?: string }).message ?? "API error")
+    const error = await readApiError(res)
+    // 401: sesi dihapus Admin atau berakhir — AuthProvider kembali ke login.
+    if (res.status === 401) notifyUnauthenticated()
+    // 403: tidak memiliki izin modul/sumber data; pesan server ditampilkan.
+    throw error
   }
 
   return res.json() as Promise<VehicleData>

@@ -128,7 +128,7 @@ export function PwaInstallPrompt() {
           ) : (
             <>
               <p className="mt-1 text-xs text-muted-foreground">
-                Pasang aplikasi agar dapat dibuka dari layar utama dan digunakan secara offline.
+                Pasang aplikasi agar dapat dibuka langsung dari layar utama. Koneksi internet tetap diperlukan.
               </p>
               <Button type="button" size="sm" className="mt-3" onClick={() => void install()}>
                 Instal Aplikasi

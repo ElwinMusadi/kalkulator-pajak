@@ -1,6 +1,32 @@
 import assert from "node:assert/strict"
 import { onRequestGet } from "../functions/api/njkb/[nopol].ts"
+import type { AuthContext } from "../server/types.ts"
+import { MODULE_KEYS, type ModuleKey } from "../src/types/auth.ts"
 import type { D1DatabaseLike, VehicleRow } from "../src/services/vehicle-data/index.ts"
+
+const ADMIN_AUTH: AuthContext = {
+  user: {
+    id: "00000000-0000-4000-8000-000000000001",
+    username: "admin",
+    name: "Admin",
+    role: "admin",
+    permissions: [...MODULE_KEYS],
+  },
+  session: { id: "00000000-0000-4000-8000-0000000000a1", isPetugas: false },
+}
+
+function petugasAuth(permissions: ModuleKey[]): AuthContext {
+  return {
+    user: {
+      id: "00000000-0000-4000-8000-000000000002",
+      username: "petugas",
+      name: "Petugas",
+      role: "petugas",
+      permissions,
+    },
+    session: { id: "00000000-0000-4000-8000-0000000000b1", isPetugas: true },
+  }
+}
 
 interface TestEnv {
   DB: D1DatabaseLike
@@ -67,6 +93,7 @@ async function callEndpoint(
   env: TestEnv,
   nopol = "DH2506KA",
   source?: string,
+  auth: AuthContext | null = ADMIN_AUTH,
 ): Promise<Response> {
   const url = new URL(`https://consumer.test/api/njkb/${nopol}`)
   if (source !== undefined) url.searchParams.set("source", source)
@@ -74,7 +101,7 @@ async function callEndpoint(
     request: new Request(url),
     params: { nopol },
     env,
-    data: {},
+    data: auth ? { auth } : {},
     functionPath: "/api/njkb/[nopol]",
     waitUntil: () => undefined,
     next: async () => new Response(null, { status: 404 }),
@@ -108,7 +135,76 @@ try {
     assert.equal(response.status, 200)
     assert.equal(json.source, "d1")
     assert.equal(apiCalls, 0)
-    pass("default d1_then_api: D1 found → API tidak dipanggil")
+    // Kebijakan baru: data per-user, tanpa CORS wildcard dan tanpa cache publik.
+    assert.equal(response.headers.get("Cache-Control"), "private, no-store")
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), null)
+    pass("default d1_then_api: D1 found → API tidak dipanggil (private, no-store, tanpa CORS)")
+  }
+
+  // Tanpa auth pada ctx.data → 401 defensif, tanpa query D1/API.
+  {
+    let calls = 0
+    globalThis.fetch = async () => {
+      calls++
+      return new Response(null, { status: 500 })
+    }
+    const response = await callEndpoint(
+      { DB: mockDb({ DH2506KA: d1Row }, false, () => calls++), ...API_ENV },
+      "DH2506KA",
+      "d1",
+      null,
+    )
+    assert.equal(response.status, 401)
+    assert.equal((await body(response)).code, "UNAUTHENTICATED")
+    assert.equal(calls, 0)
+    pass("Tanpa auth → HTTP 401 UNAUTHENTICATED tanpa lookup")
+  }
+
+  // Permission petugas per sumber data.
+  {
+    let calls = 0
+    globalThis.fetch = async () => {
+      calls++
+      return new Response(JSON.stringify(officialApiResponse("DH2506KA")), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    const env = { DB: mockDb({ DH2506KA: d1Row }, false, () => calls++), ...API_ENV }
+    const cases: Array<{ source: string | undefined; permissions: ModuleKey[]; status: number }> = [
+      { source: "d1", permissions: ["calculator"], status: 403 },
+      { source: "d1", permissions: ["vehicle_lookup.d1"], status: 403 },
+      { source: "d1", permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
+      { source: "api", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
+      { source: "d1_then_api", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
+      { source: "d1_then_api", permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
+      { source: undefined, permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
+    ]
+    for (const testCase of cases) {
+      const response = await callEndpoint(
+        env,
+        "DH2506KA",
+        testCase.source,
+        petugasAuth(testCase.permissions),
+      )
+      assert.equal(response.status, testCase.status, `source=${testCase.source}`)
+      const json = await body(response)
+      assert.equal(json.code, "FORBIDDEN")
+      assert.equal(typeof json.message, "string")
+      assert.equal(response.headers.get("Cache-Control"), "no-store")
+    }
+    assert.equal(calls, 0, "403 tidak menyentuh D1/API")
+
+    for (const [source, permissions, expectedSource] of [
+      ["d1", ["calculator", "vehicle_lookup.d1"], "d1"],
+      ["api", ["calculator", "vehicle_lookup.api"], "api"],
+      ["d1_then_api", ["calculator", "vehicle_lookup.d1", "vehicle_lookup.api"], "d1"],
+    ] as const) {
+      const response = await callEndpoint(env, "DH2506KA", source, petugasAuth([...permissions]))
+      assert.equal(response.status, 200, `source=${source}`)
+      assert.equal((await body(response)).source, expectedSource)
+    }
+    pass("Petugas: 403 FORBIDDEN tanpa modul calculator/sumber; 200 bila modul lengkap")
   }
 
   // source=d1 hanya D1.
@@ -299,7 +395,7 @@ try {
     console.warn = (...args: unknown[]) => logs.push(args.map(String).join(" "))
     let apiCalls = 0
     let cancelled = 0
-    let redirectMode: RequestRedirect | undefined
+    let redirectMode: string | undefined
     globalThis.fetch = async (_input, init) => {
       apiCalls++
       redirectMode = init?.redirect

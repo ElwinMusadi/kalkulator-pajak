@@ -8,11 +8,14 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "pages:dev": "wrangler pages dev dist --d1 DB",
+    "pages:dev": "wrangler pages dev dist",
     "seed": "tsx scripts/seed-d1.ts",
     "test:tax": "tsx tests/tax-calculator.regression.ts",
     "test:vehicle": "tsx tests/vehicle-data-source.test.ts && tsx tests/njkb-endpoint.integration.test.ts && tsx tests/vehicle-data-source-settings.test.ts && tsx tests/vehicle-api-client.test.ts && tsx tests/vehicle-lookup-metadata.test.ts",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "db:migrate:local": "wrangler d1 migrations apply kalkulator-pajak-db --local",
+    "admin:create": "tsx scripts/create-admin.ts",
+    "test:auth": "tsx tests/auth.test.ts && tsx tests/create-admin.test.ts && tsx tests/auth-endpoints.integration.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.20",
