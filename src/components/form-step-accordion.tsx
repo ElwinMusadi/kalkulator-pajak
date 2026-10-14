@@ -38,7 +38,7 @@ export function FormStepAccordion({
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-3">
           <span className="flex min-w-0 items-center justify-between gap-2">
-            <span className="text-base font-semibold tracking-tight text-foreground">
+            <span className="min-w-0 text-base font-semibold tracking-tight text-foreground">
               {title}
             </span>
             {status && (

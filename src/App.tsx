@@ -22,6 +22,14 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { TaxCalculationResult } from "@/types/tax";
 
+/**
+ * `grid-cols-1` (= minmax(0,1fr)) wajib di mobile. Tanpa itu kolom grid implisit
+ * berukuran "auto" melebar mengikuti konten nowrap (nama pemilik, badge sumber
+ * data) sehingga kartu Data Penetapan melampaui lebar layar.
+ */
+const CALCULATOR_GRID_CLASS =
+  "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]";
+
 export default function App() {
   return (
     <TooltipProvider delayDuration={200}>
@@ -88,8 +96,8 @@ function AuthenticatedApp() {
             <UserManagementPage />
           </main>
         ) : canUseCalculator ? (
-          <main className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]">
-            <Card className="shadow-sm">
+          <main className={CALCULATOR_GRID_CLASS}>
+            <Card className="min-w-0 shadow-sm">
               <CardHeader className="border-b pb-5">
                 <CardTitle className="text-xl pb-0!">Data Penetapan</CardTitle>
               </CardHeader>

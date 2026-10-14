@@ -96,8 +96,9 @@ export function NopolLookupMessage({
           "animate-fade-up rounded-md border border-success-subtle bg-success-subtle px-3 py-2",
         )}
       >
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
+        {/* flex-wrap: di layar sempit badge sumber turun ke baris baru, tidak mendorong lebar. */}
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-1 basis-40">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-success">
               Data Ditemukan
             </p>
@@ -111,10 +112,9 @@ export function NopolLookupMessage({
             )}
           </div>
           {sourceLabel && (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-success-subtle bg-background/70 px-2 py-1 text-[11px] font-medium text-muted-foreground">
-              <SourceIcon className="size-3" aria-hidden="true" />
-              <span>Sumber data: </span>
-              {sourceLabel}
+            <span className="flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full border border-success-subtle bg-background/70 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+              <SourceIcon className="size-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">Sumber data: {sourceLabel}</span>
             </span>
           )}
         </div>

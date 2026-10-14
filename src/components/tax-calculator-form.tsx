@@ -349,7 +349,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
       {/* ── 1 · Identitas Kendaraan ── */}
-      <FieldSet className="gap-3">
+      {/*
+        min-w-0 wajib: <fieldset> punya min-inline-size: min-content bawaan browser,
+        sehingga konten nowrap (nama pemilik, badge sumber data) membuatnya melebar
+        melewati Card di layar sempit.
+      */}
+      <FieldSet className="min-w-0 gap-3">
         <SectionLegend
           step="1"
           title="Identitas Kendaraan"
