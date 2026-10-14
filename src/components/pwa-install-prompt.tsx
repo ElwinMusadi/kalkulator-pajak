@@ -1,151 +1,277 @@
-import { useEffect, useState } from "react"
-import { Download, Share, X } from "lucide-react"
+import { useState, type ReactNode } from "react"
+import { Download, EllipsisVertical, Menu, Share, SquarePlus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { usePwaInstall } from "@/hooks/use-pwa-install"
+import type { InstallPlatform } from "@/lib/pwa-install"
+import { cn } from "@/lib/utils"
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>
+const DISMISS_KEY = "pwa-install-dismissed"
+
+interface InstallGuide {
+  title: string
+  steps: ReactNode[]
+  note?: string
 }
 
-function isStandalone() {
+/** Petunjuk manual saat browser tidak menyediakan dialog instalasi otomatis. */
+const GUIDES: Record<InstallPlatform, InstallGuide> = {
+  "ios-safari": {
+    title: "Safari di iPhone/iPad",
+    steps: [
+      <>Tekan tombol <Kbd icon={<Share />}>Bagikan</Kbd> di bilah bawah (iPad: kanan atas).</>,
+      <>Gulir ke bawah, lalu pilih <Kbd icon={<SquarePlus />}>Tambahkan ke Layar Utama</Kbd>.</>,
+      <>Tekan <Kbd>Tambah</Kbd> di pojok kanan atas.</>,
+    ],
+  },
+  "ios-other": {
+    title: "Browser di iPhone/iPad",
+    steps: [
+      <>Tekan tombol <Kbd icon={<Share />}>Bagikan</Kbd> di bilah alamat.</>,
+      <>Pilih <Kbd icon={<SquarePlus />}>Tambahkan ke Layar Utama</Kbd>, lalu tekan <Kbd>Tambah</Kbd>.</>,
+    ],
+    note: "Bila pilihan tersebut tidak muncul, buka halaman ini di Safari lalu ulangi langkahnya.",
+  },
+  "android-chromium": {
+    title: "Chrome di Android",
+    steps: [
+      <>Tekan <Kbd icon={<EllipsisVertical />}>Menu</Kbd> di kanan atas.</>,
+      <>Pilih <Kbd>Instal aplikasi</Kbd> atau <Kbd>Tambahkan ke layar utama</Kbd>.</>,
+      <>Konfirmasi dengan menekan <Kbd>Instal</Kbd>.</>,
+    ],
+  },
+  "android-samsung": {
+    title: "Samsung Internet",
+    steps: [
+      <>Tekan <Kbd icon={<Menu />}>Menu</Kbd> di kanan bawah.</>,
+      <>Pilih <Kbd>Tambahkan halaman ke</Kbd>, lalu <Kbd>Layar Utama</Kbd>.</>,
+    ],
+  },
+  "android-firefox": {
+    title: "Firefox di Android",
+    steps: [
+      <>Tekan <Kbd icon={<EllipsisVertical />}>Menu</Kbd>.</>,
+      <>Pilih <Kbd>Instal</Kbd> atau <Kbd>Tambahkan ke layar utama</Kbd>.</>,
+    ],
+  },
+  "desktop-chromium": {
+    title: "Chrome / Edge di komputer",
+    steps: [
+      <>Klik ikon <Kbd icon={<Download />}>Instal</Kbd> di ujung kanan bilah alamat.</>,
+      <>Atau buka <Kbd icon={<EllipsisVertical />}>Menu</Kbd>, pilih <Kbd>Simpan dan bagikan</Kbd>, lalu <Kbd>Instal halaman sebagai aplikasi</Kbd>.</>,
+    ],
+  },
+  "desktop-safari": {
+    title: "Safari di Mac",
+    steps: [<>Buka menu <Kbd>File</Kbd>, lalu pilih <Kbd>Tambahkan ke Dock</Kbd>.</>],
+    note: "Memerlukan macOS Sonoma atau lebih baru.",
+  },
+  "desktop-firefox": {
+    title: "Firefox di komputer",
+    steps: [<>Buka halaman ini di <Kbd>Google Chrome</Kbd> atau <Kbd>Microsoft Edge</Kbd>, lalu tekan tombol Instal Aplikasi.</>],
+    note: "Firefox desktop belum mendukung instalasi aplikasi web.",
+  },
+  other: {
+    title: "Browser Anda",
+    steps: [
+      <>Buka menu browser.</>,
+      <>Pilih <Kbd>Instal aplikasi</Kbd> atau <Kbd>Tambahkan ke layar utama</Kbd>.</>,
+    ],
+    note: "Bila pilihan tersebut tidak tersedia, gunakan Chrome (Android/komputer) atau Safari (iPhone/iPad).",
+  },
+}
+
+function Kbd({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
   return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone))
+    <span className="inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-px align-baseline text-[0.8125rem] font-medium text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">
+      {icon}
+      {children}
+    </span>
   )
 }
 
-function isIosDevice() {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+function InstallGuideDialog({
+  open,
+  onOpenChange,
+  platform,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  platform: InstallPlatform
+}) {
+  const guide = GUIDES[platform]
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto">
+        <DialogHeader className="text-left">
+          <DialogTitle>Instal Kalkulator Pajak</DialogTitle>
+          <DialogDescription>
+            Pasang aplikasi agar dapat dibuka langsung dari layar utama, tanpa
+            mengetik alamat. Koneksi internet tetap diperlukan.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {guide.title}
+          </p>
+          <ol className="flex flex-col gap-2.5">
+            {guide.steps.map((step, index) => (
+              <li key={index} className="flex items-start gap-3 text-sm leading-relaxed">
+                <span
+                  className="numeric step-badge mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
+                  aria-hidden="true"
+                >
+                  {index + 1}
+                </span>
+                <span className="min-w-0">{step}</span>
+              </li>
+            ))}
+          </ol>
+          {guide.note && (
+            <p className="info-subtle rounded-md border px-3 py-2 text-xs leading-relaxed text-foreground">
+              {guide.note}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            Mengerti
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
-interface PwaInstallState {
-  installEvent: BeforeInstallPromptEvent | null
-  showIosHelp: boolean
-  dismissed: boolean
-}
+/**
+ * Logika tombol instal bersama: dialog native bila tersedia (Chrome/Edge/
+ * Samsung), selain itu petunjuk manual sesuai browser (Safari iOS, dsb.).
+ */
+function useInstallAction() {
+  const { installed, canPrompt, platform, promptInstall } = usePwaInstall()
+  const [guideOpen, setGuideOpen] = useState(false)
 
-function usePwaInstallState(): PwaInstallState & {
-  dismiss: () => void
-  install: () => Promise<void>
-} {
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
-  const [showIosHelp, setShowIosHelp] = useState(false)
-  const [dismissed, setDismissed] = useState(
-    () => sessionStorage.getItem("pwa-install-dismissed") === "1"
+  async function start() {
+    if (canPrompt) {
+      const outcome = await promptInstall()
+      if (outcome !== "unavailable") return
+    }
+    setGuideOpen(true)
+  }
+
+  const dialog = (
+    <InstallGuideDialog open={guideOpen} onOpenChange={setGuideOpen} platform={platform} />
   )
 
-  useEffect(() => {
-    if (isStandalone() || dismissed) return
-    setShowIosHelp(isIosDevice())
+  return { visible: !installed, start, dialog }
+}
 
-    const onPrompt = (event: Event) => {
-      event.preventDefault()
-      setInstallEvent(event as BeforeInstallPromptEvent)
-    }
-    const onInstalled = () => {
-      setInstallEvent(null)
-      setShowIosHelp(false)
-    }
+/** Tombol "Instal" di header; tampil di semua ukuran layar selama belum terpasang. */
+export function PwaInstallButton({ className }: { className?: string }) {
+  const { visible, start, dialog } = useInstallAction()
+  if (!visible) return null
 
-    window.addEventListener("beforeinstallprompt", onPrompt)
-    window.addEventListener("appinstalled", onInstalled)
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt)
-      window.removeEventListener("appinstalled", onInstalled)
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => void start()}
+        className={cn("h-9", className)}
+      >
+        <Download aria-hidden="true" />
+        Instal Aplikasi
+      </Button>
+      {dialog}
+    </>
+  )
+}
+
+/** Tautan instal ringkas untuk halaman login (ruang terbatas, tanpa scroll). */
+export function PwaInstallLink({ className }: { className?: string }) {
+  const { visible, start, dialog } = useInstallAction()
+  if (!visible) return null
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void start()}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5",
+          className,
+        )}
+      >
+        <Download aria-hidden="true" />
+        Instal aplikasi di perangkat ini
+      </button>
+      {dialog}
+    </>
+  )
+}
+
+/** Kartu ajakan instal pada mobile; dapat ditutup untuk sesi browser ini. */
+export function PwaInstallPrompt() {
+  const { visible, start, dialog } = useInstallAction()
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem(DISMISS_KEY) === "1"
+    } catch {
+      return false
     }
-  }, [dismissed])
+  })
 
   function dismiss() {
-    sessionStorage.setItem("pwa-install-dismissed", "1")
+    try {
+      sessionStorage.setItem(DISMISS_KEY, "1")
+    } catch {
+      // Abaikan: penutupan tetap berlaku sampai halaman dimuat ulang.
+    }
     setDismissed(true)
   }
 
-  async function install() {
-    if (!installEvent) return
-    await installEvent.prompt()
-    const choice = await installEvent.userChoice
-    if (choice.outcome === "accepted") setInstallEvent(null)
-  }
-
-  return { installEvent, showIosHelp, dismissed, dismiss, install }
-}
-
-/** Tombol kecil di header — ditampilkan hanya pada desktop (lg+). */
-export function PwaInstallButton() {
-  const { installEvent, showIosHelp, dismissed, dismiss, install } = usePwaInstallState()
-
-  if (dismissed || (!installEvent && !showIosHelp)) return null
-
-  if (showIosHelp) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="outline" size="sm" onClick={dismiss} aria-label="Petunjuk instalasi iOS">
-            Instal
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-[220px]">
-          Di Safari, tekan Bagikan lalu "Tambahkan ke Layar Utama".
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
+  if (!visible || dismissed) return null
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => void install()}
-      aria-label="Instal aplikasi"
-    >
-      Instal
-    </Button>
-  )
-}
-
-/** Card prompt penuh — ditampilkan hanya pada mobile (hidden lg:hidden). */
-export function PwaInstallPrompt() {
-  const { installEvent, showIosHelp, dismissed, dismiss, install } = usePwaInstallState()
-
-  if (dismissed || (!installEvent && !showIosHelp)) return null
-
-  return (
-    <Card className="border-primary/20 bg-card lg:hidden">
-      <CardContent className="flex items-start gap-3 p-4">
-        {showIosHelp ? (
-          <Share className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-        ) : (
-          <Download className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Instal Kalkulator Pajak</p>
-          {showIosHelp ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Di Safari, tekan tombol Bagikan lalu pilih "Tambahkan ke Layar Utama".
+    <>
+      <Card className="border-primary/20 bg-card lg:hidden">
+        <CardContent className="flex items-start gap-3 p-4">
+          <span className="step-badge flex size-9 shrink-0 items-center justify-center rounded-md border">
+            <Download className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Instal Kalkulator Pajak</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Pasang aplikasi agar dapat dibuka langsung dari layar utama. Koneksi
+              internet tetap diperlukan.
             </p>
-          ) : (
-            <>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Pasang aplikasi agar dapat dibuka langsung dari layar utama. Koneksi internet tetap diperlukan.
-              </p>
-              <Button type="button" size="sm" className="mt-3" onClick={() => void install()}>
-                Instal Aplikasi
-              </Button>
-            </>
-          )}
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Tutup petunjuk instalasi"
-          onClick={dismiss}
-        >
-          <X aria-hidden="true" />
-        </Button>
-      </CardContent>
-    </Card>
+            <Button type="button" size="sm" className="mt-3" onClick={() => void start()}>
+              <Download aria-hidden="true" />
+              Instal Aplikasi
+            </Button>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-mr-2 -mt-2 shrink-0"
+            aria-label="Tutup ajakan instalasi"
+            onClick={dismiss}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        </CardContent>
+      </Card>
+      {dialog}
+    </>
   )
 }

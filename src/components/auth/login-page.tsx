@@ -3,6 +3,7 @@ import type { FormEvent } from "react"
 import { CircleAlert, Info, Loader2, LogIn } from "lucide-react"
 import { useAuth } from "@/auth/auth-context"
 import { PasswordInput } from "@/components/password-input"
+import { PwaInstallLink } from "@/components/pwa-install-prompt"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -235,8 +236,11 @@ export function LoginPage() {
         </div>
       </main>
 
-      <footer className="shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground short:hidden">
-        Pergub NTT No. 54 Tahun 2026
+      {/* Footer disembunyikan pada tinggi sempit agar form tetap utuh tanpa scroll;
+          tombol instal tetap tersedia di header setelah login. */}
+      <footer className="flex shrink-0 flex-col items-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground short:hidden">
+        <PwaInstallLink className="text-sm" />
+        <span>Pergub NTT No. 54 Tahun 2026</span>
       </footer>
     </div>
   )
