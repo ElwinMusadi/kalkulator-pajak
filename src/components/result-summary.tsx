@@ -27,17 +27,17 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
   const swdkllj =
     result.swdklljBerjalan + result.swdklljTunggakan + result.dendaSwdkllj;
   const pnbp = result.biayaStnk + result.biayaTnkb;
+  // Informasi tarif hanya ditampilkan untuk plat merah (tarif khusus 0,5%);
+  // plat putih/hitam memakai tarif umum sehingga tidak perlu ditandai.
+  const isPlatMerah = result.warnaPlat === "merah";
   const tarifLabel = formatPersen(result.tarifPkbBerjalan);
-  // Plat putih/hitam dengan tunggakan sebelum 5 Jan 2025 memakai 1,5% untuk
-  // periode tersebut; label menyebut "berjalan" agar tidak menyesatkan.
-  const tarifPrefix = result.tahunTunggakanPra > 0 && result.warnaPlat !== "merah"
-    ? "Tarif PKB berjalan"
-    : "Tarif PKB";
 
   async function copySummary() {
     const text = [
       "RINGKASAN PENETAPAN PAJAK KENDARAAN",
-      `Plat ${WARNA_PLAT_LABEL[result.warnaPlat]} · ${tarifPrefix} ${tarifLabel}`,
+      isPlatMerah
+        ? `Plat ${WARNA_PLAT_LABEL[result.warnaPlat]} · Tarif PKB ${tarifLabel}`
+        : null,
       `PKB: ${formatRupiah(pokokPkb)}`,
       `Opsen PKB: ${formatRupiah(pokokOpsen)}`,
       `SWDKLLJ: ${formatRupiah(swdkllj)}`,
@@ -72,20 +72,22 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
               ? `${result.tahunTunggakan} tahun tunggakan - 1 tahun berjalan`
               : "Tidak Ada Tunggakan - Bayar Tahun Berjalan"}
           </p>
-          {/* Warna plat TNKB yang dipakai; berbeda dari PNBP TNKB (biaya plat). */}
-          <Badge
-            variant="outline"
-            className="mt-2 max-w-full gap-1.5 bg-background/70 font-medium text-muted-foreground"
-          >
-            <PlateColorSwatch warna={result.warnaPlat} />
-            <span className="min-w-0 truncate">
-              {tarifPrefix}{" "}
-              <span className="numeric font-semibold text-foreground">
-                {tarifLabel}
-              </span>{" "}
-              · Plat {WARNA_PLAT_LABEL[result.warnaPlat]}
-            </span>
-          </Badge>
+          {/* Hanya plat merah (tarif khusus); berbeda dari PNBP TNKB (biaya plat). */}
+          {isPlatMerah && (
+            <Badge
+              variant="outline"
+              className="mt-2 max-w-full gap-1.5 bg-background/70 font-medium text-muted-foreground"
+            >
+              <PlateColorSwatch warna={result.warnaPlat} />
+              <span className="min-w-0 truncate">
+                Tarif PKB{" "}
+                <span className="numeric font-semibold text-foreground">
+                  {tarifLabel}
+                </span>{" "}
+                · Plat {WARNA_PLAT_LABEL[result.warnaPlat]}
+              </span>
+            </Badge>
+          )}
         </div>
         {/* <Badge
           variant={result.tahunTunggakan > 0 ? "secondary" : "outline"}
