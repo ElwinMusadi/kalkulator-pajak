@@ -37,6 +37,11 @@ export interface VehicleRow {
   njkb: number
   njub: number
   bobot: number
+  /**
+   * Warna TNKB (migration 0002). Opsional: kolom belum ada sebelum migration
+   * diterapkan; NULL = tidak diketahui (frontend default putih).
+   */
+  warna_plat?: string | null
 }
 
 /**

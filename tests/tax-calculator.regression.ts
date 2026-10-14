@@ -297,4 +297,122 @@ const innoBase: Omit<TaxCalculatorInput, "jatuhTempoPajak" | "jatuhTempoStnk"> =
   pass("Tembak RU/STNK – biaya dan total motor")
 }
 
+// ---------------------------------------------------------------------------
+// Warna Plat (TNKB)
+// Kasus acuan user: DH3088WK — sepeda motor plat merah, NJKB 12.100.000,
+// bobot 1, jatuh tempo PKB & STNK 29 Nov 2026.
+// Aturan: plat merah tarif 0,5% untuk semua periode; insentif Pergub 54,
+// Opsen 66%, SWDKLLJ, dan PNBP sama seperti plat putih/hitam.
+// ---------------------------------------------------------------------------
+const dh3088wk: TaxCalculatorInput = {
+  njkb: 12_100_000,
+  njub: 0,
+  bobot: 1,
+  jenisKendaraan: "SEPEDA MOTOR",
+  jatuhTempoPajak: new Date("2026-11-29T00:00:00"),
+  jatuhTempoStnk: new Date("2026-11-29T00:00:00"),
+  tanggalBayar: new Date("2026-10-14T00:00:00"), // 46 hari sebelum JT
+  isDomisiliGempa: false,
+  isTembakRu: false,
+}
+
+// Default tanpa warnaPlat = putih → hasil identik dengan sebelum fitur ini.
+{
+  const tanpa = calculateTax(dh3088wk)
+  const putih = calculateTax({ ...dh3088wk, warnaPlat: "putih" })
+  const hitam = calculateTax({ ...dh3088wk, warnaPlat: "hitam" })
+  assert.equal(tanpa.warnaPlat, "putih")
+  assert.equal(tanpa.tarifPkbBerjalan, 0.012)
+  assert.deepEqual(putih, tanpa, "Plat putih = default")
+  assert.deepEqual({ ...hitam, warnaPlat: "putih" }, tanpa, "Plat hitam = plat putih")
+  pass("Warna plat – default putih; plat hitam identik dengan plat putih")
+}
+
+// DH3088WK plat merah, bayar 46 hari sebelum JT (motor 31–60 hari → diskon 15%).
+{
+  const r = calculateTax({ ...dh3088wk, warnaPlat: "merah" })
+  // DP = 82,5% × 12.100.000 = 9.982.500; PKB = 9.982.500 × 0,5% = 49.912,5; × 85% = 42.425,625
+  assert.equal(r.tarifPkbBerjalan, 0.005, "DH3088WK - tarif 0,5%")
+  assert.equal(r.pkbDiscount, 0.15, "DH3088WK - diskon bayar awal 15% tetap berlaku")
+  assert.ok(Math.abs(r.pkbBerjalan - 42_425.625) < 1e-6, "DH3088WK - pkbBerjalan")
+  assert.ok(Math.abs(r.opsenBerjalan - 42_425.625 * 0.66) < 1e-6, "DH3088WK - opsen 66%")
+  assert.equal(r.swdklljBerjalan, 35_000, "DH3088WK - SWDKLLJ sama")
+  assert.equal(r.biayaStnk, 100_000, "DH3088WK - PNBP STNK (STNK ≤ 90 hari)")
+  assert.equal(r.biayaTnkb, 60_000, "DH3088WK - PNBP TNKB")
+
+  // Plat merah ≈ 0,5/1,2 PKB plat putih untuk kondisi yang sama.
+  const putih = calculateTax({ ...dh3088wk, warnaPlat: "putih" })
+  assert.ok(Math.abs(r.pkbBerjalan / putih.pkbBerjalan - 0.5 / 1.2) < 1e-9, "Rasio merah/putih")
+  // Komponen di luar PKB & Opsen tidak berubah.
+  assert.equal(r.swdklljBerjalan + r.biayaStnk + r.biayaTnkb, putih.swdklljBerjalan + putih.biayaStnk + putih.biayaTnkb)
+  pass("DH3088WK plat merah – tarif 0,5%, diskon 15%, Opsen/SWDKLLJ/PNBP sama")
+}
+
+// Plat merah dengan tunggakan pra & pasca 5 Jan 2025: 0,5% untuk semua periode,
+// diskon tunggakan Pergub 54 tetap berlaku.
+{
+  const r = calculateTax({
+    ...dh3088wk,
+    jatuhTempoPajak: new Date("2023-11-29T00:00:00"),
+    jatuhTempoStnk: new Date("2023-11-29T00:00:00"),
+    tanggalBayar: new Date("2026-12-15T00:00:00"),
+    warnaPlat: "merah",
+  })
+  const pkbPenuh = 12_100_000 * 0.005 // 60.500 per tahun
+  // Tunggakan 2023, 2024 (pra) dan 2025 (pasca); diskon non-gempa 50%.
+  assert.equal(r.tahunTunggakanPra, 2)
+  assert.equal(r.tahunTunggakanPost, 1)
+  assert.ok(Math.abs(r.pkbTunggakanPra2025 - 2 * pkbPenuh * 0.5) < 1e-6, "Tunggak pra 0,5% (bukan 1,5%)")
+  assert.ok(Math.abs(r.pkbTunggakanPost2025 - pkbPenuh * 0.5) < 1e-6, "Tunggak pasca 0,5%")
+  assert.ok(Math.abs(r.opsenTunggakan - pkbPenuh * 0.5 * 0.66) < 1e-6, "Opsen tunggak hanya pasca")
+  // Ada tunggakan → DP berjalan 100%, tanpa diskon bayar awal.
+  assert.ok(Math.abs(r.pkbBerjalan - pkbPenuh) < 1e-6, "PKB berjalan 0,5% × DP 100%")
+  assert.equal(r.dendaPkb, 0, "Denda PKB tetap dihapus")
+  pass("Plat merah tunggakan – 0,5% semua periode, diskon tunggakan & hapus denda berlaku")
+}
+
+// Periode berjalan sebelum 5 Jan 2025 (bayar 2024): putih 1,5% tanpa Opsen,
+// merah tetap 0,5% tanpa Opsen; tidak ada pengurang DP 17,5%.
+{
+  const base: TaxCalculatorInput = {
+    ...dh3088wk,
+    jatuhTempoPajak: new Date("2024-06-01T00:00:00"),
+    jatuhTempoStnk: new Date("2024-06-01T00:00:00"),
+    tanggalBayar: new Date("2024-05-20T00:00:00"),
+  }
+  const putih = calculateTax({ ...base, warnaPlat: "putih" })
+  const merah = calculateTax({ ...base, warnaPlat: "merah" })
+  assert.equal(putih.tarifPkbBerjalan, 0.015, "Pra-cutoff putih 1,5%")
+  assert.equal(merah.tarifPkbBerjalan, 0.005, "Pra-cutoff merah 0,5%")
+  assert.equal(merah.opsenBerjalan, 0, "Pra-cutoff tanpa Opsen")
+  // DP 100% (tanpa 17,5%), diskon motor 0–30 hari 10%.
+  assert.ok(Math.abs(merah.pkbBerjalan - 12_100_000 * 0.005 * 0.9) < 1e-6, "Pra-cutoff merah PKB")
+  pass("Periode berjalan pra-5 Jan 2025 – putih 1,5%, merah 0,5%, tanpa Opsen")
+}
+
+// Plat merah dengan fasilitas: gempa 75%, Mutasi Masuk 50%, Tembak RU.
+{
+  const tunggak: TaxCalculatorInput = {
+    ...dh3088wk,
+    jatuhTempoPajak: new Date("2025-11-29T00:00:00"),
+    jatuhTempoStnk: new Date("2025-11-29T00:00:00"),
+    tanggalBayar: new Date("2026-12-15T00:00:00"),
+    warnaPlat: "merah",
+  }
+  const gempa = calculateTax({ ...tunggak, isDomisiliGempa: true })
+  assert.ok(Math.abs(gempa.pkbTunggakanPost2025 - 12_100_000 * 0.005 * 0.25) < 1e-6, "Merah + gempa 75%")
+
+  const mutasi = calculateTax({ ...dh3088wk, warnaPlat: "merah", isMutasiMasuk: true })
+  assert.equal(mutasi.pkbDiscount, 0.5, "Merah + mutasi 50%")
+  assert.ok(Math.abs(mutasi.pkbBerjalan - 12_100_000 * 0.825 * 0.005 * 0.5) < 1e-6, "Merah + mutasi PKB")
+
+  const tembak = calculateTax({ ...dh3088wk, warnaPlat: "merah", isTembakRu: true })
+  assert.equal(tembak.biayaTembakRu, 150_000, "Merah + Tembak RU motor")
+
+  // Nilai null runtime diperlakukan sebagai default putih.
+  const nullPlat = calculateTax({ ...dh3088wk, warnaPlat: null as unknown as undefined })
+  assert.equal(nullPlat.warnaPlat, "putih", "warnaPlat null → putih")
+  pass("Plat merah + gempa/mutasi/Tembak RU; warnaPlat null aman → putih")
+}
+
 console.log("\nSemua regression test: PASS ✓\n")

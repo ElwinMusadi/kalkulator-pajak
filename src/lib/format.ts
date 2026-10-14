@@ -11,6 +11,17 @@ export function formatRupiah(amount: number): string {
   }).format(Math.round(amount))
 }
 
+const PERCENT_FORMAT = new Intl.NumberFormat("id-ID", {
+  style: "percent",
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 2,
+})
+
+/** Format rasio ke persen Indonesia: 0.012 → "1,2%", 0.005 → "0,5%". */
+export function formatPersen(ratio: number): string {
+  return PERCENT_FORMAT.format(ratio)
+}
+
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat("id-ID", {
   day: "numeric",
   month: "short",

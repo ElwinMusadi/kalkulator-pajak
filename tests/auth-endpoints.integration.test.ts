@@ -207,7 +207,11 @@ console.log("Menjalankan auth endpoint integration tests (Miniflare D1)...\n")
 try {
   const db = (await mf.getD1Database("DB")) as unknown as D1Database
   env = { DB: db }
-  for (const file of ["schema.sql", "migrations/0001_auth.sql"]) {
+  for (const file of [
+    "schema.sql",
+    "migrations/0001_auth.sql",
+    "migrations/0002_vehicle_plate_color.sql",
+  ]) {
     const sql = await readFile(path.join(ROOT, file), "utf8")
     await db.batch(splitSql(sql).map((stmt) => db.prepare(stmt)))
   }
@@ -415,7 +419,10 @@ try {
     const d1 = await api("GET", "/api/njkb/DH2506KA?source=d1", { token: petugasToken })
     assert.equal(d1.status, 200)
     assert.equal(d1.headers.get("Cache-Control"), "private, no-store")
-    assert.equal((await json(d1)).source, "d1")
+    const d1Json = await json(d1)
+    assert.equal(d1Json.source, "d1")
+    // D1 nyata dengan migration 0002: kolom warna_plat NULL → warnaPlat null.
+    assert.equal(d1Json.warnaPlat, null)
     for (const source of ["api", "d1_then_api"]) {
       const denied = await api("GET", `/api/njkb/DH2506KA?source=${source}`, { token: petugasToken })
       assert.equal(denied.status, 403)

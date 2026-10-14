@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Calculator,
   CircleAlert,
+  Info,
   Landmark,
   ShieldCheck,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import {
   NopolLookupIndicator,
   NopolLookupMessage,
 } from "@/components/nopol-lookup-status";
+import { PlateColorRadioGroup } from "@/components/plate-color-radio-group";
 import { useAuth } from "@/auth/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Accordion } from "@/components/ui/accordion";
@@ -26,6 +28,7 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
+  FieldTitle,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -39,10 +42,21 @@ import {
 import { useEffectiveVehicleDataSource } from "@/hooks/use-effective-vehicle-data-source";
 import { useNopolLookup } from "@/hooks/use-nopol-lookup";
 import { calculateTax } from "@/lib/tax-calculator";
-import { formatRupiah } from "@/lib/format";
+import { formatPersen, formatRupiah } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { BOBOT_MAP } from "@/types/tax";
-import type { JenisKendaraan, TaxCalculationResult } from "@/types/tax";
+import {
+  BOBOT_MAP,
+  DEFAULT_WARNA_PLAT,
+  TARIF_PKB_PLAT_MERAH,
+  WARNA_PLAT_LABEL,
+  isWarnaPlat,
+} from "@/types/tax";
+import type {
+  JenisKendaraan,
+  TaxCalculationResult,
+  VehicleData,
+  WarnaPlat,
+} from "@/types/tax";
 
 const JENIS_OPTIONS: { value: JenisKendaraan; label: string }[] = [
   { value: "SEPEDA MOTOR", label: "Sepeda Motor · 1,00" },
@@ -69,6 +83,11 @@ function normalizeJenis(raw: string | null): JenisKendaraan | undefined {
   const upper = raw.toUpperCase().trim();
   const match = Object.keys(BOBOT_MAP).find((k) => k === upper);
   return match as JenisKendaraan | undefined;
+}
+
+/** Warna plat dari data kendaraan; nilai kosong/tak dikenal → default Putih. */
+function plateFromData(raw: unknown): WarnaPlat {
+  return isWarnaPlat(raw) ? raw : DEFAULT_WARNA_PLAT;
 }
 
 function isoToDate(iso: string | null | undefined): Date | undefined {
@@ -138,6 +157,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   );
   const [isDomisiliGempa, setIsDomisiliGempa] = useState(false);
   const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
+  const [warnaPlat, setWarnaPlat] = useState<WarnaPlat>(DEFAULT_WARNA_PLAT);
   const { hasPermission } = useAuth();
   const { effectiveMode: sourceMode, lookupEnabled } =
     useEffectiveVehicleDataSource();
@@ -156,6 +176,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidField, setInvalidField] = useState<FieldKey | null>(null);
   const hasCalculated = useRef(false);
+  // Nilai warna plat terkini untuk efek auto-hitung tanpa menjadikannya dependensi.
+  const warnaPlatRef = useRef<WarnaPlat>(warnaPlat);
+  const plateAppliedForRef = useRef<VehicleData | null>(null);
+  useEffect(() => {
+    warnaPlatRef.current = warnaPlat;
+  }, [warnaPlat]);
 
   const {
     vehicleData,
@@ -176,6 +202,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setIsDomisiliGempa(false);
     setIsMutasiMasuk(false);
     setIsTembakRu(false);
+    setWarnaPlat(DEFAULT_WARNA_PLAT);
     setOpenSections(defaultOpenSections);
     setValidationError(null);
     setInvalidField(null);
@@ -202,6 +229,16 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     const jenisNormal = normalizeJenis(vehicleData.jenis);
     const stnkDate = isoToDate(vehicleData.jatuhTempoStnk);
     const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
+
+    // Warna plat diambil dari data hanya sekali per hasil lookup. Efek ini juga
+    // berjalan ulang saat Tanggal Pembayaran berubah; pilihan manual (mis. Merah
+    // untuk data D1 tanpa warna plat) tidak boleh kembali ke default diam-diam.
+    let plate = warnaPlatRef.current;
+    if (plateAppliedForRef.current !== vehicleData) {
+      plateAppliedForRef.current = vehicleData;
+      plate = plateFromData(vehicleData.warnaPlat);
+      setWarnaPlat(plate);
+    }
 
     if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb));
     setNjub(String(vehicleData.njub ?? 0));
@@ -242,6 +279,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           isDomisiliGempa: false,
           isMutasiMasuk: false,
           isTembakRu: false,
+          warnaPlat: plate,
         }),
       );
     }
@@ -266,14 +304,16 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       isDomisiliGempa,
       isMutasiMasuk,
       isTembakRu,
+      warnaPlat,
     };
   }
 
+  // Fasilitas dan warna plat langsung menghitung ulang setelah hasil pertama tampil.
   useEffect(() => {
     if (!hasCalculated.current) return;
     const input = getCalculatorInput();
     if (input) onResult(calculateTax(input));
-  }, [isMutasiMasuk, isTembakRu, isDomisiliGempa]);
+  }, [isMutasiMasuk, isTembakRu, isDomisiliGempa, warnaPlat]);
 
   // Jaga tahap fasilitas tetap terbuka ketika salah satu toggle aktif.
   const anyFacilityActive = isDomisiliGempa || isMutasiMasuk || isTembakRu;
@@ -328,6 +368,23 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
   const manualEntry =
     !lookupEnabled || lookupStatus === "not_found" || lookupForbidden;
+
+  // Keterangan asal nilai warna plat. Plat selalu bernilai (default Putih),
+  // sehingga tidak memengaruhi status kelengkapan Dasar Pengenaan.
+  const plateFromSource =
+    lookupStatus === "found" && vehicleData && isWarnaPlat(vehicleData.warnaPlat)
+      ? vehicleData.warnaPlat
+      : null;
+  const plateSourceHint =
+    lookupStatus === "found" && vehicleData
+      ? plateFromSource
+        ? warnaPlat === plateFromSource
+          ? "Terisi otomatis dari sumber data."
+          : `Diubah manual (sumber data: ${WARNA_PLAT_LABEL[plateFromSource]}).`
+        : warnaPlat === DEFAULT_WARNA_PLAT
+          ? `Sumber data tidak menyediakan warna plat. Default ${WARNA_PLAT_LABEL[DEFAULT_WARNA_PLAT]} — ubah bila kendaraan dinas (plat merah).`
+          : "Dipilih manual — sumber data tidak menyediakan warna plat."
+      : `Pilih sesuai TNKB kendaraan. Default ${WARNA_PLAT_LABEL[DEFAULT_WARNA_PLAT]}.`;
 
   const assessmentStatus =
     manualEntry
@@ -509,6 +566,47 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   <span>Bobot mengikuti jenis kendaraan.</span>
                 )}
               </FieldDescription>
+            </Field>
+
+            {/*
+              Baris penuh: kontrol mengikuti lebar satu kolom field di atasnya,
+              keterangan berada di sisi kanan pada desktop dan di bawah pada mobile.
+            */}
+            <Field className="md:col-span-3">
+              {/* Bukan <label>: radiogroup dilabeli via aria-labelledby. */}
+              <FieldTitle id="warna-plat-label">Warna Plat (TNKB)</FieldTitle>
+              <div className="grid w-full min-w-0 grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-3 md:items-center">
+                <PlateColorRadioGroup
+                  value={warnaPlat}
+                  onValueChange={setWarnaPlat}
+                  labelledBy="warna-plat-label"
+                  describedBy="warna-plat-description"
+                />
+                <div
+                  id="warna-plat-description"
+                  className="flex min-w-0 flex-col gap-1 text-sm leading-snug text-muted-foreground md:col-span-2"
+                >
+                  <p>{plateSourceHint}</p>
+                  {warnaPlat === "merah" && (
+                    <p className="flex items-start gap-1.5 font-medium text-foreground">
+                      <Info
+                        className="mt-0.5 size-3.5 shrink-0 text-primary"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        Kendaraan dinas: tarif PKB{" "}
+                        <span className="numeric">
+                          {formatPersen(TARIF_PKB_PLAT_MERAH)}
+                        </span>{" "}
+                        untuk semua periode.
+                      </span>
+                    </p>
+                  )}
+                  <p className="text-xs">
+                    Plat kuning (angkutan umum) dihitung di loket.
+                  </p>
+                </div>
+              </div>
             </Field>
           </div>
         </FormStepAccordion>

@@ -304,6 +304,9 @@ try {
     assert.equal(response.status, 200)
     assert.equal(json.source, "api")
     assert.equal(json.jenis, "MINIBUS")
+    // Tanpa registration.plate_color → warnaPlat null (frontend default putih).
+    assert.ok("warnaPlat" in json)
+    assert.equal(json.warnaPlat, null)
     assert.equal(d1Calls, 0)
     assert.equal(
       requestedUrl,
@@ -312,6 +315,61 @@ try {
     assert.equal(headers["CF-Access-Client-Id"], "test-client.access")
     assert.equal(headers["CF-Access-Client-Secret"], "test-secret")
     pass("source=api menggunakan kontrak endpoint dan Access headers resmi")
+  }
+
+  // Warna plat diteruskan di JSON response (API plate_color dan D1 warna_plat).
+  {
+    for (const [plateColor, expected] of [
+      ["MERAH", "merah"],
+      ["Hitam", "hitam"],
+      ["KUNING", null],
+    ] as const) {
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            ...officialApiResponse("DH2506KA"),
+            registration: { stnk_valid_until: "2031-12-31", plate_color: plateColor },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        )
+      const response = await callEndpoint({ DB: mockDb(), ...API_ENV }, "DH2506KA", "api")
+      const json = await body(response)
+      assert.equal(response.status, 200)
+      assert.equal(json.warnaPlat, expected, `plate_color=${plateColor}`)
+    }
+
+    // D1 dengan kolom warna_plat.
+    const d1Merah = await callEndpoint(
+      { DB: mockDb({ DH2506KA: { ...d1Row, warna_plat: "merah" } }), ...API_ENV },
+      "DH2506KA",
+      "d1",
+    )
+    assert.equal(d1Merah.status, 200)
+    assert.equal((await body(d1Merah)).warnaPlat, "merah")
+
+    // D1 tanpa kolom (migration 0002 belum diterapkan) → 200, warnaPlat null.
+    const legacyDb: D1DatabaseLike = {
+      prepare(query) {
+        return {
+          bind(...values: unknown[]) {
+            return {
+              async first<T>(): Promise<T | null> {
+                if (query.includes("warna_plat")) {
+                  throw new Error("D1_ERROR: no such column: warna_plat: SQLITE_ERROR")
+                }
+                return (values[0] === "DH2506KA" ? d1Row : null) as T | null
+              },
+            }
+          },
+        }
+      },
+    }
+    const legacy = await callEndpoint({ DB: legacyDb, ...API_ENV }, "DH2506KA", "d1")
+    const legacyText = await legacy.text()
+    assert.equal(legacy.status, 200)
+    assert.equal(JSON.parse(legacyText).warnaPlat, null)
+    assert.equal(/SQLITE|no such column/.test(legacyText), false)
+    pass("JSON response memuat warnaPlat (API plate_color, D1 warna_plat, fallback D1 tanpa kolom → null)")
   }
 
   // D1 miss/error fallback API.

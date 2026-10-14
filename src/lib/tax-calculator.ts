@@ -6,10 +6,28 @@
  * seluruh contoh penetapan (Contoh 1–14) yang terlampir.
  */
 
-import type { TaxCalculatorInput, TaxCalculationResult } from "@/types/tax"
+import {
+  DEFAULT_WARNA_PLAT,
+  isWarnaPlat,
+  TARIF_PKB_PLAT_MERAH,
+  type TaxCalculatorInput,
+  type TaxCalculationResult,
+  type WarnaPlat,
+} from "../types/tax"
 
 /** Tanggal cutoff berlakunya Opsen PKB dan tarif PKB 1,2% */
 const CUTOFF_OPSEN = new Date("2025-01-05T00:00:00")
+
+/**
+ * Tarif PKB per periode.
+ * - Plat merah (kendaraan dinas): 0,5% untuk seluruh periode.
+ * - Plat putih/hitam: 1,5% sebelum 5 Jan 2025, 1,2% sesudahnya.
+ * Opsen tetap ditentukan oleh tanggal periode, bukan warna plat.
+ */
+function tarifPkbFor(start: Date, warnaPlat: WarnaPlat): number {
+  if (warnaPlat === "merah") return TARIF_PKB_PLAT_MERAH
+  return start < CUTOFF_OPSEN ? 0.015 : 0.012
+}
 
 // ---------------------------------------------------------------------------
 // Utilitas tanggal
@@ -33,7 +51,7 @@ function bulanKalender(dari: Date, hingga: Date): number {
 
 interface TaxPeriod {
   start: Date     // Tanggal awal periode
-  tarifPkb: 0.015 | 0.012
+  tarifPkb: number
   kenaOpsen: boolean
   status: "tunggakan" | "berjalan"
 }
@@ -44,7 +62,8 @@ interface TaxPeriod {
  */
 function buildTaxPeriods(
   jatuhTempoPajak: Date,
-  tanggalBayar: Date
+  tanggalBayar: Date,
+  warnaPlat: WarnaPlat,
 ): TaxPeriod[] {
   const tahunBayar = tanggalBayar.getFullYear()
   const tahunAwal = jatuhTempoPajak.getFullYear()
@@ -56,7 +75,7 @@ function buildTaxPeriods(
     start.setFullYear(tahun)
     semuaTunggakan.push({
       start,
-      tarifPkb: start < CUTOFF_OPSEN ? 0.015 : 0.012,
+      tarifPkb: tarifPkbFor(start, warnaPlat),
       kenaOpsen: start >= CUTOFF_OPSEN,
       status: "tunggakan",
     })
@@ -74,7 +93,7 @@ function buildTaxPeriods(
 
   const berjalan: TaxPeriod = {
     start: berjalanStart,
-    tarifPkb: berjalanStart < CUTOFF_OPSEN ? 0.015 : 0.012,
+    tarifPkb: tarifPkbFor(berjalanStart, warnaPlat),
     kenaOpsen: berjalanStart >= CUTOFF_OPSEN,
     status: "berjalan",
   }
@@ -99,6 +118,8 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     isMutasiMasuk = false,
     isTembakRu,
   } = input
+  // Pengaman runtime: null/nilai tak valid diperlakukan sebagai default.
+  const warnaPlat: WarnaPlat = isWarnaPlat(input.warnaPlat) ? input.warnaPlat : DEFAULT_WARNA_PLAT
 
   const isMotor = jenisKendaraan === "SEPEDA MOTOR"
   const swdklljBase = isMotor ? 35_000 : 143_000
@@ -109,7 +130,7 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   // -----------------------------------------------------------------------
   // Bangun periode
   // -----------------------------------------------------------------------
-  const semua = buildTaxPeriods(jatuhTempoPajak, tanggalBayar)
+  const semua = buildTaxPeriods(jatuhTempoPajak, tanggalBayar, warnaPlat)
   const tunggakanPeriods = semua.filter((p) => p.status === "tunggakan")
   const berjalanPeriod = semua.find((p) => p.status === "berjalan")!
 
@@ -258,6 +279,8 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     isMutasiMasuk,
     pkbTunggakanPra2025,
     pkbTunggakanPost2025,
+    warnaPlat,
+    tarifPkbBerjalan: berjalanPeriod.tarifPkb,
     tahunTunggakanPra,
     tahunTunggakanPost,
     tahunTunggakan,

@@ -15,6 +15,7 @@ import {
   type VehicleLookupResult,
   type VehicleRow,
 } from "../src/services/vehicle-data/index.ts"
+import { DEFAULT_WARNA_PLAT, normalizeWarnaPlat } from "../src/types/tax.ts"
 
 const API_CONFIG = {
   baseUrl: "https://api.uptdpenda-kupang.web.id",
@@ -181,6 +182,75 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   }
 
   pass("Audit 1: vehicle_status=found + njkb_status=not_found menghasilkan found (njkb=0), bukan vehicle not_found")
+}
+
+// 2b. Warna plat (TNKB): normalisasi dan mapping registration.plate_color.
+{
+  assert.equal(DEFAULT_WARNA_PLAT, "putih")
+  const normalizeCases: Array<[unknown, ReturnType<typeof normalizeWarnaPlat>]> = [
+    ["PUTIH", "putih"],
+    ["Putih", "putih"],
+    ["  putih  ", "putih"],
+    ["white", "putih"],
+    ["TNKB PUTIH", "putih"],
+    ["HITAM", "hitam"],
+    ["TNKB HITAM", "hitam"],
+    ["black", "hitam"],
+    ["MERAH", "merah"],
+    ["Merah", "merah"],
+    ["red", "merah"],
+    ["KUNING", null],
+    ["yellow", null],
+    ["HIJAU", null],
+    ["REDUP", null],
+    // Deskripsi multi-warna: warna DASAR menentukan; ambigu/kuning → null.
+    ["DASAR MERAH TULISAN PUTIH", "merah"],
+    ["Dasar Putih Tulisan Hitam", "putih"],
+    ["MERAH-PUTIH", null],
+    ["PUTIH KUNING", null],
+    ["KUNING HITAM", null],
+    ["DASAR KUNING TULISAN HITAM", null],
+    ["MERAHPUTIH", null],
+    ["MERAH MAROON", "merah"],
+    ["", null],
+    ["   ", null],
+    [null, null],
+    [undefined, null],
+    [1, null],
+    [{}, null],
+  ]
+  for (const [raw, expected] of normalizeCases) {
+    assert.equal(normalizeWarnaPlat(raw), expected, `normalizeWarnaPlat(${JSON.stringify(raw)})`)
+  }
+
+  const plateCases: Array<{ registration: Record<string, unknown> | null; expected: string | null }> = [
+    { registration: { stnk_valid_until: "2031-12-31", plate_color: "MERAH" }, expected: "merah" },
+    { registration: { stnk_valid_until: "2031-12-31", plate_color: "Putih" }, expected: "putih" },
+    { registration: { stnk_valid_until: "2031-12-31", plate_color: "HITAM" }, expected: "hitam" },
+    { registration: { stnk_valid_until: "2031-12-31", plate_color: "KUNING" }, expected: null },
+    { registration: { stnk_valid_until: "2031-12-31" }, expected: null },
+    { registration: { stnk_valid_until: "2031-12-31", plate_color: 2 }, expected: null },
+    { registration: null, expected: null },
+  ]
+  for (const variant of [
+    { njkb_status: "matched" },
+    { njkb_status: "not_found", njkb: null },
+  ]) {
+    for (const { registration, expected } of plateCases) {
+      const res = mapApiResponseToVehicleData(
+        { ...officialMatchedResponse, ...variant, registration },
+        "DH0001XX",
+      )
+      const label = `${variant.njkb_status} plate_color=${JSON.stringify(registration?.plate_color)}`
+      assert.equal(res.status, "found", `${label}: warna plat tidak boleh menggagalkan lookup`)
+      if (res.status === "found") {
+        assert.equal(res.data.warnaPlat, expected, label)
+        assert.ok("warnaPlat" in res.data, `${label}: warnaPlat selalu ada (null bila tak dikenal)`)
+      }
+    }
+  }
+
+  pass("Warna plat: normalizeWarnaPlat dan registration.plate_color → warnaPlat (KUNING/tak dikenal → null)")
 }
 
 // 3. Point 2 Audit: Retry policy & timeout (~8 detik)
@@ -587,6 +657,110 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   assert.equal(apiCalls, 1)
 
   pass("Invarian D1 & Resolver Phase 1/3 tetap terjaga (mode d1_then_api)")
+}
+
+// 5b. D1 warna_plat: mapping kolom dan fallback bila migration 0002 belum diterapkan.
+{
+  // Kolom tersedia: nilai dinormalisasi; NULL/tak dikenal → null.
+  for (const [raw, expected] of [
+    ["merah", "merah"],
+    ["hitam", "hitam"],
+    ["putih", "putih"],
+    [null, null],
+    ["kuning", null],
+  ] as const) {
+    const queries: string[] = []
+    const db: D1DatabaseLike = {
+      prepare(query) {
+        queries.push(query)
+        return mockDb({ DH2506KA: { ...d1Row, warna_plat: raw } }).prepare(query)
+      },
+    }
+    const res = await new D1VehicleDataSource(db).lookup("DH2506KA")
+    assert.equal(res.status, "found")
+    if (res.status === "found") assert.equal(res.data.warnaPlat, expected, `warna_plat=${raw}`)
+    assert.equal(queries.length, 1)
+    assert.match(queries[0], /warna_plat/)
+  }
+
+  // Kolom belum ada (deploy sebelum migration): retry query lama → warnaPlat null.
+  function legacyDb(errorMessage: string) {
+    const queries: string[] = []
+    const db: D1DatabaseLike = {
+      prepare(query) {
+        queries.push(query)
+        return {
+          bind(...values: unknown[]) {
+            return {
+              async first<T>(): Promise<T | null> {
+                if (query.includes("warna_plat")) throw new Error(errorMessage)
+                return (values[0] === "DH2506KA" ? d1Row : null) as T | null
+              },
+            }
+          },
+        }
+      },
+    }
+    return { db, queries }
+  }
+
+  {
+    const { db, queries } = legacyDb("D1_ERROR: no such column: warna_plat: SQLITE_ERROR")
+    const source = new D1VehicleDataSource(db)
+    const res = await source.lookup("DH2506KA")
+    assert.equal(res.status, "found")
+    if (res.status === "found") {
+      assert.equal(res.data.warnaPlat, null)
+      assert.equal(res.data.njkb, d1Row.njkb)
+      assert.equal(res.data.source, "d1")
+    }
+    assert.equal(queries.length, 2)
+    assert.match(queries[0], /warna_plat/)
+    assert.doesNotMatch(queries[1], /warna_plat/)
+
+    const miss = await source.lookup("DH9999ZZ")
+    assert.equal(miss.status, "not_found", "Fallback tetap membedakan not_found")
+  }
+
+  // Error D1 lain tidak di-retry dan tidak membocorkan pesan mentah.
+  {
+    const { db, queries } = legacyDb("D1_ERROR: no such table: vehicle_njkb: SQLITE_ERROR")
+    const res = await new D1VehicleDataSource(db).lookup("DH2506KA")
+    assert.equal(res.status, "error")
+    assert.equal(queries.length, 1, "Error selain kolom warna_plat hilang tidak di-retry")
+    if (res.status === "error") {
+      assert.equal(res.message, "Terjadi kesalahan server saat membaca database D1.")
+      assert.doesNotMatch(String(res.message), /SQLITE|no such/)
+    }
+  }
+
+  // Query lama juga gagal → error aman.
+  {
+    const db: D1DatabaseLike = {
+      prepare(query) {
+        return {
+          bind() {
+            return {
+              async first<T>(): Promise<T | null> {
+                throw new Error(
+                  query.includes("warna_plat")
+                    ? "D1_ERROR: no such column: warna_plat: SQLITE_ERROR"
+                    : "D1 failure",
+                )
+              },
+            }
+          },
+        }
+      },
+    }
+    const res = await new D1VehicleDataSource(db).lookup("DH2506KA")
+    assert.equal(res.status, "error")
+    if (res.status === "error") {
+      assert.equal(res.message, "Terjadi kesalahan server saat membaca database D1.")
+    }
+  }
+
+  pass("D1 warna_plat: mapping kolom; fallback query lama saat kolom belum ada; error lain tetap aman")
 }
 
 // 6. Default api_then_d1: NJKB API dahulu, D1 hanya sebagai fallback.

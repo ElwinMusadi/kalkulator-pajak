@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { Check, Copy, ShieldCheck } from "lucide-react";
-// import { Badge } from "@/components/ui/badge";
+import { PlateColorSwatch } from "@/components/plate-color-swatch";
 import { ResultBreakdown } from "@/components/result-breakdown";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatRupiah } from "@/lib/format";
-import type { TaxCalculationResult } from "@/types/tax";
+import { formatPersen, formatRupiah } from "@/lib/format";
+import { WARNA_PLAT_LABEL, type TaxCalculationResult } from "@/types/tax";
 
 interface ResultSummaryProps {
   result: TaxCalculationResult;
@@ -26,10 +27,17 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
   const swdkllj =
     result.swdklljBerjalan + result.swdklljTunggakan + result.dendaSwdkllj;
   const pnbp = result.biayaStnk + result.biayaTnkb;
+  const tarifLabel = formatPersen(result.tarifPkbBerjalan);
+  // Plat putih/hitam dengan tunggakan sebelum 5 Jan 2025 memakai 1,5% untuk
+  // periode tersebut; label menyebut "berjalan" agar tidak menyesatkan.
+  const tarifPrefix = result.tahunTunggakanPra > 0 && result.warnaPlat !== "merah"
+    ? "Tarif PKB berjalan"
+    : "Tarif PKB";
 
   async function copySummary() {
     const text = [
       "RINGKASAN PENETAPAN PAJAK KENDARAAN",
+      `Plat ${WARNA_PLAT_LABEL[result.warnaPlat]} · ${tarifPrefix} ${tarifLabel}`,
       `PKB: ${formatRupiah(pokokPkb)}`,
       `Opsen PKB: ${formatRupiah(pokokOpsen)}`,
       `SWDKLLJ: ${formatRupiah(swdkllj)}`,
@@ -64,6 +72,20 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
               ? `${result.tahunTunggakan} tahun tunggakan - 1 tahun berjalan`
               : "Tidak Ada Tunggakan - Bayar Tahun Berjalan"}
           </p>
+          {/* Warna plat TNKB yang dipakai; berbeda dari PNBP TNKB (biaya plat). */}
+          <Badge
+            variant="outline"
+            className="mt-2 max-w-full gap-1.5 bg-background/70 font-medium text-muted-foreground"
+          >
+            <PlateColorSwatch warna={result.warnaPlat} />
+            <span className="min-w-0 truncate">
+              {tarifPrefix}{" "}
+              <span className="numeric font-semibold text-foreground">
+                {tarifLabel}
+              </span>{" "}
+              · Plat {WARNA_PLAT_LABEL[result.warnaPlat]}
+            </span>
+          </Badge>
         </div>
         {/* <Badge
           variant={result.tahunTunggakan > 0 ? "secondary" : "outline"}

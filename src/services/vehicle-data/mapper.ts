@@ -1,4 +1,4 @@
-import { BOBOT_MAP } from "../../types/tax"
+import { BOBOT_MAP, normalizeWarnaPlat } from "../../types/tax"
 import type { VehicleData, VehicleLookupResult } from "../../types/tax"
 import { normalizeNopol, parseApiDate } from "./utils"
 
@@ -21,6 +21,8 @@ interface OfficialNjkbApiResponse {
   } | null
   registration?: {
     stnk_valid_until?: unknown
+    /** Warna TNKB, mis. "PUTIH"/"HITAM"/"MERAH". Opsional; nilai tak dikenal → null. */
+    plate_color?: unknown
   } | null
   tax?: {
     notice_valid_until?: unknown
@@ -149,6 +151,9 @@ export function mapApiResponseToVehicleData(
   const jenis = categoryRaw ?? nullableString(payload.vehicle?.category)
   const jatuhTempoStnk = parseApiDate(payload.registration?.stnk_valid_until)
   const jatuhTempoPajak = parseApiDate(payload.tax?.notice_valid_until)
+  // Warna plat tidak pernah menggagalkan lookup: nilai tak dikenal/KUNING → null,
+  // frontend memakai default putih dan user dapat mengubah manual.
+  const warnaPlat = normalizeWarnaPlat(payload.registration?.plate_color)
 
   // 2. Evaluasi njkb_status secara terpisah
   const njkbStatus = payload.njkb_status
@@ -189,6 +194,7 @@ export function mapApiResponseToVehicleData(
       njkb,
       njub: 0,
       bobot,
+      warnaPlat,
       source: "api",
       njkbStatus: "matched",
     }
@@ -222,6 +228,7 @@ export function mapApiResponseToVehicleData(
       njkb: 0,
       njub: 0,
       bobot,
+      warnaPlat,
       source: "api",
       njkbStatus: "not_found",
     }

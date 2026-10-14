@@ -16,6 +16,7 @@
  *   "njkb": 11500000,
  *   "njub": 0,
  *   "bobot": 1,
+ *   "warnaPlat": "putih" | "hitam" | "merah" | null,  // null = tidak diketahui → frontend default putih
  *   "source": "d1" | "api"
  * }
  *

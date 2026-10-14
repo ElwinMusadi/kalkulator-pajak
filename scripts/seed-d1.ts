@@ -16,6 +16,7 @@ import * as fs from "fs"
 import * as path from "path"
 import { fileURLToPath } from "url"
 import XLSX from "xlsx"
+import { normalizeWarnaPlat } from "../src/types/tax.ts"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -29,6 +30,19 @@ const ROWS_PER_FILE = 50_000
 const ROWS_PER_INSERT = 500
 
 type ExcelRow = Record<string, unknown>
+
+interface ExcelHeaders {
+  nopol: string
+  nama: string
+  jenis: string
+  jatuhTempoStnk: string
+  jatuhTempoPajak: string
+  njkb: string
+  njub: string
+  bobot: string
+  /** Opsional: workbook lama tidak memiliki kolom warna plat. */
+  warnaPlat: string | null
+}
 
 function parseRupiah(raw: unknown): number {
   if (raw === null || raw === undefined || raw === "") return 0
@@ -88,7 +102,7 @@ function sqlString(value: string | null): string {
   return value === null ? "NULL" : `'${value.replace(/'/g, "''")}'`
 }
 
-function rowToValues(row: ExcelRow, headers: Record<string, string>): string | null {
+function rowToValues(row: ExcelRow, headers: ExcelHeaders): string | null {
   const nopol = normalizeNopol(row[headers.nopol])
   const njkb = parseRupiah(row[headers.njkb])
 
@@ -100,11 +114,13 @@ function rowToValues(row: ExcelRow, headers: Record<string, string>): string | n
   const jatuhTempoPajak = parseDate(row[headers.jatuhTempoPajak])
   const njub = parseRupiah(row[headers.njub])
   const bobot = parseBobot(row[headers.bobot])
+  // Nilai tak dikenal/KUNING → NULL (frontend default putih); tidak membuang baris.
+  const warnaPlat = headers.warnaPlat ? normalizeWarnaPlat(row[headers.warnaPlat]) : null
 
-  return `(${sqlString(nopol)}, ${sqlString(nama)}, ${sqlString(jenis)}, ${sqlString(jatuhTempoStnk)}, ${sqlString(jatuhTempoPajak)}, ${njkb}, ${njub}, ${bobot})`
+  return `(${sqlString(nopol)}, ${sqlString(nama)}, ${sqlString(jenis)}, ${sqlString(jatuhTempoStnk)}, ${sqlString(jatuhTempoPajak)}, ${njkb}, ${njub}, ${bobot}, ${sqlString(warnaPlat)})`
 }
 
-function findHeaders(firstRow: ExcelRow): Record<string, string> {
+function findHeaders(firstRow: ExcelRow): ExcelHeaders {
   const normalized = new Map(
     Object.keys(firstRow).map((key) => [key.trim().toLowerCase(), key])
   )
@@ -117,6 +133,14 @@ function findHeaders(firstRow: ExcelRow): Record<string, string> {
     throw new Error(`Header Excel tidak ditemukan: ${candidates.join(" / ")}`)
   }
 
+  function optionalHeader(...candidates: string[]): string | null {
+    for (const candidate of candidates) {
+      const found = normalized.get(candidate.toLowerCase())
+      if (found) return found
+    }
+    return null
+  }
+
   return {
     nopol: requireHeader("nopol", "nomor polisi", "no. polisi"),
     nama: requireHeader("nama"),
@@ -126,12 +150,14 @@ function findHeaders(firstRow: ExcelRow): Record<string, string> {
     njkb: requireHeader("nilai_jual", "njkb"),
     njub: requireHeader("njub"),
     bobot: requireHeader("bobot"),
+    // Tanpa alias "tnkb": kolom bernama TNKB bisa berisi nomor/biaya, bukan warna.
+    warnaPlat: optionalHeader("warna plat", "warna_plat"),
   }
 }
 
 function createInsert(values: string[]): string {
   return `INSERT INTO vehicle_njkb (
-  nopol, nama, jenis, jatuh_tempo_stnk, jatuh_tempo_pajak, njkb, njub, bobot
+  nopol, nama, jenis, jatuh_tempo_stnk, jatuh_tempo_pajak, njkb, njub, bobot, warna_plat
 ) VALUES
 ${values.join(",\n")}
 ON CONFLICT(nopol) DO UPDATE SET
@@ -142,6 +168,7 @@ ON CONFLICT(nopol) DO UPDATE SET
   njkb = excluded.njkb,
   njub = excluded.njub,
   bobot = excluded.bobot,
+  warna_plat = excluded.warna_plat,
   updated_at = CURRENT_TIMESTAMP;\n\n`
 }
 
@@ -187,7 +214,13 @@ function main(): void {
   const openFile = () => {
     const fileName = `${String(fileIndex).padStart(4, "0")}.sql`
     currentOutput = path.join(OUTPUT_DIR, fileName)
-    const prefix = `-- Auto-generated from Data Kendaraan New.xlsx\n-- File ${fileIndex}; jalankan berurutan.\n${fileIndex === 1 ? "\n-- Menimpa seluruh dataset sebelumnya.\nDELETE FROM vehicle_njkb;\n\n" : ""}`
+    // Guard: SELECT ... LIMIT 0 gagal ("no such column") SEBELUM DELETE bila
+    // migration 0002 belum diterapkan, sehingga data lama tidak terhapus.
+    const firstFileHeader =
+      "\n-- Wajib: migration 0002 (kolom warna_plat) sudah diterapkan.\n" +
+      "SELECT warna_plat FROM vehicle_njkb LIMIT 0;\n\n" +
+      "-- Menimpa seluruh dataset sebelumnya.\nDELETE FROM vehicle_njkb;\n\n"
+    const prefix = `-- Auto-generated from Data Kendaraan New.xlsx\n-- File ${fileIndex}; jalankan berurutan.\n${fileIndex === 1 ? firstFileHeader : ""}`
     fs.writeFileSync(currentOutput, prefix)
     fileRows = 0
   }
