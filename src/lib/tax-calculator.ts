@@ -7,6 +7,9 @@
  */
 
 import {
+  BIAYA_LAYANAN_KEYS,
+  BIAYA_LAYANAN_MAX,
+  type BiayaLayananKey,
   DEFAULT_WARNA_PLAT,
   isWarnaPlat,
   TARIF_PKB_PLAT_MERAH,
@@ -258,6 +261,19 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   const biayaTembakRu = isTembakRu ? (isMotor ? 150_000 : 250_000) : 0
 
   // -----------------------------------------------------------------------
+  // Biaya BBN & Mutasi (bagian 5) — nominal manual, ditambahkan apa adanya.
+  // Nilai kosong, negatif, atau tidak valid dianggap 0 (pengaman runtime;
+  // validasi pesan error dilakukan di form).
+  // -----------------------------------------------------------------------
+  const biayaLayanan = Object.fromEntries(
+    BIAYA_LAYANAN_KEYS.map((key) => {
+      const value = input.biayaLayanan?.[key]
+      return [key, typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= BIAYA_LAYANAN_MAX ? value : 0]
+    }),
+  ) as Record<BiayaLayananKey, number>
+  const totalBiayaLayanan = BIAYA_LAYANAN_KEYS.reduce((sum, key) => sum + biayaLayanan[key], 0)
+
+  // -----------------------------------------------------------------------
   // Grand Total
   // -----------------------------------------------------------------------
   const total =
@@ -271,7 +287,8 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     dendaSwdkllj +
     biayaStnk +
     biayaTnkb +
-    biayaTembakRu
+    biayaTembakRu +
+    totalBiayaLayanan
 
   return {
     pkbBerjalan,
@@ -300,6 +317,8 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     biayaStnk,
     biayaTnkb,
     biayaTembakRu,
+    biayaLayanan,
+    totalBiayaLayanan,
     total,
   }
 }

@@ -16,6 +16,7 @@ export const MODULE_KEYS = [
   "vehicle_lookup.api",
   "vehicle_source.settings",
   "facility.tembak_ru",
+  "fees.bbn_mutasi",
 ] as const
 export type ModuleKey = (typeof MODULE_KEYS)[number]
 
@@ -39,6 +40,11 @@ export const MODULE_LABELS: Record<ModuleKey, { label: string; description: stri
   "facility.tembak_ru": {
     label: "Biaya Tembak RU/STNK",
     description: "Menggunakan pilihan Biaya Tembak RU/STNK pada kalkulator.",
+  },
+  "fees.bbn_mutasi": {
+    label: "Biaya BBN & Mutasi",
+    description:
+      "Mengisi biaya Pendaftaran BBN, BPKB, Cek Fisik, Mutasi Masuk/Keluar, dan Arsip (Fiskal) pada bagian 5.",
   },
 }
 

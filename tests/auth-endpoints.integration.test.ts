@@ -210,10 +210,135 @@ try {
   for (const file of [
     "schema.sql",
     "migrations/0001_auth.sql",
-    "migrations/0002_vehicle_plate_color.sql",
   ]) {
     const sql = await readFile(path.join(ROOT, file), "utf8")
     await db.batch(splitSql(sql).map((stmt) => db.prepare(stmt)))
+  }
+
+  // --- Regression test migration 0003: upgrade user_permissions dari data 0001 nyata ---
+  {
+    const tempUser1 = "00000000-0000-4000-9000-000000000001"
+    const tempUser2 = "00000000-0000-4000-9000-000000000002"
+    const iso = new Date(nowValue).toISOString()
+
+    // 2 user dengan beberapa baris permission dari whitelist 0001
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO users (id, username, name, role, password_hash, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+        )
+        .bind(tempUser1, "migr_user1", "Migr User 1", "petugas", "hash1", iso, iso),
+      db
+        .prepare(
+          `INSERT INTO users (id, username, name, role, password_hash, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+        )
+        .bind(tempUser2, "migr_user2", "Migr User 2", "petugas", "hash2", iso, iso),
+      db.prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`).bind(tempUser1, "calculator"),
+      db.prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`).bind(tempUser1, "vehicle_lookup.d1"),
+      db.prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`).bind(tempUser2, "facility.tembak_ru"),
+      db.prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`).bind(tempUser2, "vehicle_source.settings"),
+    ])
+
+    // Sebelum 0003: 0001 menolak fees.bbn_mutasi via CHECK constraint
+    await assert.rejects(
+      () =>
+        db
+          .prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`)
+          .bind(tempUser1, "fees.bbn_mutasi")
+          .run(),
+      (err: Error) => /CHECK constraint failed/i.test(err.message),
+      "0001 harus menolak fees.bbn_mutasi",
+    )
+
+    // Terapkan migration 0002 dan 0003 (rebuild tabel atomik dalam batch D1)
+    for (const file of [
+      "migrations/0002_vehicle_plate_color.sql",
+      "migrations/0003_permission_bbn_mutasi.sql",
+    ]) {
+      const sql = await readFile(path.join(ROOT, file), "utf8")
+      await db.batch(splitSql(sql).map((stmt) => db.prepare(stmt)))
+    }
+
+    // 1. Baris izin lama harus terlestarikan persis setelah rebuild tabel
+    const preserved = await db
+      .prepare(`SELECT user_id, module_key FROM user_permissions ORDER BY user_id ASC, module_key ASC`)
+      .all<{ user_id: string; module_key: string }>()
+    assert.deepEqual(preserved.results, [
+      { user_id: tempUser1, module_key: "calculator" },
+      { user_id: tempUser1, module_key: "vehicle_lookup.d1" },
+      { user_id: tempUser2, module_key: "facility.tembak_ru" },
+      { user_id: tempUser2, module_key: "vehicle_source.settings" },
+    ])
+
+    // 2. Modul baru fees.bbn_mutasi berhasil dimasukkan
+    await db
+      .prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`)
+      .bind(tempUser1, "fees.bbn_mutasi")
+      .run()
+    const u1Perms = await db
+      .prepare(`SELECT module_key FROM user_permissions WHERE user_id = ? ORDER BY module_key ASC`)
+      .bind(tempUser1)
+      .all<{ module_key: string }>()
+    assert.deepEqual(
+      u1Perms.results.map((r) => r.module_key),
+      ["calculator", "fees.bbn_mutasi", "vehicle_lookup.d1"],
+    )
+
+    // 3. Modul tidak dikenal ditolak oleh CHECK constraint baru
+    await assert.rejects(
+      () =>
+        db
+          .prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`)
+          .bind(tempUser1, "fees.unknown")
+          .run(),
+      (err: Error) => /CHECK constraint failed/i.test(err.message),
+      "0003 harus menolak module_key yang tidak terdaftar",
+    )
+
+    // 4. Baris duplikat ditolak oleh PRIMARY KEY (user_id, module_key)
+    await assert.rejects(
+      () =>
+        db
+          .prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`)
+          .bind(tempUser1, "fees.bbn_mutasi")
+          .run(),
+      (err: Error) => /UNIQUE constraint failed|PRIMARY KEY/i.test(err.message),
+      "0003 harus menolak duplikasi izin",
+    )
+
+    // 5. ON DELETE CASCADE: hapus user 1 meng-cascade izinnya, izin user 2 tetap ada
+    await db.prepare(`DELETE FROM users WHERE id = ?`).bind(tempUser1).run()
+    const u1Remaining = await db
+      .prepare(`SELECT COUNT(*) AS n FROM user_permissions WHERE user_id = ?`)
+      .bind(tempUser1)
+      .first<{ n: number }>()
+    assert.equal(u1Remaining?.n, 0, "seluruh permission user 1 harus terhapus via cascade")
+
+    const u2Remaining = await db
+      .prepare(`SELECT user_id, module_key FROM user_permissions WHERE user_id = ? ORDER BY module_key ASC`)
+      .bind(tempUser2)
+      .all<{ user_id: string; module_key: string }>()
+    assert.deepEqual(
+      u2Remaining.results,
+      [
+        { user_id: tempUser2, module_key: "facility.tembak_ru" },
+        { user_id: tempUser2, module_key: "vehicle_source.settings" },
+      ],
+      "permission user 2 harus tetap utuh",
+    )
+
+    // Bersihkan user 2 sehingga state DB kosong kembali untuk suite utama
+    await db.prepare(`DELETE FROM users WHERE id = ?`).bind(tempUser2).run()
+    const remainingUsers = (await db.prepare(`SELECT COUNT(*) AS n FROM users`).first<{ n: number }>())?.n ?? 0
+    const remainingPerms = (await db.prepare(`SELECT COUNT(*) AS n FROM user_permissions`).first<{ n: number }>())?.n ?? 0
+    assert.equal(remainingUsers, 0)
+    assert.equal(remainingPerms, 0)
+
+    pass(
+      "Migration 0003: upgrade user_permissions melestarikan data, mendukung fees.bbn_mutasi, tolak modul ilegal & duplikat, serta mempertahankan ON DELETE CASCADE",
+    )
   }
   await db
     .prepare(
@@ -497,6 +622,21 @@ try {
     const both = await api("GET", "/api/njkb/DH2506KA?source=d1_then_api", { token: petugasToken })
     assert.equal(both.status, 200, "permission baru berlaku tanpa login ulang")
 
+    // Migration 0003: CHECK user_permissions menerima 'fees.bbn_mutasi'.
+    const bbn = await api("PUT", `/api/admin/users/${ids.petugas}/permissions`, {
+      token: adminToken,
+      body: { permissions: ["calculator", "fees.bbn_mutasi"] },
+    })
+    assert.equal(bbn.status, 200)
+    assert.deepEqual((await json<AdminUserResponse>(bbn)).user.permissions, ["calculator", "fees.bbn_mutasi"])
+    const bbnMe = await json<AuthMeResponse>(await api("GET", "/api/auth/me", { token: petugasToken }))
+    assert.deepEqual(bbnMe.user.permissions, ["calculator", "fees.bbn_mutasi"])
+    const restore = await api("PUT", `/api/admin/users/${ids.petugas}/permissions`, {
+      token: adminToken,
+      body: { permissions: ["calculator", "vehicle_lookup.api", "vehicle_lookup.d1"] },
+    })
+    assert.equal(restore.status, 200)
+
     const toAdmin = await api("PUT", `/api/admin/users/${ids.admin2}/permissions`, {
       token: adminToken,
       body: { permissions: [] },
@@ -516,7 +656,7 @@ try {
     const badId = await api("PATCH", `/api/admin/users/not-a-uuid`, { token: adminToken, body: { name: "x" } })
     assert.equal(badId.status, 404)
     assert.equal((await json(badId)).code, "NOT_FOUND")
-    pass("PUT permissions petugas berlaku langsung; target admin 400; duplikat 400; id tidak ada/invalid 404")
+    pass("PUT permissions petugas berlaku langsung (termasuk fees.bbn_mutasi); target admin 400; duplikat 400; id tidak ada/invalid 404")
   }
 
   // --- Admin deletes petugas session --------------------------------------

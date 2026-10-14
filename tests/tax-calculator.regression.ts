@@ -451,4 +451,57 @@ const dh3088wk: TaxCalculatorInput = {
   pass("hariMenujuJatuhTempo – 91 hari aktif, 90 hari diskon 20%, lintas tahun, lewat JT negatif")
 }
 
+// Biaya BBN & Mutasi (bagian 5): nominal manual ditambahkan apa adanya ke
+// total; tidak mengubah komponen pajak lain.
+{
+  const tanpa = calculateTax(dh3088wk)
+  assert.equal(tanpa.totalBiayaLayanan, 0, "Default tanpa biaya layanan")
+  assert.ok(Object.values(tanpa.biayaLayanan).every((v) => v === 0))
+
+  const dengan = calculateTax({
+    ...dh3088wk,
+    biayaLayanan: {
+      pendaftaranBbn: 50_000,
+      bpkb: 225_000,
+      cekFisik: 30_000,
+      mutasiMasuk: 150_000,
+      mutasiKeluar: 0,
+      arsipFiskal: 75_000,
+    },
+  })
+  assert.equal(dengan.totalBiayaLayanan, 530_000)
+  assert.equal(dengan.biayaLayanan.bpkb, 225_000)
+  assert.equal(dengan.biayaLayanan.mutasiKeluar, 0)
+  assert.equal(dengan.total, tanpa.total + 530_000, "Total bertambah tepat sebesar biaya layanan")
+  // Komponen pajak tidak berubah.
+  assert.equal(dengan.pkbBerjalan, tanpa.pkbBerjalan)
+  assert.equal(dengan.opsenBerjalan, tanpa.opsenBerjalan)
+  assert.equal(dengan.swdklljBerjalan, tanpa.swdklljBerjalan)
+  assert.equal(dengan.biayaStnk + dengan.biayaTnkb, tanpa.biayaStnk + tanpa.biayaTnkb)
+
+  // Nilai negatif / NaN / Infinity diabaikan (pengaman runtime).
+  const rusak = calculateTax({
+    ...dh3088wk,
+    biayaLayanan: { pendaftaranBbn: -10_000, bpkb: Number.NaN, cekFisik: Number.POSITIVE_INFINITY, arsipFiskal: 20_000 },
+  })
+  assert.equal(rusak.totalBiayaLayanan, 20_000)
+  const batas = calculateTax({
+    ...dh3088wk,
+    biayaLayanan: {
+      pendaftaranBbn: 100_000_000,
+      bpkb: 100_000_001,
+      cekFisik: 1.5,
+      mutasiMasuk: Number.MAX_SAFE_INTEGER + 1,
+      arsipFiskal: 0,
+      // Field tak dikenal harus diabaikan, termasuk saat input berasal dari JS.
+      tidakDikenal: 123_000,
+    } as NonNullable<TaxCalculatorInput["biayaLayanan"]>,
+  })
+  assert.equal(batas.totalBiayaLayanan, 100_000_000)
+  assert.equal(batas.biayaLayanan.bpkb, 0)
+  assert.equal(batas.biayaLayanan.cekFisik, 0)
+  assert.equal(batas.total, tanpa.total + 100_000_000)
+  pass("Biaya BBN & Mutasi – dijumlahkan ke total, komponen pajak tetap, nilai tidak valid diabaikan")
+}
+
 console.log("\nSemua regression test: PASS ✓\n")

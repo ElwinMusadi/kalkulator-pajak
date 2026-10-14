@@ -2,9 +2,10 @@ import { useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { formatRupiah } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { BIAYA_LAYANAN_KEYS, BIAYA_LAYANAN_LABEL } from "@/types/tax";
 import type { TaxCalculationResult } from "@/types/tax";
 
-type ComponentKey = "pkb" | "opsen" | "swdkllj" | "biaya";
+type ComponentKey = "pkb" | "opsen" | "swdkllj" | "biaya" | "layanan";
 
 interface DetailRowData {
   label: string;
@@ -135,6 +136,23 @@ function buildTiles(result: TaxCalculationResult): ComponentTile[] {
           ? [{ label: "Tembak RU/STNK", value: result.biayaTembakRu }]
           : []),
       ],
+    });
+  }
+
+  // Biaya BBN & Mutasi (tahap 5): hanya tampil bila ada nominal yang diisi;
+  // rinciannya memuat biaya bernilai > 0 saja.
+  if (result.totalBiayaLayanan > 0) {
+    tiles.push({
+      key: "layanan",
+      label: "BBN & Mutasi",
+      hint: "Biaya Layanan",
+      amount: result.totalBiayaLayanan,
+      rows: BIAYA_LAYANAN_KEYS.filter((key) => result.biayaLayanan[key] > 0).map(
+        (key) => ({
+          label: BIAYA_LAYANAN_LABEL[key],
+          value: result.biayaLayanan[key],
+        }),
+      ),
     });
   }
 

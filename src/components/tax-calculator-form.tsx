@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import {
   ArrowLeftRight,
@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
   FieldLegend,
   FieldSet,
@@ -45,9 +46,16 @@ import {
 import { useEffectiveVehicleDataSource } from "@/hooks/use-effective-vehicle-data-source";
 import { useNopolLookup } from "@/hooks/use-nopol-lookup";
 import { calculateTax } from "@/lib/tax-calculator";
+import {
+  BIAYA_LAYANAN_INPUT_MAX_LENGTH,
+  formatBiayaLayananInput,
+  parseBiayaLayananInput,
+} from "@/lib/biaya-layanan-input";
 import { formatPersen, formatRupiah } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
+  BIAYA_LAYANAN_KEYS,
+  BIAYA_LAYANAN_LABEL,
   BOBOT_MAP,
   DEFAULT_WARNA_PLAT,
   TARIF_PKB_PLAT_MERAH,
@@ -55,6 +63,8 @@ import {
   isWarnaPlat,
 } from "@/types/tax";
 import type {
+  BiayaLayanan,
+  BiayaLayananKey,
   JenisKendaraan,
   TaxCalculationResult,
   VehicleData,
@@ -77,9 +87,22 @@ type FieldKey =
   | "jenis"
   | "jatuhTempoPajak"
   | "jatuhTempoStnk"
-  | "tanggalBayar";
+  | "tanggalBayar"
+  | `biayaLayanan.${BiayaLayananKey}`;
 
-type FormSection = "assessment" | "tax-period" | "facilities";
+type FormSection = "assessment" | "tax-period" | "facilities" | "fees";
+
+/** Teks input biaya; nominal valid diformat, teks salah dipertahankan utuh. */
+type BiayaLayananText = Record<BiayaLayananKey, string>;
+
+const EMPTY_BIAYA_LAYANAN_TEXT: BiayaLayananText = {
+  pendaftaranBbn: "",
+  bpkb: "",
+  cekFisik: "",
+  mutasiMasuk: "",
+  mutasiKeluar: "",
+  arsipFiskal: "",
+};
 
 type SectionStatus = "Isi Manual" | "Terisi Otomatis" | "Belum Lengkap";
 
@@ -125,6 +148,74 @@ function RequiredMark() {
  */
 const STEP_INDENT = "sm:pl-10";
 
+interface BiayaLayananFieldProps {
+  fieldKey: BiayaLayananKey;
+  text: string;
+  onTextChange: (text: string) => void;
+}
+
+/** Nominal valid diformat id-ID; input salah tetap terlihat dan ditolak inline. */
+function BiayaLayananField({
+  fieldKey,
+  text,
+  onTextChange,
+}: BiayaLayananFieldProps) {
+  const id = `biaya-${fieldKey}`;
+  const errorId = `${id}-error`;
+  const parsed = parseBiayaLayananInput(text);
+  const invalid = parsed.status === "invalid";
+
+  return (
+    <Field data-invalid={invalid || undefined} className="min-w-0 gap-2">
+      {/* Label dapat 2 baris; mt-auto pada input menjaga kotak input sebaris
+          dengan field lain di baris grid yang sama. */}
+      <FieldLabel htmlFor={id} className="leading-snug">
+        {BIAYA_LAYANAN_LABEL[fieldKey]}
+      </FieldLabel>
+      <div className="relative mt-auto min-w-0">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground"
+        >
+          Rp
+        </span>
+        <Input
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={text}
+          onChange={(e) => {
+            const edit = e.nativeEvent as InputEvent;
+            // Ketikan digit/deletion pada tampilan ribuan bukan paste nominal.
+            // Hanya grouping yang kita tambahkan boleh dibuang pada edit ini;
+            // paste, tanda negatif, huruf, dan koma selalu lewat parser ketat.
+            const digitEdit = edit.inputType === "insertText" &&
+              /^\d$/.test(edit.data ?? "");
+            const deletion = edit.inputType === "deleteContentBackward" ||
+              edit.inputType === "deleteContentForward";
+            const raw = (digitEdit || deletion) && parsed.status !== "invalid" &&
+              /^[\d.]*$/.test(text)
+              ? e.target.value.replace(/\./g, "")
+              : e.target.value;
+            onTextChange(formatBiayaLayananInput(raw));
+          }}
+          maxLength={BIAYA_LAYANAN_INPUT_MAX_LENGTH}
+          placeholder="0"
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? errorId : undefined}
+          className="numeric h-10 bg-card pl-10 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
+        />
+      </div>
+      {parsed.status === "invalid" && (
+        <FieldError id={errorId} className="text-xs leading-snug">
+          {parsed.error}
+        </FieldError>
+      )}
+    </Field>
+  );
+}
+
 interface TaxCalculatorFormProps {
   onResult: (result: TaxCalculationResult | null) => void;
 }
@@ -153,8 +244,10 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const { effectiveMode: sourceMode, lookupEnabled } =
     useEffectiveVehicleDataSource();
   const canUseTembakRu = hasPermission("facility.tembak_ru");
+  const canUseBiayaLayanan = hasPermission("fees.bbn_mutasi");
 
   // Tanpa izin pencarian Nopol, tahap 2 dan 3 dibuka untuk pengisian manual.
+  // Tahap 5 (biaya BBN & Mutasi) selalu tertutup secara default: opsional.
   const defaultOpenSections: FormSection[] = lookupEnabled
     ? []
     : ["assessment", "tax-period"];
@@ -162,17 +255,53 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [isTembakRuState, setIsTembakRu] = useState(false);
   // Fasilitas Tembak RU dipaksa nonaktif bila user tidak memiliki izin.
   const isTembakRu = canUseTembakRu && isTembakRuState;
+  const [biayaLayananText, setBiayaLayananText] =
+    useState<BiayaLayananText>(EMPTY_BIAYA_LAYANAN_TEXT);
+  const parsedBiayaLayanan = useMemo(
+    () => BIAYA_LAYANAN_KEYS.map((key) => ({
+      key,
+      parsed: parseBiayaLayananInput(biayaLayananText[key]),
+    })),
+    [biayaLayananText],
+  );
+  // Tanpa izin dipaksa kosong. Teks salah tidak memakai nominal valid lama
+  // dan tidak ikut total live; tetap dipertahankan untuk diperbaiki pengguna.
+  const biayaLayanan = useMemo<BiayaLayanan>(() => {
+    if (!canUseBiayaLayanan) return {};
+    return Object.fromEntries(parsedBiayaLayanan.flatMap(({ key, parsed }) =>
+      parsed.status === "valid" && parsed.value > 0
+        ? [[key, parsed.value] as const]
+        : [],
+    )) as BiayaLayanan;
+  }, [canUseBiayaLayanan, parsedBiayaLayanan]);
+  const invalidBiayaLayanan = canUseBiayaLayanan
+    ? parsedBiayaLayanan.find(({ parsed }) => parsed.status === "invalid")
+    : undefined;
+  const biayaLayananStats = useMemo(() => {
+    let count = 0;
+    let sum = 0;
+    for (const key of BIAYA_LAYANAN_KEYS) {
+      const value = biayaLayanan[key] ?? 0;
+      if (value > 0) {
+        count += 1;
+        sum += value;
+      }
+    }
+    return { count, sum };
+  }, [biayaLayanan]);
   const [openSections, setOpenSections] =
     useState<FormSection[]>(defaultOpenSections);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidField, setInvalidField] = useState<FieldKey | null>(null);
   const hasCalculated = useRef(false);
-  // Nilai warna plat terkini untuk efek auto-hitung tanpa menjadikannya dependensi.
-  const warnaPlatRef = useRef<WarnaPlat>(warnaPlat);
-  const plateAppliedForRef = useRef<VehicleData | null>(null);
+  // Snapshot hanya dipakai saat hasil lookup BARU diterapkan. Perubahan tanggal,
+  // fasilitas, plate, dan biaya berikutnya memakai input form, bukan data lookup.
+  const lookupInputRef = useRef({ tanggalBayar, biayaLayanan });
+  const appliedVehicleRef = useRef<VehicleData | null>(null);
+  const skipLookupRecalculationRef = useRef(false);
   useEffect(() => {
-    warnaPlatRef.current = warnaPlat;
-  }, [warnaPlat]);
+    lookupInputRef.current = { tanggalBayar, biayaLayanan };
+  }, [tanggalBayar, biayaLayanan]);
 
   const {
     vehicleData,
@@ -194,6 +323,10 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setIsMutasiMasuk(false);
     setIsTembakRu(false);
     setWarnaPlat(DEFAULT_WARNA_PLAT);
+    // Biaya BBN & Mutasi bersifat per transaksi (per kendaraan), bukan
+    // pengaturan loket; ikut dikosongkan seperti data kendaraan lainnya.
+    setBiayaLayananText(EMPTY_BIAYA_LAYANAN_TEXT);
+    appliedVehicleRef.current = null;
     setOpenSections(defaultOpenSections);
     setValidationError(null);
     setInvalidField(null);
@@ -201,11 +334,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     onResult(null);
   }
 
-  function openSection(section: FormSection) {
+  const openSection = useCallback((section: FormSection) => {
     setOpenSections((current) =>
       current.includes(section) ? current : [...current, section],
     );
-  }
+  }, []);
 
   useEffect(() => {
     // Nopol tidak ditemukan atau lookup ditolak (403): lanjutkan secara manual.
@@ -215,21 +348,24 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   }, [lookupStatus, lookupForbidden]);
 
   useEffect(() => {
-    if (!vehicleData) return;
+    if (!vehicleData || appliedVehicleRef.current === vehicleData) return;
+    appliedVehicleRef.current = vehicleData;
+    // Lewati efek hitung ulang pada render ini: state hasil autofill belum
+    // diterapkan. Render berikutnya menghitung ulang dari state yang lengkap.
+    skipLookupRecalculationRef.current = true;
+    hasCalculated.current = false;
 
     const jenisNormal = normalizeJenis(vehicleData.jenis);
     const stnkDate = isoToDate(vehicleData.jatuhTempoStnk);
     const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
+    const plate = plateFromData(vehicleData.warnaPlat);
+    const { tanggalBayar, biayaLayanan } = lookupInputRef.current;
 
-    // Warna plat diambil dari data hanya sekali per hasil lookup. Efek ini juga
-    // berjalan ulang saat Tanggal Pembayaran berubah; pilihan manual (mis. Merah
-    // untuk data D1 tanpa warna plat) tidak boleh kembali ke default diam-diam.
-    let plate = warnaPlatRef.current;
-    if (plateAppliedForRef.current !== vehicleData) {
-      plateAppliedForRef.current = vehicleData;
-      plate = plateFromData(vehicleData.warnaPlat);
-      setWarnaPlat(plate);
-    }
+    // Reset fasilitas hanya untuk hasil lookup baru, tidak saat tanggal berubah.
+    setIsDomisiliGempa(false);
+    setIsMutasiMasuk(false);
+    setIsTembakRu(false);
+    setWarnaPlat(plate);
 
     if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb));
     setNjub(String(vehicleData.njub ?? 0));
@@ -271,17 +407,20 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           isMutasiMasuk: false,
           isTembakRu: false,
           warnaPlat: plate,
+          biayaLayanan,
         }),
       );
+    } else {
+      onResult(null);
     }
-  }, [vehicleData, tanggalBayar, onResult]);
+  }, [vehicleData, onResult]);
 
   const effectiveBobot =
     bobot ?? (jenisKendaraan ? BOBOT_MAP[jenisKendaraan] : 1.0);
 
-  function getCalculatorInput() {
+  const getCalculatorInput = useCallback(() => {
     const njkbNum = parseFloat(njkb);
-    if (!njkb || isNaN(njkbNum) || njkbNum <= 0) return null;
+    if (!njkb || !Number.isFinite(njkbNum) || njkbNum <= 0) return null;
     if (!jenisKendaraan || !jatuhTempoPajak || !jatuhTempoStnk || !tanggalBayar)
       return null;
     return {
@@ -296,21 +435,30 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       isMutasiMasuk,
       isTembakRu,
       warnaPlat,
+      biayaLayanan,
     };
-  }
+  }, [njkb, njub, effectiveBobot, jenisKendaraan, jatuhTempoPajak,
+    jatuhTempoStnk, tanggalBayar, isDomisiliGempa, isMutasiMasuk,
+    isTembakRu, warnaPlat, biayaLayanan]);
 
-  // Fasilitas dan warna plat langsung menghitung ulang setelah hasil pertama tampil.
+  // Setelah hasil pertama, seluruh edit memakai state form terkini. Input inti
+  // yang dikosongkan menghapus hasil lama; izin biaya dicabut membuang biayanya.
+  // Sebelum hitung/lookup lengkap pertama, jangan auto-hitung pengisian manual.
   useEffect(() => {
+    if (vehicleData && skipLookupRecalculationRef.current) {
+      skipLookupRecalculationRef.current = false;
+      return;
+    }
     if (!hasCalculated.current) return;
     const input = getCalculatorInput();
-    if (input) onResult(calculateTax(input));
-  }, [isMutasiMasuk, isTembakRu, isDomisiliGempa, warnaPlat]);
+    onResult(input ? calculateTax(input) : null);
+  }, [vehicleData, getCalculatorInput, onResult]);
 
   // Jaga tahap fasilitas tetap terbuka ketika salah satu toggle aktif.
   const anyFacilityActive = isDomisiliGempa || isMutasiMasuk || isTembakRu;
   useEffect(() => {
     if (anyFacilityActive) openSection("facilities");
-  }, [anyFacilityActive]);
+  }, [anyFacilityActive, openSection]);
 
   function fail(field: FieldKey, message: string) {
     setInvalidField(field);
@@ -318,6 +466,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
     if (field === "njkb" || field === "jenis") {
       openSection("assessment");
+    } else if (field.startsWith("biayaLayanan.")) {
+      openSection("fees");
     } else {
       openSection("tax-period");
     }
@@ -336,6 +486,14 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     if (!jatuhTempoStnk)
       return fail("jatuhTempoStnk", "Isi tanggal jatuh tempo STNK.");
     if (!tanggalBayar) return fail("tanggalBayar", "Isi tanggal pembayaran.");
+    // Validasi biaya BBN & Mutasi ditempatkan setelah validasi inti agar
+    // urutan pesan validasi yang sudah ada tidak berubah.
+    if (invalidBiayaLayanan?.parsed.status === "invalid") {
+      return fail(
+        `biayaLayanan.${invalidBiayaLayanan.key}`,
+        `${BIAYA_LAYANAN_LABEL[invalidBiayaLayanan.key]}: ${invalidBiayaLayanan.parsed.error} Periksa kembali nominalnya.`,
+      );
+    }
     const input = getCalculatorInput();
     if (!input) return;
     hasCalculated.current = true;
@@ -393,6 +551,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           ? "Terisi Otomatis"
           : "Belum Lengkap"
         : undefined;
+
+  // Chip tahap 5 hanya tampil bila ada biaya terisi: "3 biaya · Rp 530.000".
+  const feesStatus =
+    biayaLayananStats.count > 0
+      ? `${biayaLayananStats.count} biaya · ${formatRupiah(biayaLayananStats.sum)}`
+      : undefined;
 
   // Strip masa berlaku pada plat: "MM · YY" dari jatuh tempo pajak, bila ada.
   const plateStripText = jatuhTempoPajak
@@ -715,6 +879,41 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             )}
           </div>
         </FormStepAccordion>
+
+        {/* ── 5 · Biaya BBN & Mutasi — hanya bila user memiliki izin modul ── */}
+        {canUseBiayaLayanan && (
+          <FormStepAccordion
+            value="fees"
+            step="5"
+            title="Biaya BBN & Mutasi"
+            hint="Isi nominal sesuai ketetapan; kosongkan bila tidak dikenakan."
+            status={feesStatus}
+            statusTone="info"
+          >
+            {/*
+              Kolom form ±560px pada lg (sidebar 400px): tiga kolom masih ≥ 170px
+              per input, cukup untuk "Rp 100.000.000"; pada xl lebih lega.
+            */}
+            <div className="grid w-full min-w-0 grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+              {BIAYA_LAYANAN_KEYS.map((key) => (
+                <BiayaLayananField
+                  key={key}
+                  fieldKey={key}
+                  text={biayaLayananText[key]}
+                  onTextChange={(text) => {
+                    setBiayaLayananText((current) =>
+                      current[key] === text ? current : { ...current, [key]: text },
+                    );
+                    if (invalidField === `biayaLayanan.${key}`) {
+                      setInvalidField(null);
+                      setValidationError(null);
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          </FormStepAccordion>
+        )}
       </Accordion>
 
       {/* ── Validasi + aksi utama ── */}

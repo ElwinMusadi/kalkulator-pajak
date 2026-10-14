@@ -10,7 +10,12 @@ import {
 } from "@/components/ui/tooltip";
 import { formatPersen, formatRupiah } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { WARNA_PLAT_LABEL, type TaxCalculationResult } from "@/types/tax";
+import {
+  BIAYA_LAYANAN_KEYS,
+  BIAYA_LAYANAN_LABEL,
+  WARNA_PLAT_LABEL,
+  type TaxCalculationResult,
+} from "@/types/tax";
 
 interface ResultSummaryProps {
   result: TaxCalculationResult;
@@ -55,6 +60,16 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
       result.biayaTembakRu > 0
         ? `Biaya tambahan: ${formatRupiah(result.biayaTembakRu)}`
         : null,
+      // Biaya BBN & Mutasi: satu baris total diikuti rincian biaya yang terisi.
+      ...(result.totalBiayaLayanan > 0
+        ? [
+            `Biaya BBN & Mutasi: ${formatRupiah(result.totalBiayaLayanan)}`,
+            ...BIAYA_LAYANAN_KEYS.filter((key) => result.biayaLayanan[key] > 0).map(
+              (key) =>
+                `  - ${BIAYA_LAYANAN_LABEL[key]}: ${formatRupiah(result.biayaLayanan[key])}`,
+            ),
+          ]
+        : []),
       `Total bayar: ${formatRupiah(result.total)}`,
       "Denda PKB dan Opsen: dibebaskan 100%",
     ]

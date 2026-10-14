@@ -155,6 +155,34 @@ export type VehicleLookupResult =
       upstreamStatus?: number
     }
 
+/**
+ * Biaya layanan BBN & Mutasi (bagian 5). Nominal diisi manual oleh petugas
+ * karena bersifat dinamis; kosong/0 berarti tidak dikenakan.
+ */
+export const BIAYA_LAYANAN_KEYS = [
+  "pendaftaranBbn",
+  "bpkb",
+  "cekFisik",
+  "mutasiMasuk",
+  "mutasiKeluar",
+  "arsipFiskal",
+] as const
+export type BiayaLayananKey = (typeof BIAYA_LAYANAN_KEYS)[number]
+
+export const BIAYA_LAYANAN_LABEL: Record<BiayaLayananKey, string> = {
+  pendaftaranBbn: "Biaya Pendaftaran BBN",
+  bpkb: "Biaya BPKB",
+  cekFisik: "Biaya Cek Fisik / Cek Fisik Bantuan",
+  mutasiMasuk: "Biaya Mutasi Masuk",
+  mutasiKeluar: "Biaya Mutasi Keluar",
+  arsipFiskal: "Biaya Arsip STNK & BPKB (Fiskal)",
+}
+
+/** Batas atas per biaya (pengaman salah ketik), dalam Rupiah. */
+export const BIAYA_LAYANAN_MAX = 100_000_000
+
+export type BiayaLayanan = Partial<Record<BiayaLayananKey, number>>
+
 /** Input untuk fungsi calculateTax */
 export interface TaxCalculatorInput {
   njkb: number
@@ -169,6 +197,8 @@ export interface TaxCalculatorInput {
   isTembakRu: boolean
   /** Warna plat (TNKB); default "putih". Plat merah → tarif PKB 0,5% semua periode. */
   warnaPlat?: WarnaPlat
+  /** Biaya BBN & Mutasi (bagian 5); nilai kosong/≤0/tidak valid diabaikan. */
+  biayaLayanan?: BiayaLayanan
 }
 
 /** Rincian komponen pajak hasil kalkulasi */
@@ -213,6 +243,10 @@ export interface TaxCalculationResult {
 
   // Biaya tambahan
   biayaTembakRu: number
+
+  // Biaya BBN & Mutasi (bagian 5) — setiap key selalu ada; 0 = tidak dikenakan
+  biayaLayanan: Record<BiayaLayananKey, number>
+  totalBiayaLayanan: number
 
   // Grand total
   total: number
