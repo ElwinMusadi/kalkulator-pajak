@@ -31,10 +31,16 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
   // plat putih/hitam memakai tarif umum sehingga tidak perlu ditandai.
   const isPlatMerah = result.warnaPlat === "merah";
   const tarifLabel = formatPersen(result.tarifPkbBerjalan);
+  // Jatuh tempo pajak masih > 90 hari lagi dan tanpa tunggakan → pajak masih
+  // aktif. Biaya tetap ditampilkan; hanya keterangan status yang berubah.
+  const isPajakAktif =
+    result.tahunTunggakan === 0 && result.hariMenujuJatuhTempo > 90;
   const statusLine =
     result.tahunTunggakan > 0
       ? `${result.tahunTunggakan} tahun tunggakan · 1 tahun berjalan`
-      : "Tidak ada tunggakan · bayar tahun berjalan";
+      : isPajakAktif
+        ? "Pajak Aktif"
+        : "Tidak ada tunggakan · bayar tahun berjalan";
 
   async function copySummary() {
     const text = [
@@ -78,15 +84,17 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
 
       {/* Tile total — fokus utama panel. */}
       <div className="brand-band relative overflow-hidden rounded-xl p-5">
-        <div className="flex items-start justify-between gap-3">
-          <p className="eyebrow text-white/65">Total Bayar</p>
+        {/* Tombol salin diposisikan absolut agar tingginya tidak menambah
+            jarak antara label "Total Bayar" dan nominal. */}
+        <p className="eyebrow pr-10 text-white/65">Total Bayar</p>
+        <div className="absolute right-3.5 top-3.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 type="button"
                 variant="onDark"
                 size="icon"
-                className="-mr-1.5 -mt-1.5 size-9 border-transparent bg-transparent"
+                className="size-9 border-transparent bg-transparent"
                 aria-label={
                   copied ? "Ringkasan disalin" : "Salin ringkasan penetapan"
                 }
@@ -106,13 +114,20 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         </div>
         <p
           key={result.total}
-          className="animate-value-settle font-plate mt-1 whitespace-nowrap text-[clamp(2rem,9vw,2.75rem)] font-bold leading-none tracking-tight tabular-nums text-white lg:text-[2.5rem] xl:text-[2.75rem]"
+          className="animate-value-settle font-plate mt-1.5 whitespace-nowrap text-[clamp(2rem,9vw,2.75rem)] font-bold leading-none tracking-tight tabular-nums text-white lg:text-[2.5rem] xl:text-[2.75rem]"
         >
           {formatRupiah(result.total)}
         </p>
         <div className="gold-rule my-3.5 opacity-80" aria-hidden="true" />
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-          <p className="text-sm text-white/75">{statusLine}</p>
+          {isPajakAktif ? (
+            <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-white">
+              <ShieldCheck className="size-4 shrink-0 text-emerald-300" aria-hidden="true" />
+              {statusLine}
+            </p>
+          ) : (
+            <p className="text-sm text-white/75">{statusLine}</p>
+          )}
           {/* Hanya plat merah (tarif khusus); berbeda dari PNBP TNKB (biaya plat). */}
           {isPlatMerah && (
             <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-xs font-medium text-white">

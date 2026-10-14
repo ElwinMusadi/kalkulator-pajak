@@ -415,4 +415,40 @@ const dh3088wk: TaxCalculatorInput = {
   pass("Plat merah + gempa/mutasi/Tembak RU; warnaPlat null aman → putih")
 }
 
+// hariMenujuJatuhTempo — dasar status "Pajak Aktif" (> 90 hari, tanpa tunggakan).
+// Diukur ke tanggal Jatuh Tempo Pajak yang diisi; informasi tampilan saja.
+{
+  const jt = new Date("2026-12-15T00:00:00")
+  const base: TaxCalculatorInput = {
+    ...dh3088wk,
+    jatuhTempoPajak: jt,
+    jatuhTempoStnk: jt,
+  }
+  const hari = (bayar: string) => calculateTax({ ...base, tanggalBayar: new Date(`${bayar}T00:00:00`) })
+
+  // 15 Des 2026 − 15 Sep 2026 = 91 hari → Pajak Aktif; tanpa diskon bayar awal (> 90).
+  const aktif = hari("2026-09-15")
+  assert.equal(aktif.hariMenujuJatuhTempo, 91)
+  assert.equal(aktif.tahunTunggakan, 0)
+  assert.equal(aktif.pkbDiscount, 0, "> 90 hari: tidak ada diskon bayar awal")
+  assert.ok(aktif.total > 0, "Biaya tetap dihitung saat Pajak Aktif")
+
+  // Tepat 90 hari → bukan Pajak Aktif; diskon motor 61–90 hari 20%.
+  const batas = hari("2026-09-16")
+  assert.equal(batas.hariMenujuJatuhTempo, 90)
+  assert.equal(batas.pkbDiscount, 0.2)
+
+  // Jatuh tempo di tahun berikutnya diukur ke tanggal yang diisi (bukan tahun bayar).
+  const lintasTahun = calculateTax({
+    ...base,
+    jatuhTempoPajak: new Date("2027-03-01T00:00:00"),
+    tanggalBayar: new Date("2026-11-30T00:00:00"),
+  })
+  assert.equal(lintasTahun.hariMenujuJatuhTempo, 91)
+
+  // Sudah lewat jatuh tempo → negatif.
+  assert.ok(hari("2026-12-20").hariMenujuJatuhTempo < 0)
+  pass("hariMenujuJatuhTempo – 91 hari aktif, 90 hari diskon 20%, lintas tahun, lewat JT negatif")
+}
+
 console.log("\nSemua regression test: PASS ✓\n")

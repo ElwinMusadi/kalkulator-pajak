@@ -181,6 +181,12 @@ export interface TaxCalculationResult {
   pkbTunggakanPost2025: number     // PKB tunggakan periode mulai 5 Jan 2025 (kena Opsen)
   warnaPlat: WarnaPlat             // Warna plat yang dipakai dalam perhitungan
   tarifPkbBerjalan: number         // Tarif PKB periode berjalan (0.012 / 0.015 / 0.005)
+  /**
+   * Selisih hari dari tanggal bayar ke tanggal Jatuh Tempo Pajak yang diisi.
+   * Positif = sebelum jatuh tempo; negatif = sudah lewat. Informasi tampilan
+   * saja (status "Pajak Aktif" bila > 90 hari) — tidak memengaruhi nominal.
+   */
+  hariMenujuJatuhTempo: number
   tahunTunggakanPra: number        // Jumlah tahun tunggakan pra-cutoff
   tahunTunggakanPost: number       // Jumlah tahun tunggakan post-cutoff
   tahunTunggakan: number           // Total tahun tunggakan (max 4)

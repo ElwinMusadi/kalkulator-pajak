@@ -281,6 +281,11 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     pkbTunggakanPost2025,
     warnaPlat,
     tarifPkbBerjalan: berjalanPeriod.tarifPkb,
+    // Informasi tampilan: selisih ke tanggal Jatuh Tempo Pajak yang diisi user
+    // (bukan awal periode berjalan di tahun bayar). Tidak memengaruhi nominal.
+    hariMenujuJatuhTempo: Math.floor(
+      (jatuhTempoPajak.getTime() - tanggalBayar.getTime()) / (1000 * 60 * 60 * 24)
+    ),
     tahunTunggakanPra,
     tahunTunggakanPost,
     tahunTunggakan,
