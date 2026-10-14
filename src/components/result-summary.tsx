@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Check, Copy, ShieldCheck } from "lucide-react";
 import { PlateColorSwatch } from "@/components/plate-color-swatch";
 import { ResultBreakdown } from "@/components/result-breakdown";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -10,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatPersen, formatRupiah } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { WARNA_PLAT_LABEL, type TaxCalculationResult } from "@/types/tax";
 
 interface ResultSummaryProps {
@@ -31,6 +31,10 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
   // plat putih/hitam memakai tarif umum sehingga tidak perlu ditandai.
   const isPlatMerah = result.warnaPlat === "merah";
   const tarifLabel = formatPersen(result.tarifPkbBerjalan);
+  const statusLine =
+    result.tahunTunggakan > 0
+      ? `${result.tahunTunggakan} tahun tunggakan · 1 tahun berjalan`
+      : "Tidak ada tunggakan · bayar tahun berjalan";
 
   async function copySummary() {
     const text = [
@@ -58,102 +62,85 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
 
   return (
     <section
-      className={
-        compact ? "flex min-w-0 flex-col gap-3" : "flex min-w-0 flex-col gap-4"
-      }
+      aria-label="Hasil penetapan"
+      className={cn("flex min-w-0 flex-col", compact ? "gap-3" : "gap-4")}
     >
-      <div className="flex min-w-0 items-start justify-between gap-2 pt-0">
-        <div className="min-w-0">
-          <p className="text-xl font-bold tracking-normal leading-tight">
-            Rincian Pembayaran
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground leading-tight">
-            {result.tahunTunggakan > 0
-              ? `${result.tahunTunggakan} tahun tunggakan - 1 tahun berjalan`
-              : "Tidak Ada Tunggakan - Bayar Tahun Berjalan"}
-          </p>
+      {!compact && (
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="eyebrow">Hasil penetapan</p>
+            <h3 className="mt-0.5 text-lg font-bold leading-tight tracking-tight text-foreground">
+              Rincian Pembayaran
+            </h3>
+          </div>
+        </div>
+      )}
+
+      {/* Tile total — fokus utama panel. */}
+      <div className="brand-band relative overflow-hidden rounded-xl p-5">
+        <div className="flex items-start justify-between gap-3">
+          <p className="eyebrow text-white/65">Total Bayar</p>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="onDark"
+                size="icon"
+                className="-mr-1.5 -mt-1.5 size-9 border-transparent bg-transparent"
+                aria-label={
+                  copied ? "Ringkasan disalin" : "Salin ringkasan penetapan"
+                }
+                onClick={() => void copySummary()}
+              >
+                {copied ? (
+                  <Check aria-hidden="true" />
+                ) : (
+                  <Copy aria-hidden="true" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {copied ? "Tersalin" : "Salin ringkasan"}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <p
+          key={result.total}
+          className="animate-value-settle font-plate mt-1 whitespace-nowrap text-[clamp(2rem,9vw,2.75rem)] font-bold leading-none tracking-tight tabular-nums text-white lg:text-[2.5rem] xl:text-[2.75rem]"
+        >
+          {formatRupiah(result.total)}
+        </p>
+        <div className="gold-rule my-3.5 opacity-80" aria-hidden="true" />
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+          <p className="text-sm text-white/75">{statusLine}</p>
           {/* Hanya plat merah (tarif khusus); berbeda dari PNBP TNKB (biaya plat). */}
           {isPlatMerah && (
-            <Badge
-              variant="outline"
-              className="mt-2 max-w-full gap-1.5 bg-background/70 font-medium text-muted-foreground"
-            >
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-xs font-medium text-white">
               <PlateColorSwatch warna={result.warnaPlat} />
               <span className="min-w-0 truncate">
                 Tarif PKB{" "}
-                <span className="numeric font-semibold text-foreground">
-                  {tarifLabel}
-                </span>{" "}
-                · Plat {WARNA_PLAT_LABEL[result.warnaPlat]}
+                <span className="numeric font-semibold">{tarifLabel}</span> ·
+                Plat {WARNA_PLAT_LABEL[result.warnaPlat]}
               </span>
-            </Badge>
-          )}
-        </div>
-        {/* <Badge
-          variant={result.tahunTunggakan > 0 ? "secondary" : "outline"}
-          className="shrink-0"
-        >
-          {result.tahunTunggakan > 0 ? "Ada Tunggakan" : "Tahun Berjalan"}
-        </Badge> */}
-      </div>
-
-      {!compact && (
-        <>
-          <div className="amnesty-badge flex items-start gap-2.5 rounded-md border px-3 py-2.5">
-            <ShieldCheck
-              className="mt-0.5 size-4 shrink-0 text-success"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                Fasilitas Tax Amnesty Aktif
-              </p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                Denda keterlambatan PKB dan Opsen dibebaskan 100%. Pokok pajak
-                dan SWDKLLJ tetap diperhitungkan.
-              </p>
-            </div>
-          </div>
-
-        </>
-      )}
-
-      <ResultBreakdown result={result} />
-
-      <div className="total-block min-w-0 rounded-lg border p-4">
-        <div className="flex min-w-0 items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-              Total Bayar
-            </p>
-            <p className="numeric mt-1 whitespace-nowrap text-[clamp(1.5rem,7vw,2.25rem)] font-bold leading-none tracking-tight text-primary">
-              {formatRupiah(result.total)}
-            </p>
-          </div>
-          {!compact && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Salin ringkasan penetapan"
-                  onClick={() => void copySummary()}
-                >
-                  {copied ? (
-                    <Check aria-hidden="true" />
-                  ) : (
-                    <Copy aria-hidden="true" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {copied ? "Ringkasan disalin" : "Salin ringkasan"}
-              </TooltipContent>
-            </Tooltip>
+            </span>
           )}
         </div>
       </div>
+
+      {/* Catatan Tax Amnesty */}
+      <div className="amnesty-badge flex items-start gap-2.5 rounded-lg border px-3 py-2.5">
+        <ShieldCheck
+          className="mt-0.5 size-4 shrink-0 text-success"
+          aria-hidden="true"
+        />
+        <p className="text-xs leading-relaxed text-foreground">
+          <span className="font-semibold">Tax Amnesty aktif.</span> Denda PKB
+          dan Opsen dibebaskan 100%; pokok pajak dan SWDKLLJ tetap
+          diperhitungkan.
+        </p>
+      </div>
+
+      <ResultBreakdown result={result} compact={compact} />
     </section>
   );
 }

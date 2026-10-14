@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react"
 import { Download, EllipsisVertical, Menu, Share, SquarePlus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -10,6 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { usePwaInstall } from "@/hooks/use-pwa-install"
 import type { InstallPlatform } from "@/lib/pwa-install"
 import { cn } from "@/lib/utils"
@@ -91,7 +95,7 @@ const GUIDES: Record<InstallPlatform, InstallGuide> = {
 
 function Kbd({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-px align-baseline text-[0.8125rem] font-medium text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">
+    <span className="inline-flex items-center gap-1 rounded-md border bg-muted px-1.5 py-px align-baseline text-[0.8125rem] font-medium text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">
       {icon}
       {children}
     </span>
@@ -119,9 +123,7 @@ function InstallGuideDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            {guide.title}
-          </p>
+          <p className="eyebrow">{guide.title}</p>
           <ol className="flex flex-col gap-2.5">
             {guide.steps.map((step, index) => (
               <li key={index} className="flex items-start gap-3 text-sm leading-relaxed">
@@ -136,7 +138,7 @@ function InstallGuideDialog({
             ))}
           </ol>
           {guide.note && (
-            <p className="info-subtle rounded-md border px-3 py-2 text-xs leading-relaxed text-foreground">
+            <p className="info-subtle rounded-lg border px-3 py-2 text-xs leading-relaxed text-foreground">
               {guide.note}
             </p>
           )}
@@ -174,23 +176,31 @@ function useInstallAction() {
   return { visible: !installed, start, dialog }
 }
 
-/** Tombol "Instal" di header; tampil di semua ukuran layar selama belum terpasang. */
+/**
+ * Tombol "Instal" di header band navy; tampil selama belum terpasang.
+ * Ikon + label di ≥sm, ikon saja (dengan aria-label dan tooltip) di layar sempit.
+ */
 export function PwaInstallButton({ className }: { className?: string }) {
   const { visible, start, dialog } = useInstallAction()
   if (!visible) return null
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => void start()}
-        className={cn("h-9", className)}
-      >
-        <Download aria-hidden="true" />
-        Instal Aplikasi
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="onDark"
+            onClick={() => void start()}
+            aria-label="Instal aplikasi"
+            className={cn("w-10 px-0 sm:w-auto sm:px-4", className)}
+          >
+            <Download aria-hidden="true" />
+            <span className="hidden sm:inline">Instal</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Instal aplikasi di perangkat ini</TooltipContent>
+      </Tooltip>
       {dialog}
     </>
   )
@@ -243,34 +253,39 @@ export function PwaInstallPrompt() {
 
   return (
     <>
-      <Card className="border-primary/20 bg-card lg:hidden">
-        <CardContent className="flex items-start gap-3 p-4">
-          <span className="step-badge flex size-9 shrink-0 items-center justify-center rounded-md border">
-            <Download className="size-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Instal Kalkulator Pajak</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Pasang aplikasi agar dapat dibuka langsung dari layar utama. Koneksi
-              internet tetap diperlukan.
-            </p>
-            <Button type="button" size="sm" className="mt-3" onClick={() => void start()}>
-              <Download aria-hidden="true" />
-              Instal Aplikasi
-            </Button>
-          </div>
+      <div className="surface-card flex items-start gap-3 p-4 lg:hidden">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-navy-800">
+          <Download className="size-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground">
+            Instal Kalkulator Pajak
+          </p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            Pasang aplikasi agar dapat dibuka langsung dari layar utama. Koneksi
+            internet tetap diperlukan.
+          </p>
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="-mr-2 -mt-2 shrink-0"
-            aria-label="Tutup ajakan instalasi"
-            onClick={dismiss}
+            size="sm"
+            className="mt-3"
+            onClick={() => void start()}
           >
-            <X aria-hidden="true" />
+            <Download aria-hidden="true" />
+            Instal Aplikasi
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="-mr-2 -mt-2 size-9 shrink-0 text-muted-foreground"
+          aria-label="Tutup ajakan instalasi"
+          onClick={dismiss}
+        >
+          <X aria-hidden="true" />
+        </Button>
+      </div>
       {dialog}
     </>
   )

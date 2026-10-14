@@ -35,17 +35,18 @@ export function FullScreenState({
       aria-live={role === "alert" ? "assertive" : "polite"}
       aria-busy={busy || undefined}
     >
-      <div className="flex w-full max-w-sm flex-col items-center gap-5 text-center short:gap-3">
+      <div className="surface-card flex w-full max-w-sm flex-col items-center gap-5 px-6 py-8 text-center shadow-float short:gap-3 short:py-5">
         <img
           src="/logo-ntt.png"
           alt="Lambang Provinsi Nusa Tenggara Timur"
           width={61}
           height={64}
-          className="h-14 w-auto short:h-10 xshort:hidden"
+          className="h-12 w-auto short:h-9 xshort:hidden"
         />
+        <div className="gold-rule w-16 short:hidden" aria-hidden="true" />
         <span
           className={cn(
-            "flex size-11 items-center justify-center rounded-lg border [&_svg]:size-5",
+            "flex size-12 items-center justify-center rounded-full border [&_svg]:size-5",
             tone === "warning"
               ? "border-warning/30 bg-warning/10 text-warning"
               : "step-badge",

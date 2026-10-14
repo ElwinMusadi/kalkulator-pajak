@@ -29,7 +29,7 @@ export default defineConfig({
         display: "standalone",
         orientation: "any",
         background_color: "#ffffff",
-        theme_color: "#171717",
+        theme_color: "#0a4743",
         categories: ["finance", "utilities", "government"],
         icons: [
           {
@@ -93,6 +93,19 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": new URL("./src", import.meta.url).pathname,
+    },
+  },
+  // `npm run dev` hanya menjalankan Vite (tanpa Pages Functions/D1). Request
+  // /api diteruskan ke backend lokal `wrangler pages dev` (port 8788) agar
+  // login, sesi, dan lookup bekerja same-origin seperti di production.
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8788",
+        // Pertahankan Host localhost agar pemeriksaan Origin (CSRF) dan cookie
+        // sesi tetap same-origin dengan halaman dev.
+        changeOrigin: false,
+      },
     },
   },
 })

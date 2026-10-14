@@ -8,7 +8,15 @@
 
 import type { ApiErrorBody } from "@/types/auth"
 
-export const API_BASE_URL: string = import.meta.env?.VITE_API_BASE_URL ?? ""
+/**
+ * Base URL API. Sesi berbasis cookie same-origin (`__Host-`, SameSite=Strict)
+ * dan pemeriksaan Origin (CSRF) mengharuskan API berada di origin yang sama.
+ * Saat `npm run dev`, nilai VITE_API_BASE_URL diabaikan: request /api relatif
+ * dan diteruskan proxy Vite ke `wrangler pages dev` (lihat vite.config.ts).
+ */
+export const API_BASE_URL: string = import.meta.env?.DEV
+  ? ""
+  : (import.meta.env?.VITE_API_BASE_URL ?? "")
 
 /** Event global saat server menyatakan sesi tidak ada/berakhir (HTTP 401). */
 export const AUTH_UNAUTHENTICATED_EVENT = "auth:unauthenticated"

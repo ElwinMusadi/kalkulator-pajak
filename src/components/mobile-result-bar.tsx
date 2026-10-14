@@ -17,37 +17,38 @@ import type { TaxCalculationResult } from "@/types/tax";
 export function MobileResultBar({ result }: { result: TaxCalculationResult }) {
   return (
     <Drawer>
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden">
+      <div className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/80 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-float lg:hidden">
         <div className="mx-auto flex min-w-0 max-w-7xl items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Total bayar
-            </p>
-            <p className="numeric mt-1 whitespace-nowrap text-2xl font-bold leading-none tracking-tight text-primary sm:text-3xl">
+            <p className="eyebrow">Total bayar</p>
+            <p
+              key={result.total}
+              className="animate-value-settle font-plate mt-0.5 whitespace-nowrap text-2xl font-bold leading-none tracking-tight tabular-nums text-navy-900 sm:text-3xl"
+            >
               {formatRupiah(result.total)}
             </p>
           </div>
           <DrawerTrigger asChild>
-            <Button type="button" size="default" className="shrink-0">
+            <Button type="button" size="lg" className="h-11 shrink-0 px-5">
               Rincian
-              <ChevronUp data-icon="inline-end" aria-hidden="true" />
+              <ChevronUp aria-hidden="true" />
             </Button>
           </DrawerTrigger>
         </div>
       </div>
       <DrawerContent className="max-h-[88dvh]">
-        <DrawerHeader className="border-b text-left">
+        <DrawerHeader className="border-b border-border/80">
           <DrawerTitle>Rincian penetapan</DrawerTitle>
           <DrawerDescription>
             Komponen pajak dan biaya yang membentuk total pembayaran.
           </DrawerDescription>
         </DrawerHeader>
-        <div className="overflow-y-auto px-4 py-5">
+        <div className="overflow-y-auto px-4 py-4">
           <ResultSummary result={result} compact />
         </div>
-        <DrawerFooter className="border-t">
+        <DrawerFooter className="border-t border-border/80">
           <DrawerClose asChild>
-            <Button type="button" variant="outline">
+            <Button type="button" variant="outline" size="lg">
               Tutup
             </Button>
           </DrawerClose>

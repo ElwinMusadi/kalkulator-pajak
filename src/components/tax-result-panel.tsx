@@ -6,8 +6,8 @@ interface TaxResultPanelProps {
 }
 
 /**
- * Desktop shell untuk hasil penetapan.
- * ResultSummary mencakup nominal kategori accordion dan total pembayaran.
+ * Shell desktop untuk hasil penetapan.
+ * ResultSummary memuat tile total, catatan amnesti, dan bento komponen.
  */
 export function TaxResultPanel({ result }: TaxResultPanelProps) {
   return <ResultSummary result={result} />;

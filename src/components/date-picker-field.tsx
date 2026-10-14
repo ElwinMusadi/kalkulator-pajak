@@ -36,7 +36,7 @@ export function DatePickerField({
   };
 
   return (
-    <Field data-invalid={invalid || undefined}>
+    <Field data-invalid={invalid || undefined} className="min-w-0 gap-2">
       <FieldLabel htmlFor={id}>
         {label}
         {required && (
@@ -53,30 +53,25 @@ export function DatePickerField({
             variant="outline"
             aria-invalid={invalid || undefined}
             className={cn(
-              "h-10 w-full justify-start px-3 text-left font-normal",
-              !value && "text-muted-foreground",
-              invalid && "border-destructive",
+              "h-10 w-full min-w-0 justify-start gap-2.5 bg-card px-3 text-left font-normal shadow-xs",
+              "[&_svg]:text-muted-foreground",
+              invalid && "border-destructive ring-1 ring-destructive/25",
             )}
           >
-            <CalendarIcon data-icon="inline-start" aria-hidden="true" />
+            <CalendarIcon aria-hidden="true" />
             {/*
-              Teks tanggal harus ikut warna hover tombol (putih).
-              Gunakan `inherit` bukan warna tetap, supaya hover state bekerja.
+              Warna teks mengikuti state hover tombol outline (selector
+              `hover:[&_span]` pada varian), jadi tidak dikunci di sini.
             */}
-            <span
-              className={cn(
-                "inherit leading-none",
-                !value && "text-muted-foreground",
-              )}
-            >
-              {value ? (
-                <span className="numeric font-medium">
-                  {format(value, "dd/MM/yyyy")}
-                </span>
-              ) : (
-                placeholder
-              )}
-            </span>
+            {value ? (
+              <span className="numeric min-w-0 truncate text-sm font-medium leading-none text-foreground">
+                {format(value, "dd/MM/yyyy")}
+              </span>
+            ) : (
+              <span className="min-w-0 truncate text-sm leading-none text-muted-foreground">
+                {placeholder}
+              </span>
+            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">

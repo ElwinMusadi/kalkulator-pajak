@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import {
   ArrowLeftRight,
   Calculator,
@@ -10,7 +10,11 @@ import {
 } from "lucide-react";
 import { DatePickerField } from "@/components/date-picker-field";
 import { FacilityToggle } from "@/components/facility-toggle";
-import { FormStepAccordion } from "@/components/form-step-accordion";
+import {
+  FormStepAccordion,
+  FormStepHeading,
+  type StepStatusTone,
+} from "@/components/form-step-accordion";
 import {
   NopolLookupDisabledMessage,
   NopolLookupIndicator,
@@ -20,7 +24,6 @@ import { PlateColorRadioGroup } from "@/components/plate-color-radio-group";
 import { useAuth } from "@/auth/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Accordion } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -78,6 +81,14 @@ type FieldKey =
 
 type FormSection = "assessment" | "tax-period" | "facilities";
 
+type SectionStatus = "Isi Manual" | "Terisi Otomatis" | "Belum Lengkap";
+
+const SECTION_STATUS_TONE: Record<SectionStatus, StepStatusTone> = {
+  "Terisi Otomatis": "success",
+  "Belum Lengkap": "warning",
+  "Isi Manual": "neutral",
+};
+
 function normalizeJenis(raw: string | null): JenisKendaraan | undefined {
   if (!raw) return undefined;
   const upper = raw.toUpperCase().trim();
@@ -99,40 +110,20 @@ function isoToDate(iso: string | null | undefined): Date | undefined {
   }
 }
 
-/** Angka langkah + judul + hint — layout: nomor | konten */
-function SectionLegend({
-  step,
-  title,
-  hint,
-}: {
-  step: string;
-  title: string;
-  hint: string;
-}) {
+/** Tanda bintang wajib isi (dekoratif; label sudah menyebut kewajiban via validasi). */
+function RequiredMark() {
   return (
-    <FieldLegend className="mb-1 flex w-full min-w-0 items-start gap-3">
-      <span
-        className="numeric step-badge mt-0! flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
-        aria-hidden="true"
-      >
-        {step}
-      </span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-base font-semibold tracking-tight">{title}</span>
-        <span className="text-sm font-normal leading-snug text-muted-foreground">
-          {hint}
-        </span>
-      </span>
-    </FieldLegend>
+    <span className="text-destructive" aria-hidden="true">
+      *
+    </span>
   );
 }
 
 /**
- * Konten section diindentasi sejajar teks judul tahap.
- * `padding-left` dipakai, bukan `margin-left`, agar elemen `w-full`
- * tetap berada di dalam batas Card pada seluruh ukuran viewport.
+ * Konten tahap diindentasi sejajar teks judul pada ≥sm (badge 28px + gap 12px);
+ * pada mobile selebar kartu agar lebar 320px tidak terbuang.
  */
-const INDENT = "pl-[calc(1.75rem+0.75rem)]"; // size-7 (28px) + gap-3 (12px)
+const STEP_INDENT = "sm:pl-10";
 
 interface TaxCalculatorFormProps {
   onResult: (result: TaxCalculationResult | null) => void;
@@ -386,7 +377,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           : "Dipilih manual — sumber data tidak menyediakan warna plat."
       : `Pilih sesuai TNKB kendaraan. Default ${WARNA_PLAT_LABEL[DEFAULT_WARNA_PLAT]}.`;
 
-  const assessmentStatus =
+  const assessmentStatus: SectionStatus | undefined =
     manualEntry
       ? "Isi Manual"
       : lookupStatus === "found"
@@ -394,7 +385,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           ? "Terisi Otomatis"
           : "Belum Lengkap"
         : undefined;
-  const taxPeriodStatus =
+  const taxPeriodStatus: SectionStatus | undefined =
     manualEntry
       ? "Isi Manual"
       : lookupStatus === "found"
@@ -403,50 +394,82 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           : "Belum Lengkap"
         : undefined;
 
+  // Strip masa berlaku pada plat: "MM · YY" dari jatuh tempo pajak, bila ada.
+  const plateStripText = jatuhTempoPajak
+    ? format(jatuhTempoPajak, "MM · yy")
+    : "NTT";
+
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
-      {/* ── 1 · Identitas Kendaraan ── */}
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col">
+      {/* ── 1 · Kendaraan ── */}
       {/*
         min-w-0 wajib: <fieldset> punya min-inline-size: min-content bawaan browser,
-        sehingga konten nowrap (nama pemilik, badge sumber data) membuatnya melebar
+        sehingga konten nowrap (nama pemilik, sel bento) membuatnya melebar
         melewati Card di layar sempit.
       */}
-      <FieldSet className="min-w-0 gap-3">
-        <SectionLegend
-          step="1"
-          title="Identitas Kendaraan"
-          hint={
-            lookupEnabled
-              ? "Masukkan nomor polisi untuk mengisi data secara otomatis."
-              : "Catat nomor polisi, lalu lengkapi data kendaraan secara manual."
-          }
-        />
-        <div className={cn("w-full min-w-0", INDENT)}>
-          <Field>
-            <FieldLabel htmlFor="nopol">Nomor Polisi</FieldLabel>
-            <div className="relative">
-              <Input
-                id="nopol"
-                aria-describedby="nopol-lookup-message"
-                value={nopol}
-                onChange={(e) => {
-                  // Setiap perubahan karakter Nopol mengosongkan data sebelumnya.
-                  // Tanggal Pembayaran sengaja tidak di-reset.
-                  resetVehicleFields();
-                  setNopol(e.target.value.toUpperCase());
-                }}
-                placeholder="DH1234AB"
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck={false}
-                className="numeric h-10 pr-10 text-base font-medium uppercase tracking-normal"
-                maxLength={12}
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                <NopolLookupIndicator status={lookupStatus} />
-              </span>
+      <FieldSet className="min-w-0 gap-5 pb-6">
+        <FieldLegend className="mb-0 w-full p-0 font-normal">
+          <FormStepHeading
+            step="1"
+            title="Kendaraan"
+            hint={
+              lookupEnabled
+                ? "Masukkan nomor polisi untuk mengisi data secara otomatis."
+                : "Catat nomor polisi, lalu lengkapi data kendaraan secara manual."
+            }
+          />
+        </FieldLegend>
+
+        {/* pt-5: flex `gap` tidak berlaku pada <legend>, jarak dibuat eksplisit. */}
+        <div className={cn("w-full min-w-0 pt-5", STEP_INDENT)}>
+          <Field className="min-w-0 gap-4">
+            <FieldLabel htmlFor="nopol" className="eyebrow">
+              Nomor Polisi
+            </FieldLabel>
+
+            {/* Plat TNKB: warna mengikuti pilihan Warna Plat (tahap 2) secara langsung. */}
+            <div
+              data-plate={warnaPlat}
+              className="tnkb-plate w-full max-w-[26rem] select-none"
+            >
+              <div className="relative h-[4.5rem]">
+                <Input
+                  id="nopol"
+                  aria-describedby="nopol-lookup-message"
+                  value={nopol}
+                  onChange={(e) => {
+                    // Setiap perubahan karakter Nopol mengosongkan data sebelumnya.
+                    // Tanggal Pembayaran sengaja tidak di-reset.
+                    resetVehicleFields();
+                    setNopol(e.target.value.toUpperCase());
+                  }}
+                  placeholder="DH 1234 AB"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={12}
+                  className={cn(
+                    "h-full w-full rounded-none border-0 bg-transparent px-12 py-0 text-center shadow-none",
+                    "font-plate text-3xl font-bold uppercase leading-none tracking-wide sm:text-4xl",
+                    "focus-visible:ring-0 focus-visible:ring-offset-0",
+                  )}
+                />
+                <span
+                  className="pointer-events-none absolute right-4 top-1/2 flex -translate-y-1/2 items-center"
+                  aria-hidden="true"
+                >
+                  <NopolLookupIndicator status={lookupStatus} />
+                </span>
+              </div>
+              <div
+                className="tnkb-strip mx-3 flex h-7 items-center justify-center text-xs font-semibold tracking-[0.3em]"
+                aria-hidden="true"
+              >
+                <span className="numeric">{plateStripText}</span>
+              </div>
             </div>
-            <div id="nopol-lookup-message" aria-live="polite">
+
+            <div id="nopol-lookup-message" aria-live="polite" className="min-w-0">
               {lookupEnabled ? (
                 <NopolLookupMessage
                   status={lookupStatus}
@@ -468,7 +491,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         type="multiple"
         value={openSections}
         onValueChange={(values) => setOpenSections(values as FormSection[])}
-        className="flex w-full flex-col gap-6"
+        className="flex w-full min-w-0 flex-col"
       >
         <FormStepAccordion
           value="assessment"
@@ -476,14 +499,15 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           title="Dasar Pengenaan"
           hint="Nilai jual dan bobot menentukan besaran PKB."
           status={assessmentStatus}
+          statusTone={assessmentStatus && SECTION_STATUS_TONE[assessmentStatus]}
         >
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
-            <Field data-invalid={invalidField === "njkb" || undefined}>
+          <div className="grid w-full min-w-0 grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-3">
+            <Field
+              data-invalid={invalidField === "njkb" || undefined}
+              className="min-w-0 gap-2"
+            >
               <FieldLabel htmlFor="njkb">
-                NJKB{" "}
-                <span className="text-destructive" aria-hidden="true">
-                  *
-                </span>
+                NJKB <RequiredMark />
               </FieldLabel>
               <Input
                 id="njkb"
@@ -498,16 +522,21 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 min={0}
                 step={1000}
                 aria-invalid={invalidField === "njkb" || undefined}
-                className="numeric"
+                className="numeric h-10 bg-card aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
               />
-              <FieldDescription>
+              <FieldDescription
+                className={cn(
+                  "text-xs",
+                  !isNaN(njkbNumber) && njkbNumber > 0 && "numeric font-medium text-foreground",
+                )}
+              >
                 {!isNaN(njkbNumber) && njkbNumber > 0
                   ? formatRupiah(njkbNumber)
                   : "Nilai Jual Kendaraan Bermotor."}
               </FieldDescription>
             </Field>
 
-            <Field>
+            <Field className="min-w-0 gap-2">
               <FieldLabel htmlFor="njub">NJUB</FieldLabel>
               <Input
                 id="njub"
@@ -518,21 +547,21 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 placeholder="0"
                 min={0}
                 step={1000}
-                className="numeric"
+                className="numeric h-10 bg-card"
               />
-              <FieldDescription>
+              <FieldDescription className="text-xs">
                 {!isNaN(njubNumber) && njubNumber > 0
                   ? `${formatRupiah(njubNumber)} ditambahkan ke dasar pengenaan.`
                   : "Nilai ubah bentuk, jika ada."}
               </FieldDescription>
             </Field>
 
-            <Field data-invalid={invalidField === "jenis" || undefined}>
+            <Field
+              data-invalid={invalidField === "jenis" || undefined}
+              className="min-w-0 gap-2"
+            >
               <FieldLabel htmlFor="jenis">
-                Jenis Kendaraan{" "}
-                <span className="text-destructive" aria-hidden="true">
-                  *
-                </span>
+                Jenis Kendaraan <RequiredMark />
               </FieldLabel>
               <Select
                 value={jenisKendaraan}
@@ -544,6 +573,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 <SelectTrigger
                   id="jenis"
                   aria-invalid={invalidField === "jenis" || undefined}
+                  className="h-10 bg-card aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
                 >
                   <SelectValue placeholder="Pilih Jenis" />
                 </SelectTrigger>
@@ -557,11 +587,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <FieldDescription className="flex flex-wrap items-center gap-1.5">
+              <FieldDescription className="flex flex-wrap items-center gap-1.5 text-xs">
                 {bobot !== undefined ? (
-                  <Badge variant="secondary" className="numeric font-medium">
+                  <span className="numeric step-badge inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6875rem] font-semibold leading-4">
                     Bobot Data {bobot.toLocaleString("id-ID")}
-                  </Badge>
+                  </span>
                 ) : (
                   <span>Bobot mengikuti jenis kendaraan.</span>
                 )}
@@ -569,13 +599,13 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             </Field>
 
             {/*
-              Baris penuh: kontrol mengikuti lebar satu kolom field di atasnya,
+              Baris penuh: tiga plat mini butuh ≥ 19rem agar label tidak terpotong;
               keterangan berada di sisi kanan pada desktop dan di bawah pada mobile.
             */}
-            <Field className="md:col-span-3">
+            <Field className="min-w-0 gap-2 md:col-span-3">
               {/* Bukan <label>: radiogroup dilabeli via aria-labelledby. */}
               <FieldTitle id="warna-plat-label">Warna Plat (TNKB)</FieldTitle>
-              <div className="grid w-full min-w-0 grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-3 md:items-center">
+              <div className="grid w-full min-w-0 grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] md:items-start">
                 <PlateColorRadioGroup
                   value={warnaPlat}
                   onValueChange={setWarnaPlat}
@@ -584,11 +614,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 />
                 <div
                   id="warna-plat-description"
-                  className="flex min-w-0 flex-col gap-1 text-sm leading-snug text-muted-foreground md:col-span-2"
+                  className="flex min-w-0 flex-col gap-1.5 text-xs leading-relaxed text-muted-foreground md:pt-1"
                 >
                   <p>{plateSourceHint}</p>
                   {warnaPlat === "merah" && (
-                    <p className="flex items-start gap-1.5 font-medium text-foreground">
+                    <p className="flex items-start gap-1.5 text-[0.8125rem] font-medium text-foreground">
                       <Info
                         className="mt-0.5 size-3.5 shrink-0 text-primary"
                         aria-hidden="true"
@@ -602,9 +632,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                       </span>
                     </p>
                   )}
-                  <p className="text-xs">
-                    Plat kuning (angkutan umum) dihitung di loket.
-                  </p>
+                  <p>Plat kuning (angkutan umum) dihitung di loket.</p>
                 </div>
               </div>
             </Field>
@@ -617,8 +645,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           title="Masa Pajak"
           hint="Tanggal jatuh tempo dan pembayaran menentukan tunggakan dan diskon."
           status={taxPeriodStatus}
+          statusTone={taxPeriodStatus && SECTION_STATUS_TONE[taxPeriodStatus]}
         >
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-3">
             <DatePickerField
               id="jatuh-tempo-pajak"
               label="Jatuh Tempo Pajak"
@@ -652,22 +681,23 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           title="Fasilitas & Biaya Tambahan"
           hint="Aktifkan yang berlaku bagi wajib pajak ini."
           status={activeFacilityCount > 0 ? `${activeFacilityCount} Aktif` : undefined}
+          statusTone="info"
         >
-          <div className="flex flex-col gap-2.5">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             <FacilityToggle
               id="is-gempa"
-              title="Wilayah Terdampak Gempa (Diskon tunggakan 75%)"
+              title="Wilayah Terdampak Gempa"
               description="Sikka, Ende, Nagekeo, Ngada, Manggarai, Manggarai Timur, Manggarai Barat."
-              impact=""
+              impact="Diskon tunggakan 75%"
               checked={isDomisiliGempa}
               onCheckedChange={setIsDomisiliGempa}
               icon={<ShieldCheck />}
             />
             <FacilityToggle
               id="is-mutasi-masuk"
-              title="Mutasi Masuk Luar Daerah (Diskon PKB berjalan 50%)"
+              title="Mutasi Masuk Luar Daerah"
               description="Menggantikan diskon pembayaran awal pada PKB berjalan."
-              impact=""
+              impact="Diskon PKB berjalan 50%"
               checked={isMutasiMasuk}
               onCheckedChange={setIsMutasiMasuk}
               icon={<ArrowLeftRight />}
@@ -677,7 +707,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 id="is-tembak-ru"
                 title="Biaya Tembak RU/STNK"
                 description="Motor Rp150.000 · Mobil Rp250.000."
-                impact=""
+                impact="Biaya tambahan"
                 checked={isTembakRu}
                 onCheckedChange={setIsTembakRu}
                 icon={<Landmark />}
@@ -687,22 +717,25 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         </FormStepAccordion>
       </Accordion>
 
-      {validationError && (
-        <Alert variant="destructive" className={cn("animate-fade-up", INDENT)}>
-          <CircleAlert aria-hidden="true" />
-          <AlertTitle>Data Belum Lengkap</AlertTitle>
-          <AlertDescription>{validationError}</AlertDescription>
-        </Alert>
-      )}
+      {/* ── Validasi + aksi utama ── */}
+      <div className="flex flex-col gap-4 border-t pt-6">
+        {validationError && (
+          <Alert variant="destructive" className="animate-fade-up">
+            <CircleAlert aria-hidden="true" />
+            <AlertTitle>Data Belum Lengkap</AlertTitle>
+            <AlertDescription>{validationError}</AlertDescription>
+          </Alert>
+        )}
 
-      <Button
-        type="submit"
-        size="lg"
-        className="h-11 w-full text-base font-semibold"
-      >
-        <Calculator data-icon="inline-start" aria-hidden="true" />
-        Hitung Penetapan
-      </Button>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-12 w-full text-base font-semibold shadow-card"
+        >
+          <Calculator data-icon="inline-start" aria-hidden="true" />
+          Hitung Penetapan
+        </Button>
+      </div>
     </form>
   );
 }

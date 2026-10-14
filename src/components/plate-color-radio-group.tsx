@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent } from "react";
-import { PlateColorSwatch } from "@/components/plate-color-swatch";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WARNA_PLAT_LABEL, WARNA_PLAT_OPTIONS, type WarnaPlat } from "@/types/tax";
 
@@ -12,9 +12,10 @@ interface PlateColorRadioGroupProps {
 }
 
 /**
- * Segmented control Putih / Hitam / Merah dengan semantik radiogroup (WAI-ARIA):
- * satu tab stop (roving tabindex), panah/Home/End memindahkan pilihan.
- * Grid 3 kolom `minmax(0,1fr)` + `min-w-0` mencegah overflow di layar 320px.
+ * Pilihan Putih / Hitam / Merah berupa tiga plat mini, dengan semantik
+ * radiogroup (WAI-ARIA): satu tab stop (roving tabindex), panah/Home/End
+ * memindahkan pilihan. Grid 3 kolom `minmax(0,1fr)` + `min-w-0` mencegah
+ * overflow di layar 320px.
  */
 export function PlateColorRadioGroup({
   value,
@@ -60,12 +61,7 @@ export function PlateColorRadioGroup({
       role="radiogroup"
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      className={cn(
-        // @container: segmen memadat (teks xs, padding kecil) bila lebar kontrol
-        // < 17rem, mis. layar 320px, agar label tidak terpotong.
-        "@container grid h-10 w-full min-w-0 grid-cols-3 gap-1 rounded-md border border-input bg-transparent p-1 shadow-sm",
-        className,
-      )}
+      className={cn("grid w-full min-w-0 grid-cols-3 gap-2 sm:gap-3", className)}
     >
       {WARNA_PLAT_OPTIONS.map((option, index) => {
         const checked = option === value;
@@ -82,16 +78,28 @@ export function PlateColorRadioGroup({
             onClick={() => onValueChange(option)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={cn(
-              // Bobot font sama di semua state: lebar label tidak berubah saat dipilih.
-              "flex min-w-0 items-center justify-center gap-1 rounded-[calc(var(--radius)-2px)] border px-0.5 text-xs font-medium transition-colors @[17rem]:gap-1.5 @[17rem]:px-2 @[17rem]:text-sm",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex min-w-0 rounded-lg border bg-card p-1 transition-[border-color,box-shadow] duration-150",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
               checked
-                ? "step-badge"
-                : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? "border-navy-800 ring-1 ring-navy-800 dark:border-primary dark:ring-primary"
+                : "border-border hover:border-navy-600/40",
             )}
           >
-            <PlateColorSwatch warna={option} className="size-2.5 @[17rem]:size-3" />
-            <span className="truncate">{WARNA_PLAT_LABEL[option]}</span>
+            {/* Plat mini memakai token TNKB yang sama dengan plat Nomor Polisi. */}
+            <span
+              data-plate={option}
+              className="tnkb-plate flex h-9 w-full min-w-0 items-center justify-center rounded-md! px-1 font-plate text-[0.8125rem] font-bold uppercase tracking-[0.1em] sm:text-sm"
+            >
+              <span className="truncate">{WARNA_PLAT_LABEL[option]}</span>
+            </span>
+            {checked && (
+              <span
+                className="absolute -right-1 -top-1.5 flex size-4 items-center justify-center rounded-full bg-navy-800 text-white ring-2 ring-card dark:bg-primary dark:text-primary-foreground"
+                aria-hidden="true"
+              >
+                <Check className="size-2.5" strokeWidth={3.5} />
+              </span>
+            )}
           </button>
         );
       })}

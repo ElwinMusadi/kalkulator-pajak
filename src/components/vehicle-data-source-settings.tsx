@@ -1,4 +1,4 @@
-import { Database, Globe2, Layers, Settings } from "lucide-react"
+import { Check, Database, Globe2, Layers, Settings2 } from "lucide-react"
 import { useAuth } from "@/auth/auth-context"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,6 +9,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useEffectiveVehicleDataSource } from "@/hooks/use-effective-vehicle-data-source"
 import { cn } from "@/lib/utils"
 import type { VehicleDataSourceMode } from "@/types/tax"
@@ -18,6 +23,7 @@ interface SourceOption {
   label: string
   description: string
   icon: typeof Database
+  isDefault?: boolean
 }
 
 const SOURCE_OPTIONS: SourceOption[] = [
@@ -25,21 +31,21 @@ const SOURCE_OPTIONS: SourceOption[] = [
     value: "api_then_d1",
     label: "NJKB API + Database D1",
     description:
-      "Default. Cari melalui NJKB API terlebih dahulu, lalu gunakan Database D1 bila data tidak ditemukan atau koneksi API bermasalah.",
+      "NJKB API dulu; Database D1 dipakai bila data tidak ditemukan atau API bermasalah.",
     icon: Layers,
+    isDefault: true,
   },
   {
     value: "d1_then_api",
     label: "Database D1 + NJKB API",
     description:
-      "Cari di Database D1 terlebih dahulu, lalu gunakan NJKB API bila data tidak ditemukan atau D1 bermasalah.",
+      "Database D1 dulu; NJKB API dipakai bila data tidak ditemukan atau D1 bermasalah.",
     icon: Layers,
   },
   {
     value: "api",
     label: "NJKB API NTT",
-    description:
-      "Cari data kendaraan langsung melalui layanan NJKB API NTT saja.",
+    description: "Cari data kendaraan langsung melalui layanan NJKB API NTT saja.",
     icon: Globe2,
   },
   {
@@ -70,29 +76,34 @@ export function VehicleDataSourceSettings() {
 
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label="Pengaturan sumber data kendaraan"
-        >
-          <Settings aria-hidden="true" />
-        </Button>
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              variant="onDark"
+              size="icon"
+              aria-label="Pengaturan sumber data"
+            >
+              <Settings2 aria-hidden="true" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Pengaturan sumber data</TooltipContent>
+      </Tooltip>
       <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Sumber Data Kendaraan</DialogTitle>
           <DialogDescription>
-            Pilih sumber data yang digunakan untuk pencarian Nomor Polisi. Pilihan
-            tersimpan di perangkat ini dan digunakan untuk lookup berikutnya.
+            Pilih sumber data untuk pencarian Nomor Polisi. Pilihan tersimpan di
+            perangkat ini dan dipakai untuk pencarian berikutnya.
           </DialogDescription>
         </DialogHeader>
 
         <div
           role="radiogroup"
           aria-label="Pilih sumber data kendaraan"
-          className="grid gap-3"
+          className="grid gap-2.5"
         >
           {options.map((option) => {
             const Icon = option.icon
@@ -106,40 +117,47 @@ export function VehicleDataSourceSettings() {
                 aria-checked={selected}
                 onClick={() => setMode(option.value)}
                 className={cn(
-                  "flex min-h-20 w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2",
                   selected
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                    : "border-border bg-card hover:bg-muted/50",
+                    ? "border-navy-800 bg-navy-50 shadow-xs ring-1 ring-navy-800"
+                    : "border-border bg-card hover:border-navy-600/40 hover:bg-navy-50/60",
                 )}
               >
                 <span
                   className={cn(
-                    "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border",
+                    "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg",
                     selected
-                      ? "border-primary/30 bg-primary/10 text-primary"
-                      : "border-border bg-muted text-muted-foreground",
+                      ? "bg-navy-800 text-white"
+                      : "bg-muted text-muted-foreground",
                   )}
                 >
                   <Icon className="size-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center justify-between gap-3">
-                    <span className="font-medium text-foreground">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-sm font-semibold text-foreground">
                       {option.label}
                     </span>
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "size-4 shrink-0 rounded-full border-2",
-                        selected
-                          ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--background)]"
-                          : "border-muted-foreground/50",
-                      )}
-                    />
+                    {option.isDefault && (
+                      <span className="rounded-md border border-gold-500/60 px-1.5 py-px text-[10px] font-bold uppercase tracking-[0.12em] text-warning">
+                        Default
+                      </span>
+                    )}
                   </span>
-                  <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
+                  <span className="mt-1 block text-[13px] leading-relaxed text-muted-foreground">
                     {option.description}
                   </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                    selected
+                      ? "border-navy-800 bg-navy-800 text-white"
+                      : "border-muted-foreground/40 bg-card",
+                  )}
+                >
+                  {selected && <Check className="size-3" strokeWidth={3} />}
                 </span>
               </button>
             )

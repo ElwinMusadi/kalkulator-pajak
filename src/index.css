@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Saira+Semi+Condensed:wght@600;700&display=swap");
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -10,89 +10,119 @@
 @custom-variant short-wide (@media (max-height: 500px) and (min-width: 560px));
 @custom-variant tiny (@media (max-height: 420px));
 
+/* ==========================================================================
+   Design system — "Modern Government Utility"
+   Teal (primary, dengan gradasi) + kertas dingin + aksen emas lambang NTT
+   (dipakai sangat hemat).
+
+   Catatan: nama token `--navy-*` / kelas `bg-navy-*` dipertahankan agar
+   komponen tidak perlu diubah; nilainya kini skala TEAL (950 tergelap → 50).
+   ========================================================================== */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.147 0.004 49.25);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.147 0.004 49.25);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.147 0.004 49.25);
-  --primary: oklch(0.511 0.096 186.391);
-  --primary-foreground: oklch(0.984 0.014 180.72);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0.001 106.424);
-  --muted-foreground: oklch(0.553 0.013 58.071);
-  --accent: oklch(0.511 0.096 186.391);
-  --accent-foreground: oklch(0.984 0.014 180.72);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.923 0.003 48.717);
-  --input: oklch(0.923 0.003 48.717);
-  --ring: oklch(0.709 0.01 56.259);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --radius: 0.45rem;
-  --sidebar: oklch(0.985 0.001 106.423);
-  --sidebar-foreground: oklch(0.147 0.004 49.25);
-  --sidebar-primary: oklch(0.6 0.118 184.704);
-  --sidebar-primary-foreground: oklch(0.984 0.014 180.72);
-  --sidebar-accent: oklch(0.97 0.001 106.424);
-  --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
-  --sidebar-border: oklch(0.923 0.003 48.717);
-  --sidebar-ring: oklch(0.709 0.01 56.259);
-  /* Token status semantik — turunan keluarga hue Vega */
-  --success: oklch(0.527 0.117 163.225);
-  --success-foreground: oklch(0.985 0.014 180.72);
-  --warning: oklch(0.646 0.138 75.834);
-  --warning-foreground: oklch(0.147 0.004 49.25);
-  --info: oklch(0.511 0.096 186.391);
-  --info-foreground: oklch(0.984 0.014 180.72);
+  /* Skala teal merek */
+  --navy-950: #042f2c;   /* teal-tinta tergelap: overlay, teks di atas terang */
+  --navy-900: #0a4743;   /* band header & blok total (titik akhir gradasi) */
+  --navy-800: #0d6b63;   /* primary */
+  --navy-700: #0f8076;   /* hover primary */
+  --navy-600: #14968a;   /* teal hidup: aksen, ring, hover border */
+  --navy-100: #d5efeb;
+  --navy-50: #ecf8f6;
+  --teal-glow: #2bb5a3;  /* titik terang gradasi */
+  --gold-500: #c9a24a;   /* aksen lambang NTT — hanya garis/dot kecil */
+  --gold-100: #f6eedb;
+  --paper: #f3f7f7;
+
+  /* Gradasi teal bersama */
+  --gradient-teal: linear-gradient(135deg, var(--navy-700) 0%, var(--navy-800) 45%, var(--navy-900) 100%);
+  --gradient-teal-soft: linear-gradient(135deg, var(--navy-50) 0%, #f6fbfa 60%, #ffffff 100%);
+
+  /* Token shadcn */
+  --background: var(--paper);
+  --foreground: #0b2422;
+  --card: #ffffff;
+  --card-foreground: #0b2422;
+  --popover: #ffffff;
+  --popover-foreground: #0b2422;
+  --primary: var(--navy-800);
+  --primary-foreground: #ffffff;
+  --secondary: #eaf3f2;
+  --secondary-foreground: var(--navy-800);
+  --muted: #eff4f4;
+  --muted-foreground: #556a68;
+  --accent: var(--navy-100);
+  --accent-foreground: var(--navy-800);
+  --destructive: #c0362c;
+  --border: #dfe8e7;
+  --input: #cfdcda;
+  --ring: var(--navy-600);
+  --chart-1: var(--navy-800);
+  --chart-2: var(--navy-600);
+  --chart-3: var(--teal-glow);
+  --chart-4: var(--gold-500);
+  --chart-5: #94aaa7;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b2422;
+  --sidebar-primary: var(--navy-800);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--navy-50);
+  --sidebar-accent-foreground: var(--navy-800);
+  --sidebar-border: #dfe8e7;
+  --sidebar-ring: var(--navy-600);
+
+  /* Status semantik (hijau sukses digeser ke arah hijau daun agar terbedakan dari teal) */
+  --success: #23794a;
+  --success-foreground: #ffffff;
+  --warning: #a8650a;
+  --warning-foreground: #ffffff;
+  --info: var(--navy-600);
+  --info-foreground: #ffffff;
+
+  /* Elevasi — bayangan dingin bernuansa teal, rendah, berlapis */
+  --shadow-xs: 0 1px 2px rgb(4 47 44 / 0.05);
+  --shadow-card: 0 1px 2px rgb(4 47 44 / 0.04), 0 8px 24px -12px rgb(4 47 44 / 0.14);
+  --shadow-float: 0 2px 6px rgb(4 47 44 / 0.06), 0 18px 40px -16px rgb(4 47 44 / 0.26);
+
+  /* Plat TNKB (Perpol 7/2021): putih/hitam = pribadi, merah = dinas */
+  --plate-putih-bg: #fbfcfd;
+  --plate-putih-fg: #10161d;
+  --plate-hitam-bg: #14181d;
+  --plate-hitam-fg: #f5f7fa;
+  --plate-merah-bg: #b3261e;
+  --plate-merah-fg: #fff7f5;
 }
 
 .dark {
-  --background: oklch(0.147 0.004 49.25);
-  --foreground: oklch(0.985 0.001 106.423);
-  --card: oklch(0.216 0.006 56.043);
-  --card-foreground: oklch(0.985 0.001 106.423);
-  --popover: oklch(0.216 0.006 56.043);
-  --popover-foreground: oklch(0.985 0.001 106.423);
-  --primary: oklch(0.437 0.078 188.216);
-  --primary-foreground: oklch(0.984 0.014 180.72);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.268 0.007 34.298);
-  --muted-foreground: oklch(0.709 0.01 56.259);
-  --accent: oklch(0.437 0.078 188.216);
-  --accent-foreground: oklch(0.984 0.014 180.72);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.553 0.013 58.071);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --sidebar: oklch(0.216 0.006 56.043);
-  --sidebar-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-primary: oklch(0.704 0.14 182.503);
-  --sidebar-primary-foreground: oklch(0.277 0.046 192.524);
-  --sidebar-accent: oklch(0.268 0.007 34.298);
-  --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.553 0.013 58.071);
-  --success: oklch(0.696 0.17 162.48);
-  --success-foreground: oklch(0.147 0.004 49.25);
-  --warning: oklch(0.769 0.155 84.429);
-  --warning-foreground: oklch(0.147 0.004 49.25);
-  --info: oklch(0.704 0.14 182.503);
-  --info-foreground: oklch(0.147 0.004 49.25);
+  --background: #061f1d;
+  --foreground: #e6f2f0;
+  --card: #0b2b28;
+  --card-foreground: #e6f2f0;
+  --popover: #0b2b28;
+  --popover-foreground: #e6f2f0;
+  --primary: #5fd0bf;
+  --primary-foreground: #042f2c;
+  --secondary: #123a36;
+  --secondary-foreground: #e6f2f0;
+  --muted: #10332f;
+  --muted-foreground: #96b5b1;
+  --accent: #134540;
+  --accent-foreground: #e6f2f0;
+  --destructive: #ef6b61;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.16);
+  --ring: #5fd0bf;
+  --success: #57c785;
+  --success-foreground: #042f2c;
+  --warning: #e6a447;
+  --warning-foreground: #042f2c;
+  --info: #5fd0bf;
+  --info-foreground: #042f2c;
 }
 
 @theme inline {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-plate: "Saira Semi Condensed", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -116,10 +146,6 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -134,13 +160,46 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-navy-950: var(--navy-950);
+  --color-navy-900: var(--navy-900);
+  --color-navy-800: var(--navy-800);
+  --color-navy-700: var(--navy-700);
+  --color-navy-600: var(--navy-600);
+  --color-navy-100: var(--navy-100);
+  --color-navy-50: var(--navy-50);
+  --color-teal-glow: var(--teal-glow);
+  --color-gold-500: var(--gold-500);
+  --color-gold-100: var(--gold-100);
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 14px);
+  --radius-4xl: calc(var(--radius) + 20px);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-card: var(--shadow-card);
+  --shadow-float: var(--shadow-float);
 }
 
 * {
   border-color: var(--border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1,
@@ -149,26 +208,97 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: -0.015em;
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: "Manrope", system-ui, sans-serif;
-  line-height: 1.55;
+::selection {
+  background-color: color-mix(in oklch, var(--navy-600) 22%, transparent);
 }
 
+/* Angka nominal & tanggal: figur tabular agar kolom rupiah sejajar. */
 .numeric {
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
+/* Label kecil kapital (eyebrow). Di dalam @layer components agar utilitas
+   Tailwind (mis. `text-white/65` di atas band teal) dapat menimpa warnanya. */
+@layer components {
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+}
+
+/* ==========================================================================
+   Latar & permukaan
+   ========================================================================== */
+
+/* Latar aplikasi: kertas dingin dengan cahaya teal sangat halus di atas. */
 .app-background {
   background:
-    radial-gradient(circle at 10% 0%, color-mix(in oklch, var(--primary) 8%, transparent) 0, transparent 28rem),
-    radial-gradient(circle at 92% 16%, color-mix(in oklch, var(--primary) 5%, transparent) 0, transparent 24rem),
+    radial-gradient(60rem 22rem at 50% -6rem, color-mix(in oklch, var(--navy-600) 10%, transparent), transparent 70%),
     var(--background);
+}
+
+/* Band merek teal (header, blok total). Gradasi diagonal teal hidup → teal
+   tinta, cahaya lembut di kiri atas, pendaran teal terang di kanan bawah. */
+.brand-band {
+  background:
+    radial-gradient(40rem 16rem at 10% -4rem, rgb(255 255 255 / 0.12), transparent 70%),
+    radial-gradient(30rem 16rem at 100% 120%, color-mix(in oklch, var(--teal-glow) 45%, transparent), transparent 70%),
+    linear-gradient(135deg, var(--navy-800) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
+  color: #fff;
+}
+
+/* Gradasi teal untuk tombol utama & elemen terpilih. */
+.bg-gradient-teal {
+  background-image: var(--gradient-teal);
+}
+
+.bg-gradient-teal-soft {
+  background-image: var(--gradient-teal-soft);
+}
+
+.gold-rule {
+  background: linear-gradient(90deg, transparent, var(--gold-500) 18%, var(--gold-500) 82%, transparent);
+  height: 1px;
+}
+
+/* Kartu permukaan standar */
+.surface-card {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+/* Glass — aksen 5%: bar total mobile & header lengket. */
+.glass {
+  background-color: color-mix(in oklch, var(--card) 78%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  backdrop-filter: saturate(1.6) blur(14px);
+}
+
+.glass-dark {
+  background-color: color-mix(in oklch, var(--navy-900) 82%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  backdrop-filter: saturate(1.4) blur(14px);
+  color: #fff;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background-color: var(--card);
+  }
+  .glass-dark {
+    background-color: var(--navy-900);
+  }
 }
 
 /* Layar penuh setinggi viewport yang terlihat; tidak pernah scroll.
@@ -182,28 +312,71 @@ body {
   overscroll-behavior: none;
 }
 
+/* ==========================================================================
+   Plat nomor TNKB — elemen khas aplikasi.
+   Pakai: <div class="tnkb-plate" data-plate="putih|hitam|merah">.
+   ========================================================================== */
+.tnkb-plate {
+  --plate-bg: var(--plate-putih-bg);
+  --plate-fg: var(--plate-putih-fg);
+  position: relative;
+  background-color: var(--plate-bg);
+  color: var(--plate-fg);
+  border-radius: 0.875rem;
+  /* Bingkai timbul ganda: tepi luar gelap + garis dalam seperti plat aluminium. */
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--plate-fg) 85%, transparent),
+    inset 0 0 0 3px var(--plate-bg),
+    inset 0 0 0 4.5px color-mix(in oklch, var(--plate-fg) 80%, transparent),
+    0 10px 24px -14px rgb(4 47 44 / 0.45);
+  transition:
+    background-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.tnkb-plate[data-plate="hitam"] {
+  --plate-bg: var(--plate-hitam-bg);
+  --plate-fg: var(--plate-hitam-fg);
+}
+
+.tnkb-plate[data-plate="merah"] {
+  --plate-bg: var(--plate-merah-bg);
+  --plate-fg: var(--plate-merah-fg);
+}
+
+.tnkb-plate:focus-within {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--plate-fg) 85%, transparent),
+    inset 0 0 0 3px var(--plate-bg),
+    inset 0 0 0 4.5px color-mix(in oklch, var(--plate-fg) 80%, transparent),
+    0 0 0 4px color-mix(in oklch, var(--ring) 35%, transparent),
+    0 10px 24px -14px rgb(4 47 44 / 0.45);
+}
+
+.tnkb-plate input {
+  font-family: var(--font-plate);
+  color: var(--plate-fg);
+  caret-color: var(--plate-fg);
+}
+
+.tnkb-plate input::placeholder {
+  color: color-mix(in oklch, var(--plate-fg) 32%, transparent);
+}
+
+/* Strip masa berlaku di bagian bawah plat. */
+.tnkb-strip {
+  border-top: 1.5px solid color-mix(in oklch, var(--plate-fg) 70%, transparent);
+  font-family: var(--font-plate);
+}
+
+/* ==========================================================================
+   Kelas status — dipertahankan untuk kompatibilitas komponen yang ada.
+   ========================================================================== */
 .info-subtle {
-  background-color: color-mix(in oklch, var(--primary) 6%, transparent);
-  border-color: color-mix(in oklch, var(--primary) 28%, transparent);
+  background-color: color-mix(in oklch, var(--navy-600) 6%, var(--card));
+  border-color: color-mix(in oklch, var(--navy-600) 22%, transparent);
 }
-
-@keyframes result-panel-in {
-  from {
-    opacity: 0;
-    transform: translateX(1rem);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.animate-result-panel-in {
-  animation: result-panel-in 240ms ease-out both;
-}
-
-/* ── Utility token classes (Tailwind v4 custom token bridge) ── */
 
 .text-success {
   color: var(--success);
@@ -214,45 +387,62 @@ body {
 }
 
 .bg-success-subtle {
-  background-color: color-mix(in oklch, var(--success) 10%, transparent);
+  background-color: color-mix(in oklch, var(--success) 8%, var(--card));
 }
 
 .border-success-subtle {
-  border-color: color-mix(in oklch, var(--success) 30%, transparent);
+  border-color: color-mix(in oklch, var(--success) 26%, transparent);
 }
 
 .step-badge {
-  background-color: color-mix(in oklch, var(--primary) 10%, transparent);
-  border-color: color-mix(in oklch, var(--primary) 28%, transparent);
-  color: var(--primary);
+  background-color: var(--navy-50);
+  border-color: color-mix(in oklch, var(--navy-800) 18%, transparent);
+  color: var(--navy-800);
 }
 
 .amnesty-badge {
-  background-color: color-mix(in oklch, var(--success) 9%, transparent);
-  border-color: color-mix(in oklch, var(--success) 28%, transparent);
+  background-color: color-mix(in oklch, var(--success) 7%, var(--card));
+  border-color: color-mix(in oklch, var(--success) 24%, transparent);
 }
 
 .facility-active {
-  background-color: color-mix(in oklch, var(--primary) 6%, transparent);
-  border-color: color-mix(in oklch, var(--primary) 38%, transparent);
+  background-color: color-mix(in oklch, var(--navy-600) 5%, var(--card));
+  border-color: color-mix(in oklch, var(--navy-800) 36%, transparent);
 }
 
 .total-block {
-  background-color: color-mix(in oklch, var(--primary) 8%, transparent);
-  border-color: color-mix(in oklch, var(--primary) 22%, transparent);
+  background-color: var(--navy-50);
+  border-color: color-mix(in oklch, var(--navy-800) 16%, transparent);
+}
+
+/* ==========================================================================
+   Gerak — singkat, satu arah; dimatikan pada reduced motion.
+   ========================================================================== */
+@keyframes result-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-result-panel-in {
+  animation: result-panel-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 @keyframes accordion-down {
   from {
     height: 0;
     opacity: 0;
-    transform: translateY(-0.25rem);
   }
 
   to {
     height: var(--radix-accordion-content-height);
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -260,22 +450,20 @@ body {
   from {
     height: var(--radix-accordion-content-height);
     opacity: 1;
-    transform: translateY(0);
   }
 
   to {
     height: 0;
     opacity: 0;
-    transform: translateY(-0.25rem);
   }
 }
 
 .animate-accordion-down {
-  animation: accordion-down 200ms ease-out both;
+  animation: accordion-down 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .animate-accordion-up {
-  animation: accordion-up 200ms ease-out both;
+  animation: accordion-up 180ms ease-in both;
 }
 
 @keyframes fade-up {
@@ -294,11 +482,33 @@ body {
   animation: fade-up 220ms ease-out both;
 }
 
+/* Angka total berganti: kilau lembut satu kali. */
+@keyframes value-settle {
+  from {
+    opacity: 0.35;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-value-settle {
+  animation: value-settle 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-result-panel-in,
   .animate-fade-up,
   .animate-accordion-down,
-  .animate-accordion-up {
+  .animate-accordion-up,
+  .animate-value-settle {
     animation: none;
+  }
+
+  .tnkb-plate {
+    transition: none;
   }
 }

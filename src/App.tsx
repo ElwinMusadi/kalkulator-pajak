@@ -11,7 +11,6 @@ import { ResultEmpty } from "@/components/result-empty";
 import { TaxCalculatorForm } from "@/components/tax-calculator-form";
 import { TaxResultPanel } from "@/components/tax-result-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Empty,
   EmptyDescription,
@@ -28,7 +27,7 @@ import type { TaxCalculationResult } from "@/types/tax";
  * data) sehingga kartu Data Penetapan melampaui lebar layar.
  */
 const CALCULATOR_GRID_CLASS =
-  "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]";
+  "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_440px]";
 
 export default function App() {
   return (
@@ -63,18 +62,19 @@ function AuthenticatedApp() {
 
   return (
     <div className="app-background min-h-screen overflow-x-hidden pb-0!">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-8 sm:px-6 lg:px-8">
-        <AppHeader
-          view={view}
-          onViewChange={(next) => {
-            setHeaderError(null);
-            setRequestedView(next);
-          }}
-          onError={setHeaderError}
-        />
+      <AppHeader
+        view={view}
+        onViewChange={(next) => {
+          setHeaderError(null);
+          setRequestedView(next);
+        }}
+        onError={setHeaderError}
+      />
 
+      {/* Konten ditarik ke atas agar kartu "mengapung" di atas band navy. */}
+      <div className="relative z-10 mx-auto -mt-8 flex max-w-7xl flex-col gap-6 px-4 sm:px-6 md:-mt-10 lg:px-8">
         {headerError && (
-          <Alert variant="destructive" className="pr-12">
+          <Alert variant="destructive" className="bg-card pr-12 shadow-card">
             <CircleAlert aria-hidden="true" />
             <AlertTitle>Tindakan gagal</AlertTitle>
             <AlertDescription>{headerError}</AlertDescription>
@@ -82,7 +82,7 @@ function AuthenticatedApp() {
               type="button"
               onClick={() => setHeaderError(null)}
               aria-label="Tutup pesan"
-              className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute right-2 top-2 inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -97,18 +97,31 @@ function AuthenticatedApp() {
           </main>
         ) : canUseCalculator ? (
           <main className={CALCULATOR_GRID_CLASS}>
-            <Card className="min-w-0 shadow-sm">
-              <CardHeader className="border-b pb-5">
-                <CardTitle className="text-xl pb-0!">Data Penetapan</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
+            <section
+              aria-labelledby="data-penetapan-title"
+              className="surface-card min-w-0"
+            >
+              <div className="flex flex-col gap-1 border-b border-border/80 px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
+                <p className="eyebrow">Langkah penetapan</p>
+                <h2
+                  id="data-penetapan-title"
+                  className="text-xl font-bold leading-tight tracking-tight text-foreground"
+                >
+                  Data Penetapan
+                </h2>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Cari nomor polisi atau isi data kendaraan secara manual, lalu
+                  hitung penetapan.
+                </p>
+              </div>
+              <div className="px-5 py-5 sm:px-6 sm:py-6">
                 <TaxCalculatorForm onResult={setResult} />
-              </CardContent>
-            </Card>
+              </div>
+            </section>
 
             <aside className="lg:sticky lg:top-6 lg:self-start">
-              <Card className="hidden shadow-sm lg:block">
-                <CardContent className="p-6">
+              <div className="surface-card hidden lg:block">
+                <div className="p-5 xl:p-6">
                   {result ? (
                     <div key={result.total} className="animate-result-panel-in">
                       <TaxResultPanel result={result} />
@@ -116,13 +129,13 @@ function AuthenticatedApp() {
                   ) : (
                     <ResultEmpty />
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </aside>
           </main>
         ) : (
           <main>
-            <Card className="shadow-sm">
+            <div className="surface-card">
               <Empty className="min-h-[24rem] border-0">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -134,15 +147,15 @@ function AuthenticatedApp() {
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
-            </Card>
+            </div>
           </main>
         )}
 
         <footer
           className={
             showResult
-              ? "border-t border-border/70 pt-6 pb-24 text-center text-sm leading-normal text-muted-foreground lg:pb-6"
-              : "border-t border-border/70 py-6 text-center text-sm leading-normal text-muted-foreground"
+              ? "border-t border-border/70 pt-6 pb-28 text-center text-sm leading-normal text-muted-foreground lg:pb-8"
+              : "border-t border-border/70 py-6 text-center text-sm leading-normal text-muted-foreground lg:pb-8"
           }
         >
           <div className="md:flex items-center justify-center">

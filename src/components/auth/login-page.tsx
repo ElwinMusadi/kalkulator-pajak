@@ -97,55 +97,69 @@ export function LoginPage() {
   const notice = error ? null : sessionNotice
 
   return (
+    // Pita navy di sepertiga atas (latar) + kartu putih mengambang; tetap
+    // setinggi viewport dan tidak pernah scroll.
     <div className="viewport-screen app-background flex flex-col">
+      <div
+        aria-hidden="true"
+        className="brand-band pointer-events-none absolute inset-x-0 top-0 h-[42%] short:h-[46%] short-wide:h-full short-wide:w-1/2"
+      >
+        <div className="gold-rule absolute inset-x-0 bottom-0 short-wide:hidden" />
+      </div>
+
       <main
         className={cn(
-          "mx-auto flex min-h-0 w-full max-w-sm flex-1 flex-col gap-6 px-5 py-6",
+          "relative mx-auto flex min-h-0 w-full max-w-sm flex-1 flex-col gap-6 px-5 py-6",
           "short:gap-4 short:py-4 xshort:gap-3 xshort:py-3 tiny:py-2",
           "short-wide:max-w-3xl short-wide:flex-row short-wide:gap-8",
         )}
       >
-        {/* Identitas instansi. Margin auto memusatkan konten tanpa risiko terpotong
-            (berubah menjadi 0 saat ruang kurang). Bagian ini yang menyusut
-            (terpotong) lebih dahulu sehingga form dan tombol Masuk tetap terlihat. */}
+        {/* Identitas instansi (di atas pita navy). Margin auto memusatkan konten
+            tanpa risiko terpotong; bagian ini yang menyusut lebih dahulu sehingga
+            form dan tombol Masuk tetap terlihat. */}
         <div
           className={cn(
-            "mt-auto flex min-h-0 shrink flex-col items-center gap-3 overflow-hidden text-center short-wide:my-auto",
+            "mt-auto flex min-h-0 shrink flex-col items-center gap-3 overflow-hidden text-center text-white short-wide:my-auto",
             "short:gap-2 xshort:flex-row xshort:gap-3 xshort:text-left",
             "short-wide:w-1/2 short-wide:flex-col short-wide:items-start short-wide:text-left",
           )}
         >
-          <img
-            src="/logo-ntt.png"
-            alt="Lambang Provinsi Nusa Tenggara Timur"
-            width={61}
-            height={64}
-            className="h-16 w-auto shrink-0 short:h-11 xshort:h-9 short-wide:h-12 tiny:h-10"
-          />
+          <span className="flex shrink-0 items-center justify-center rounded-2xl bg-white/10 p-2.5 ring-1 ring-white/15 short:p-2 xshort:rounded-xl xshort:p-1.5 tiny:p-1.5">
+            <img
+              src="/logo-ntt.png"
+              alt="Lambang Provinsi Nusa Tenggara Timur"
+              width={61}
+              height={64}
+              className="h-14 w-auto short:h-10 xshort:h-8 short-wide:h-11 tiny:h-8"
+            />
+          </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase leading-snug tracking-[0.16em] text-muted-foreground sm:text-[11px]">
-              UPTD Pendapatan Daerah Wilayah Kota Kupang
+            <p className="text-[10px] font-semibold uppercase leading-snug tracking-[0.16em] text-white/65 sm:text-[11px]">
+              UPTD Pendapatan Daerah · Kota Kupang
             </p>
-            <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-foreground short:mt-0.5 short:text-xl xshort:text-lg">
+            <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-white short:mt-0.5 short:text-xl xshort:text-lg">
               Kalkulator Pajak Kendaraan
             </h1>
-            <p className="mt-1 text-sm leading-snug text-muted-foreground short:hidden short-wide:block tiny:hidden">
+            <p className="mt-1 text-sm leading-snug text-white/70 short:hidden short-wide:block tiny:hidden">
               Masuk dengan akun yang diberikan Admin.
             </p>
           </div>
         </div>
 
         {/* Form login */}
-        <div className="mb-auto w-full shrink-0 rounded-xl border short-wide:my-auto bg-card p-6 text-card-foreground shadow-sm short:p-5 xshort:p-4 tiny:p-3 short-wide:w-1/2">
+        <div className="surface-card mb-auto w-full shrink-0 p-6 text-card-foreground shadow-float short-wide:my-auto short:p-5 xshort:p-4 tiny:p-3 short-wide:w-1/2">
           <form
             onSubmit={handleSubmit}
             noValidate
             aria-describedby={error || notice ? errorId : undefined}
             className="flex flex-col gap-4 short:gap-3 xshort:gap-2.5 tiny:gap-2"
           >
-            <h2 className="text-base font-semibold tracking-tight short:sr-only">
-              Masuk ke akun Anda
-            </h2>
+            <div className="short:sr-only">
+              <h2 className="text-lg font-bold tracking-tight">Masuk ke akun Anda</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Gunakan username dan password dari Admin.
+              </p>
+            </div>
 
             <div className="flex flex-col gap-2 xshort:gap-1.5 tiny:gap-1">
               <Label htmlFor="login-username">Username</Label>
@@ -238,7 +252,7 @@ export function LoginPage() {
 
       {/* Footer disembunyikan pada tinggi sempit agar form tetap utuh tanpa scroll;
           tombol instal tetap tersedia di header setelah login. */}
-      <footer className="flex shrink-0 flex-col items-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground short:hidden">
+      <footer className="relative flex shrink-0 flex-col items-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground short:hidden">
         <PwaInstallLink className="text-sm" />
         <span>Pergub NTT No. 54 Tahun 2026</span>
       </footer>
