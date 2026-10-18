@@ -3,8 +3,10 @@
  *
  * Cloudflare Pages Function — GET /api/njkb/:nopol
  *
- * Menggunakan VehicleDataResolver dengan D1VehicleDataSource dan ApiVehicleDataSource (NJKB API NTT).
- * Default mode: api_then_d1 (NJKB API dahulu, fallback D1).
+ * Satu-satunya sumber produksi: API Data Kendaraan pusat (ApiVehicleDataSource).
+ * Tidak ada fallback D1. Nama endpoint `/api/njkb` dipertahankan agar client
+ * dan cache lama tetap kompatibel. Query `?source=` lama (d1, api, d1_then_api,
+ * api_then_d1, atau nilai lain) DIABAIKAN: lookup selalu melalui API.
  *
  * Respons sukses (200):
  * {
@@ -13,46 +15,34 @@
  *   "jenis": "SEPEDA MOTOR",
  *   "jatuhTempoStnk": "2023-09-13",
  *   "jatuhTempoPajak": "2023-09-13",
- *   "njkb": 11500000,
- *   "njub": 0,
+ *   "njkb": 11500000,          // 0 bila njkbStatus=not_found (isi manual)
+ *   "njub": 0,                 // potensi.njub; tidak ada → 0
  *   "bobot": 1,
- *   "warnaPlat": "putih" | "hitam" | "merah" | null,  // null = tidak diketahui → frontend default putih
- *   "source": "d1" | "api"
+ *   "warnaPlat": "putih" | "hitam" | "merah" | null,
+ *   "originUpt": string | null, // label UPT asal (bukan alamat)
+ *   "syncedAt": string | null,  // ISO-8601 UTC sinkronisasi dataset pusat
+ *   "source": "api",
+ *   "njkbStatus": "matched" | "not_found"
  * }
  *
- * Respons tidak ditemukan (404):
- * { "message": "Data NJKB untuk Nopol tersebut tidak ditemukan." }
- *
- * Respons error validasi (400):
- * { "message": "Nopol tidak valid." }
+ * 404: { "message": "Data kendaraan tidak ditemukan." }
+ * 400: { "message": "Nopol tidak valid." }
+ * 401/403: { message, code: "UNAUTHENTICATED" | "FORBIDDEN" }
+ * 5xx: { message, code? } — code NJKB_* (lihat VehicleLookupErrorCode).
  */
 
-import {
-  ApiVehicleDataSource,
-  D1VehicleDataSource,
-  VehicleDataResolver,
-  type VehicleDataSourceMode,
-} from "../../../src/services/vehicle-data/index.ts"
-import { hasModules, requiredModulesForVehicleSource } from "../../../server/auth/permissions.ts"
-import type { AppFunction } from "../../../server/types.ts"
-import {
-  DEFAULT_VEHICLE_DATA_SOURCE_MODE,
-  VEHICLE_DATA_SOURCE_MODES,
-} from "../../../src/types/tax.ts"
+import { ApiVehicleDataSource } from "../../../src/services/vehicle-data/index.ts"
+import { hasModules, VEHICLE_LOOKUP_REQUIRED_MODULES } from "../../../server/auth/permissions.ts"
+import type { AppFunction, Env } from "../../../server/types.ts"
 
 /*
  * Akses (auth via _middleware.ts → ctx.data.auth):
  * - 401 UNAUTHENTICATED bila tidak ada sesi.
- * - 403 FORBIDDEN bila tidak memiliki modul calculator + modul sumber:
- *   d1 → vehicle_lookup.d1, api → vehicle_lookup.api,
- *   d1_then_api / api_then_d1 → keduanya.
+ * - 403 FORBIDDEN bila tidak memiliki modul calculator + vehicle_lookup.api
+ *   (tidak bergantung pada `?source`).
  */
 
 const DEFAULT_ERROR_MESSAGE = "Terjadi kesalahan server. Coba lagi."
-
-function isVehicleDataSourceMode(value: string): value is VehicleDataSourceMode {
-  return VEHICLE_DATA_SOURCE_MODES.includes(value as VehicleDataSourceMode)
-}
 
 function jsonResponse(body: unknown, status: number = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -62,6 +52,50 @@ function jsonResponse(body: unknown, status: number = 200): Response {
       // Data per-user di balik autentikasi: jangan pernah di-cache shared/browser.
       "Cache-Control": status === 200 ? "private, no-store" : "no-store",
     },
+  })
+}
+
+/** Nilai env pertama yang tidak kosong setelah trim: VEHICLE_* baru → alias NJKB_* lama. */
+function envValue(...candidates: Array<string | undefined>): string | undefined {
+  for (const value of candidates) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
+interface AccessCredentialPair {
+  accessClientId: string
+  accessClientSecret: string
+}
+
+/**
+ * Pilih pasangan credential Access dari tier pertama yang LENGKAP (ID dan
+ * secret tidak kosong): VEHICLE_* → NJKB_* → CF_ACCESS_* (lokal). Nilai dari
+ * tier berbeda tidak pernah dicampur; tanpa pasangan lengkap → undefined
+ * (adapter mengembalikan NJKB_CONFIG_ERROR tanpa fetch).
+ */
+function selectAccessCredentials(env: Env): AccessCredentialPair | undefined {
+  const tiers: Array<[string | undefined, string | undefined]> = [
+    [env.VEHICLE_ACCESS_CLIENT_ID, env.VEHICLE_ACCESS_CLIENT_SECRET],
+    [env.NJKB_ACCESS_CLIENT_ID, env.NJKB_ACCESS_CLIENT_SECRET],
+    [env.CF_ACCESS_CLIENT_ID, env.CF_ACCESS_CLIENT_SECRET],
+  ]
+  for (const [id, secret] of tiers) {
+    const accessClientId = id?.trim()
+    const accessClientSecret = secret?.trim()
+    if (accessClientId && accessClientSecret) return { accessClientId, accessClientSecret }
+  }
+  return undefined
+}
+
+function createVehicleApiSource(env: Env): ApiVehicleDataSource {
+  const timeoutRaw = envValue(env.VEHICLE_API_TIMEOUT_MS, env.NJKB_API_TIMEOUT_MS)
+  return new ApiVehicleDataSource({
+    baseUrl: envValue(env.VEHICLE_API_BASE_URL, env.NJKB_API_BASE_URL),
+    ...selectAccessCredentials(env),
+    // Number (bukan parseInt) agar "10abc" ditolak; adapter menyanitasi ke default 8000.
+    timeoutMs: timeoutRaw === undefined ? undefined : Number(timeoutRaw),
   })
 }
 
@@ -84,22 +118,11 @@ export const onRequestGet: AppFunction<"nopol"> = async (ctx) => {
     return jsonResponse({ message: "Nopol tidak valid." }, 400)
   }
 
-  const sourceParam = new URL(ctx.request.url).searchParams.get("source")
-  if (sourceParam !== null && !isVehicleDataSourceMode(sourceParam)) {
+  // `?source` lama sengaja tidak dibaca: otorisasi dan sumber selalu API.
+  if (!hasModules(auth.user, VEHICLE_LOOKUP_REQUIRED_MODULES)) {
     return jsonResponse(
       {
-        message:
-          "Source tidak valid. Gunakan salah satu: d1, api, d1_then_api, atau api_then_d1.",
-      },
-      400
-    )
-  }
-  const mode: VehicleDataSourceMode = sourceParam ?? DEFAULT_VEHICLE_DATA_SOURCE_MODE
-
-  if (!hasModules(auth.user, requiredModulesForVehicleSource(mode))) {
-    return jsonResponse(
-      {
-        message: "Anda tidak memiliki akses ke sumber data kendaraan ini.",
+        message: "Anda tidak memiliki akses ke pencarian Data Kendaraan.",
         code: "FORBIDDEN",
       },
       403,
@@ -109,27 +132,7 @@ export const onRequestGet: AppFunction<"nopol"> = async (ctx) => {
   const startedAt = Date.now()
 
   try {
-    const d1Source = new D1VehicleDataSource(ctx.env.DB)
-    const apiSource = ctx.env.NJKB_API_BASE_URL
-      ? new ApiVehicleDataSource({
-          baseUrl: ctx.env.NJKB_API_BASE_URL,
-          accessClientId: ctx.env.NJKB_ACCESS_CLIENT_ID,
-          accessClientSecret: ctx.env.NJKB_ACCESS_CLIENT_SECRET,
-          // Number (bukan parseInt) agar "10abc" ditolak; adapter menyanitasi ke default 8000.
-          timeoutMs:
-            ctx.env.NJKB_API_TIMEOUT_MS === undefined
-              ? undefined
-              : Number(ctx.env.NJKB_API_TIMEOUT_MS.trim()),
-        })
-      : undefined
-
-    const resolver = new VehicleDataResolver({
-      d1Source,
-      apiSource,
-      mode,
-    })
-
-    const result = await resolver.resolve(nopol)
+    const result = await createVehicleApiSource(ctx.env).lookup(nopol)
 
     if (result.status === "found") {
       return jsonResponse(result.data, 200)
@@ -137,12 +140,12 @@ export const onRequestGet: AppFunction<"nopol"> = async (ctx) => {
 
     if (result.status === "not_found") {
       return jsonResponse(
-        { message: result.message ?? "Data NJKB untuk Nopol tersebut tidak ditemukan." },
+        { message: result.message ?? "Data kendaraan tidak ditemukan." },
         404
       )
     }
 
-    // Prioritaskan message aman; Error mentah (mis. D1) tidak pernah diteruskan.
+    // Prioritaskan message aman; Error mentah tidak pernah diteruskan.
     const errorMessage =
       result.message ??
       (typeof result.error === "string" ? result.error : undefined) ??

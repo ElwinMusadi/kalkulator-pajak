@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { onRequestGet } from "../functions/api/njkb/[nopol].ts"
 import type { AuthContext } from "../server/types.ts"
 import { MODULE_KEYS, type ModuleKey } from "../src/types/auth.ts"
-import type { D1DatabaseLike, VehicleRow } from "../src/services/vehicle-data/index.ts"
+import type { D1DatabaseLike } from "../src/services/vehicle-data/index.ts"
 
 const ADMIN_AUTH: AuthContext = {
   user: {
@@ -30,10 +30,16 @@ function petugasAuth(permissions: ModuleKey[]): AuthContext {
 
 interface TestEnv {
   DB: D1DatabaseLike
+  VEHICLE_API_BASE_URL?: string
+  VEHICLE_ACCESS_CLIENT_ID?: string
+  VEHICLE_ACCESS_CLIENT_SECRET?: string
+  VEHICLE_API_TIMEOUT_MS?: string
   NJKB_API_BASE_URL?: string
   NJKB_ACCESS_CLIENT_ID?: string
   NJKB_ACCESS_CLIENT_SECRET?: string
   NJKB_API_TIMEOUT_MS?: string
+  CF_ACCESS_CLIENT_ID?: string
+  CF_ACCESS_CLIENT_SECRET?: string
 }
 
 const API_ENV = {
@@ -42,16 +48,7 @@ const API_ENV = {
   NJKB_ACCESS_CLIENT_SECRET: "test-secret",
 }
 
-const d1Row: VehicleRow = {
-  nopol: "DH2506KA",
-  nama: "D1 OWNER",
-  jenis: "SEPEDA MOTOR",
-  jatuh_tempo_stnk: "2027-09-13",
-  jatuh_tempo_pajak: "2026-09-13",
-  njkb: 11_500_000,
-  njub: 0,
-  bobot: 1,
-}
+const LEGACY_SOURCES = [undefined, "d1", "api", "d1_then_api", "api_then_d1", "invalid", ""] as const
 
 function officialApiResponse(nopol: string) {
   return {
@@ -67,24 +64,31 @@ function officialApiResponse(nopol: string) {
   }
 }
 
-function mockDb(
-  rows: Record<string, VehicleRow | null> = {},
-  throwError = false,
-  onQuery?: () => void,
-): D1DatabaseLike {
+/** Payload pusat lengkap termasuk field sensitif yang TIDAK boleh diteruskan. */
+function centralApiResponse(nopol: string) {
+  return {
+    ...officialApiResponse(nopol),
+    vehicle: {
+      category: "MOBIL BARANG",
+      category_raw: "PICK UP",
+      plate_color: "HITAM",
+      chassis_number: "MHKA1234567890XYZ",
+      engine_number: "ENG-998877",
+    },
+    registration: { stnk_valid_until: "2031-12-31", plate_color: "MERAH", bpkb_number: "BPKB-1234" },
+    owner: { name: "API OWNER", nik: "5371010101010001", address: "JL. RAHASIA NO. 7 KUPANG" },
+    njkb: { value: "120000000.00", weight: "1.085000" },
+    potensi: { njub: "35000000.00", synced_at: "2026-10-17T03:15:00+08:00" },
+    administrative: { origin_upt: "  UPT Pendapatan Daerah Wilayah Kota Kupang  " },
+  }
+}
+
+/** DB yang menghitung akses; endpoint API-only tidak boleh menyentuhnya. */
+function trackingDb(state: { calls: number }): D1DatabaseLike {
   return {
     prepare() {
-      return {
-        bind(...values: unknown[]) {
-          onQuery?.()
-          return {
-            async first<T>(): Promise<T | null> {
-              if (throwError) throw new Error("D1 failure")
-              return (rows[String(values[0])] ?? null) as T | null
-            },
-          }
-        },
-      }
+      state.calls++
+      throw new Error("D1 tidak boleh dipakai")
     },
   }
 }
@@ -112,341 +116,370 @@ async function body(response: Response): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>
 }
 
+function jsonUpstream(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+async function silently<T>(fn: () => Promise<T>): Promise<T> {
+  const originalWarn = console.warn
+  console.warn = () => undefined
+  try {
+    return await fn()
+  } finally {
+    console.warn = originalWarn
+  }
+}
+
 function pass(name: string) {
   console.log(`  ✓  ${name}`)
 }
 
-console.log("Menjalankan NJKB endpoint integration tests...\n")
+console.log("Menjalankan NJKB endpoint integration tests (API-only)...\n")
 const originalFetch = globalThis.fetch
 
 try {
-  // Default api_then_d1: API found → D1 tidak disentuh.
+  // Seluruh nilai ?source lama → API dipanggil, D1 tidak pernah disentuh.
   {
+    const d1 = { calls: 0 }
     let apiCalls = 0
-    let d1Calls = 0
     globalThis.fetch = async () => {
       apiCalls++
-      return new Response(JSON.stringify(officialApiResponse("DH2506KA")), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      })
+      return jsonUpstream(officialApiResponse("DH2506KA"))
     }
-    const response = await callEndpoint({
-      DB: mockDb({ DH2506KA: d1Row }, false, () => d1Calls++),
-      ...API_ENV,
-    })
-    const json = await body(response)
-    assert.equal(response.status, 200)
-    assert.equal(json.source, "api")
-    assert.equal(apiCalls, 1)
-    assert.equal(d1Calls, 0)
-    // Kebijakan baru: data per-user, tanpa CORS wildcard dan tanpa cache publik.
-    assert.equal(response.headers.get("Cache-Control"), "private, no-store")
-    assert.equal(response.headers.get("Access-Control-Allow-Origin"), null)
-    pass("default api_then_d1: API found → D1 tidak disentuh (private, no-store, tanpa CORS)")
+    for (const source of LEGACY_SOURCES) {
+      const before = apiCalls
+      const response = await callEndpoint({ DB: trackingDb(d1), ...API_ENV }, "DH2506KA", source)
+      const json = await body(response)
+      assert.equal(response.status, 200, `source=${source}`)
+      assert.equal(json.source, "api")
+      assert.equal(apiCalls, before + 1, `source=${source}: tepat satu call API`)
+      assert.equal(response.headers.get("Cache-Control"), "private, no-store")
+      assert.equal(response.headers.get("Access-Control-Allow-Origin"), null)
+    }
+    assert.equal(d1.calls, 0)
+    pass("?source lama (d1/api/d1_then_api/api_then_d1/invalid/kosong/tanpa) diabaikan → API, D1 tidak disentuh")
   }
 
-  // Default api_then_d1: API not_found / 504 persisten / network error → fallback D1.
-  for (const apiFailure of ["not_found", "http_504", "network"] as const) {
-    let apiCalls = 0
-    globalThis.fetch = async () => {
-      apiCalls++
-      if (apiFailure === "network") throw new TypeError("fetch failed")
-      if (apiFailure === "http_504") return new Response("gateway", { status: 504 })
-      return new Response(
-        JSON.stringify({
+  // API not_found (payload & HTTP 404), 504 persisten, network error → final, tanpa D1.
+  for (const [failure, expectedStatus] of [
+    ["vehicle_not_found", 404],
+    ["http_404", 404],
+    ["http_504", 504],
+    ["network", 502],
+    ["http_500", 502],
+  ] as const) {
+    for (const source of ["d1", "api_then_d1", undefined]) {
+      const d1 = { calls: 0 }
+      globalThis.fetch = async () => {
+        if (failure === "network") throw new TypeError("fetch failed")
+        if (failure === "http_504") return new Response("gateway", { status: 504 })
+        if (failure === "http_500") return new Response("err", { status: 500 })
+        if (failure === "http_404") return new Response(null, { status: 404 })
+        return jsonUpstream({
           status: "vehicle_not_found",
           vehicle_status: "not_found",
           njkb_status: null,
           nopol: "DH2506KA",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        })
+      }
+      const response = await silently(() =>
+        callEndpoint({ DB: trackingDb(d1), ...API_ENV }, "DH2506KA", source),
       )
-    }
-    const originalWarn = console.warn
-    console.warn = () => undefined
-    try {
-      const response = await callEndpoint({ DB: mockDb({ DH2506KA: d1Row }), ...API_ENV })
-      assert.equal(response.status, 200, `apiFailure=${apiFailure}`)
-      assert.equal((await body(response)).source, "d1")
-      assert.ok(apiCalls >= 1)
-    } finally {
-      console.warn = originalWarn
+      assert.equal(response.status, expectedStatus, `${failure} source=${source}`)
+      assert.equal(d1.calls, 0, `${failure} source=${source}: tanpa fallback D1`)
     }
   }
-  pass("default api_then_d1: API not_found/504/network error → fallback D1 (200, source=d1)")
+  pass("API not_found/404 → 404 final; 504/network/500 → 5xx; tidak pernah fallback D1")
 
-  // Default api_then_d1: API 504 + D1 miss → 504 dari API (bukan 404 menyesatkan).
-  {
-    globalThis.fetch = async () => new Response("gateway", { status: 504 })
-    const originalWarn = console.warn
-    console.warn = () => undefined
-    try {
-      const response = await callEndpoint({ DB: mockDb(), ...API_ENV })
-      assert.equal(response.status, 504)
-      assert.equal((await body(response)).code, "NJKB_UPSTREAM_TIMEOUT")
-    } finally {
-      console.warn = originalWarn
-    }
-    pass("default api_then_d1: API 504 + D1 miss → 504 NJKB_UPSTREAM_TIMEOUT")
-  }
-
-  // Tanpa auth pada ctx.data → 401 defensif, tanpa query D1/API.
+  // Tanpa auth → 401 tanpa lookup.
   {
     let calls = 0
     globalThis.fetch = async () => {
       calls++
       return new Response(null, { status: 500 })
     }
-    const response = await callEndpoint(
-      { DB: mockDb({ DH2506KA: d1Row }, false, () => calls++), ...API_ENV },
-      "DH2506KA",
-      "d1",
-      null,
-    )
+    const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }, "DH2506KA", "d1", null)
     assert.equal(response.status, 401)
     assert.equal((await body(response)).code, "UNAUTHENTICATED")
     assert.equal(calls, 0)
     pass("Tanpa auth → HTTP 401 UNAUTHENTICATED tanpa lookup")
   }
 
-  // Permission petugas per sumber data.
+  // Permission: selalu calculator + vehicle_lookup.api, apa pun ?source.
   {
     let calls = 0
     globalThis.fetch = async () => {
       calls++
-      return new Response(JSON.stringify(officialApiResponse("DH2506KA")), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      })
+      return jsonUpstream(officialApiResponse("DH2506KA"))
     }
-    const env = { DB: mockDb({ DH2506KA: d1Row }, false, () => calls++), ...API_ENV }
-    const cases: Array<{ source: string | undefined; permissions: ModuleKey[]; status: number }> = [
-      { source: "d1", permissions: ["calculator"], status: 403 },
-      { source: "d1", permissions: ["vehicle_lookup.d1"], status: 403 },
-      { source: "d1", permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
-      { source: "api", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
-      { source: "d1_then_api", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
-      { source: "d1_then_api", permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
-      { source: "api_then_d1", permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
-      { source: "api_then_d1", permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
-      { source: undefined, permissions: ["calculator", "vehicle_lookup.d1"], status: 403 },
-      { source: undefined, permissions: ["calculator", "vehicle_lookup.api"], status: 403 },
+    const env = { DB: trackingDb({ calls: 0 }), ...API_ENV }
+    const denied: ModuleKey[][] = [
+      [],
+      ["calculator"],
+      ["vehicle_lookup.api"],
+      ["calculator", "facility.tembak_ru", "fees.bbn_mutasi"],
     ]
-    for (const testCase of cases) {
+    for (const permissions of denied) {
+      for (const source of LEGACY_SOURCES) {
+        const response = await callEndpoint(env, "DH2506KA", source, petugasAuth(permissions))
+        assert.equal(response.status, 403, `perms=${permissions} source=${source}`)
+        const json = await body(response)
+        assert.equal(json.code, "FORBIDDEN")
+        assert.equal(typeof json.message, "string")
+        assert.equal(response.headers.get("Cache-Control"), "no-store")
+      }
+    }
+    assert.equal(calls, 0, "403 tidak memanggil API")
+
+    for (const source of LEGACY_SOURCES) {
       const response = await callEndpoint(
         env,
         "DH2506KA",
-        testCase.source,
-        petugasAuth(testCase.permissions),
+        source,
+        petugasAuth(["calculator", "vehicle_lookup.api"]),
       )
-      assert.equal(response.status, testCase.status, `source=${testCase.source}`)
-      const json = await body(response)
-      assert.equal(json.code, "FORBIDDEN")
-      assert.equal(typeof json.message, "string")
-      assert.equal(response.headers.get("Cache-Control"), "no-store")
-    }
-    assert.equal(calls, 0, "403 tidak menyentuh D1/API")
-
-    for (const [source, permissions, expectedSource] of [
-      ["d1", ["calculator", "vehicle_lookup.d1"], "d1"],
-      ["api", ["calculator", "vehicle_lookup.api"], "api"],
-      ["d1_then_api", ["calculator", "vehicle_lookup.d1", "vehicle_lookup.api"], "d1"],
-      ["api_then_d1", ["calculator", "vehicle_lookup.d1", "vehicle_lookup.api"], "api"],
-    ] as const) {
-      const response = await callEndpoint(env, "DH2506KA", source, petugasAuth([...permissions]))
       assert.equal(response.status, 200, `source=${source}`)
-      assert.equal((await body(response)).source, expectedSource)
+      assert.equal((await body(response)).source, "api")
     }
-    pass("Petugas: 403 FORBIDDEN tanpa modul calculator/sumber; 200 bila modul lengkap")
+    pass("Petugas: 403 tanpa calculator+vehicle_lookup.api (semua ?source); 200 bila lengkap")
   }
 
-  // source=d1 hanya D1.
+  // Kontrak endpoint + Access headers; env VEHICLE_* diutamakan atas alias NJKB_*.
   {
-    let apiCalls = 0
-    globalThis.fetch = async () => {
-      apiCalls++
-      return new Response(null, { status: 500 })
-    }
-    const response = await callEndpoint(
-      { DB: mockDb({ DH2506KA: d1Row }), ...API_ENV },
-      "DH2506KA",
-      "d1",
-    )
-    assert.equal(response.status, 200)
-    assert.equal((await body(response)).source, "d1")
-    assert.equal(apiCalls, 0)
-    pass("source=d1 hanya menggunakan D1")
-  }
-
-  // source=api hanya API resmi dan headers benar.
-  {
-    let d1Calls = 0
     let requestedUrl = ""
     let headers: Record<string, string> = {}
     globalThis.fetch = async (input, init) => {
       requestedUrl = String(input)
       headers = init?.headers as Record<string, string>
-      return new Response(JSON.stringify(officialApiResponse("DH2506KA")), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      })
+      return jsonUpstream(officialApiResponse("DH2506KA"))
     }
-    const response = await callEndpoint(
-      {
-        DB: mockDb({ DH2506KA: d1Row }, false, () => d1Calls++),
-        ...API_ENV,
-      },
-      "DH2506KA",
-      "api",
-    )
-    const json = await body(response)
-    assert.equal(response.status, 200)
-    assert.equal(json.source, "api")
-    assert.equal(json.jenis, "MINIBUS")
-    // Tanpa registration.plate_color → warnaPlat null (frontend default putih).
-    assert.ok("warnaPlat" in json)
-    assert.equal(json.warnaPlat, null)
-    assert.equal(d1Calls, 0)
-    assert.equal(
-      requestedUrl,
-      "https://api.uptdpenda-kupang.web.id/api/v1/vehicle/DH2506KA",
-    )
+    const legacy = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
+    const legacyJson = await body(legacy)
+    assert.equal(legacy.status, 200)
+    assert.equal(legacyJson.jenis, "MINIBUS")
+    assert.equal(legacyJson.njub, 0, "payload tanpa potensi → njub 0")
+    assert.equal(legacyJson.warnaPlat, null)
+    assert.equal(legacyJson.originUpt, null)
+    assert.equal(legacyJson.syncedAt, null)
+    assert.equal(requestedUrl, "https://api.uptdpenda-kupang.web.id/api/v1/vehicle/DH2506KA")
     assert.equal(headers["CF-Access-Client-Id"], "test-client.access")
     assert.equal(headers["CF-Access-Client-Secret"], "test-secret")
-    pass("source=api menggunakan kontrak endpoint dan Access headers resmi")
+
+    const preferred = await callEndpoint({
+      DB: trackingDb({ calls: 0 }),
+      ...API_ENV,
+      VEHICLE_API_BASE_URL: "https://central.example.test/",
+      VEHICLE_ACCESS_CLIENT_ID: "new-client.access",
+      VEHICLE_ACCESS_CLIENT_SECRET: "new-secret",
+    })
+    assert.equal(preferred.status, 200)
+    assert.equal(requestedUrl, "https://central.example.test/api/v1/vehicle/DH2506KA")
+    assert.equal(headers["CF-Access-Client-Id"], "new-client.access")
+    assert.equal(headers["CF-Access-Client-Secret"], "new-secret")
+
+    // Nilai VEHICLE_* kosong → alias lama.
+    await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, VEHICLE_API_BASE_URL: "  " })
+    assert.equal(requestedUrl, "https://api.uptdpenda-kupang.web.id/api/v1/vehicle/DH2506KA")
+
+    // CF_ACCESS_* hanya fallback terakhir untuk credential.
+    const cfOnly = await callEndpoint({
+      DB: trackingDb({ calls: 0 }),
+      VEHICLE_API_BASE_URL: "https://central.example.test",
+      CF_ACCESS_CLIENT_ID: "cf-client.access",
+      CF_ACCESS_CLIENT_SECRET: "cf-secret",
+    })
+    assert.equal(cfOnly.status, 200)
+    assert.equal(headers["CF-Access-Client-Id"], "cf-client.access")
+    assert.equal(headers["CF-Access-Client-Secret"], "cf-secret")
+    await callEndpoint({
+      DB: trackingDb({ calls: 0 }),
+      ...API_ENV,
+      CF_ACCESS_CLIENT_ID: "cf-client.access",
+      CF_ACCESS_CLIENT_SECRET: "cf-secret",
+    })
+    assert.equal(headers["CF-Access-Client-Id"], "test-client.access", "NJKB_* menang atas CF_ACCESS_*")
+
+    // Pasangan credential dipilih per tier lengkap; tier tidak pernah dicampur.
+    for (const partial of [
+      { VEHICLE_ACCESS_CLIENT_ID: "new-client.access" },
+      { VEHICLE_ACCESS_CLIENT_SECRET: "new-secret" },
+      { VEHICLE_ACCESS_CLIENT_ID: "new-client.access", VEHICLE_ACCESS_CLIENT_SECRET: "   " },
+    ]) {
+      headers = {}
+      const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, ...partial })
+      assert.equal(response.status, 200, JSON.stringify(Object.keys(partial)))
+      assert.equal(headers["CF-Access-Client-Id"], "test-client.access", "pasangan lama utuh")
+      assert.equal(headers["CF-Access-Client-Secret"], "test-secret", "pasangan lama utuh")
+    }
+
+    // Nilai di-trim sebelum dikirim.
+    await callEndpoint({
+      DB: trackingDb({ calls: 0 }),
+      VEHICLE_API_BASE_URL: "  https://central.example.test  ",
+      VEHICLE_ACCESS_CLIENT_ID: "  new-client.access ",
+      VEHICLE_ACCESS_CLIENT_SECRET: " new-secret  ",
+    })
+    assert.equal(requestedUrl, "https://central.example.test/api/v1/vehicle/DH2506KA")
+    assert.equal(headers["CF-Access-Client-Id"], "new-client.access")
+    assert.equal(headers["CF-Access-Client-Secret"], "new-secret")
+
+    // Tidak ada tier lengkap (campuran ID/secret beda tier) → config error tanpa fetch.
+    let fetches = 0
+    globalThis.fetch = async () => {
+      fetches++
+      return jsonUpstream(officialApiResponse("DH2506KA"))
+    }
+    for (const mixed of [
+      { VEHICLE_ACCESS_CLIENT_ID: "new-client.access", NJKB_ACCESS_CLIENT_SECRET: "test-secret" },
+      { NJKB_ACCESS_CLIENT_ID: "test-client.access", CF_ACCESS_CLIENT_SECRET: "cf-secret" },
+      { CF_ACCESS_CLIENT_ID: "cf-client.access", VEHICLE_ACCESS_CLIENT_SECRET: "new-secret" },
+      {},
+    ]) {
+      const response = await silently(() =>
+        callEndpoint({
+          DB: trackingDb({ calls: 0 }),
+          VEHICLE_API_BASE_URL: "https://central.example.test",
+          ...mixed,
+        }),
+      )
+      const text = await response.text()
+      assert.equal(response.status, 500, JSON.stringify(Object.keys(mixed)))
+      assert.equal(JSON.parse(text).code, "NJKB_CONFIG_ERROR")
+      assert.equal(/secret|client\.access/.test(text), false)
+    }
+    assert.equal(fetches, 0, "tanpa pasangan lengkap tidak ada fetch")
+    pass("Endpoint resmi + Access headers; pasangan credential per tier lengkap VEHICLE_* > NJKB_* > CF_ACCESS_*, trim, tanpa campuran")
   }
 
-  // Warna plat diteruskan di JSON response (API plate_color dan D1 warna_plat).
+  // Payload pusat: NJUB, bobot 1.085, warna plat, originUpt, syncedAt; tanpa PII.
   {
-    for (const [plateColor, expected] of [
-      ["MERAH", "merah"],
-      ["Hitam", "hitam"],
-      ["KUNING", null],
+    globalThis.fetch = async () => jsonUpstream(centralApiResponse("DH2506KA"))
+    const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
+    const text = await response.text()
+    const json = JSON.parse(text) as Record<string, unknown>
+    assert.equal(response.status, 200)
+    assert.deepEqual(json, {
+      nopol: "DH2506KA",
+      nama: "API OWNER",
+      jenis: "PICK UP",
+      jatuhTempoStnk: "2031-12-31",
+      jatuhTempoPajak: "2030-12-31",
+      njub: 35_000_000,
+      warnaPlat: "merah",
+      originUpt: "UPT Pendapatan Daerah Wilayah Kota Kupang",
+      syncedAt: "2026-10-16T19:15:00.000Z",
+      source: "api",
+      njkb: 120_000_000,
+      bobot: 1.085,
+      njkbStatus: "matched",
+    })
+    for (const forbidden of ["5371010101010001", "RAHASIA", "MHKA1234567890XYZ", "ENG-998877", "BPKB-1234"]) {
+      assert.equal(text.includes(forbidden), false, `response memuat ${forbidden}`)
+    }
+
+    // njkb_status=not_found tetap meneruskan NJUB (NJKB diisi manual).
+    globalThis.fetch = async () =>
+      jsonUpstream({ ...centralApiResponse("DH2506KA"), njkb_status: "not_found", njkb: null })
+    const nf = await body(await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }))
+    assert.equal(nf.njkb, 0)
+    assert.equal(nf.njub, 35_000_000)
+    assert.equal(nf.njkbStatus, "not_found")
+    assert.equal(nf.bobot, 1.085)
+
+    // synced_at / origin_upt tidak valid → tetap 200 dengan null (informasi tampilan saja).
+    for (const [potensi, administrative] of [
+      [{ njub: "35000000.00", synced_at: "bukan-tanggal" }, { origin_upt: "<script>x</script>" }],
+      [{ njub: "35000000.00", synced_at: 1_700_000_000 }, { origin_upt: "x".repeat(121) }],
+      [{ njub: "35000000.00", synced_at: "2026-02-30T00:00:00Z" }, { origin_upt: 42 }],
     ] as const) {
       globalThis.fetch = async () =>
-        new Response(
-          JSON.stringify({
-            ...officialApiResponse("DH2506KA"),
-            registration: { stnk_valid_until: "2031-12-31", plate_color: plateColor },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        )
-      const response = await callEndpoint({ DB: mockDb(), ...API_ENV }, "DH2506KA", "api")
+        jsonUpstream({ ...centralApiResponse("DH2506KA"), potensi, administrative })
+      const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
       const json = await body(response)
       assert.equal(response.status, 200)
-      assert.equal(json.warnaPlat, expected, `plate_color=${plateColor}`)
+      assert.equal(json.syncedAt, null)
+      assert.equal(json.originUpt, null)
+      assert.equal(json.njub, 35_000_000)
     }
-
-    // D1 dengan kolom warna_plat.
-    const d1Merah = await callEndpoint(
-      { DB: mockDb({ DH2506KA: { ...d1Row, warna_plat: "merah" } }), ...API_ENV },
-      "DH2506KA",
-      "d1",
-    )
-    assert.equal(d1Merah.status, 200)
-    assert.equal((await body(d1Merah)).warnaPlat, "merah")
-
-    // D1 tanpa kolom (migration 0002 belum diterapkan) → 200, warnaPlat null.
-    const legacyDb: D1DatabaseLike = {
-      prepare(query) {
-        return {
-          bind(...values: unknown[]) {
-            return {
-              async first<T>(): Promise<T | null> {
-                if (query.includes("warna_plat")) {
-                  throw new Error("D1_ERROR: no such column: warna_plat: SQLITE_ERROR")
-                }
-                return (values[0] === "DH2506KA" ? d1Row : null) as T | null
-              },
-            }
-          },
-        }
-      },
-    }
-    const legacy = await callEndpoint({ DB: legacyDb, ...API_ENV }, "DH2506KA", "d1")
-    const legacyText = await legacy.text()
-    assert.equal(legacy.status, 200)
-    assert.equal(JSON.parse(legacyText).warnaPlat, null)
-    assert.equal(/SQLITE|no such column/.test(legacyText), false)
-    pass("JSON response memuat warnaPlat (API plate_color, D1 warna_plat, fallback D1 tanpa kolom → null)")
+    pass("Payload pusat: NJUB 35000000.00, bobot 1.085, warna/originUpt/syncedAt; tanpa NIK/alamat/rangka/BPKB")
   }
 
-  // D1 miss/error fallback API.
-  for (const d1Error of [false, true]) {
-    let apiCalls = 0
-    globalThis.fetch = async () => {
-      apiCalls++
-      return new Response(JSON.stringify(officialApiResponse("DH0001XX")), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
+  // NJUB invalid / Nopol berbeda / struktur rusak → 502 NJKB_INVALID_PAYLOAD (fail closed).
+  {
+    const invalidPayloads: Array<[string, unknown]> = [
+      ["njub negatif", { ...centralApiResponse("DH2506KA"), potensi: { njub: "-1.00" } }],
+      ["njub fraksi", { ...centralApiResponse("DH2506KA"), potensi: { njub: "35000000.50" } }],
+      ["njub number", { ...centralApiResponse("DH2506KA"), potensi: { njub: 35000000 } }],
+      ["njub teks", { ...centralApiResponse("DH2506KA"), potensi: { njub: "abc" } }],
+      ["potensi array", { ...centralApiResponse("DH2506KA"), potensi: [] }],
+      ["nopol beda", centralApiResponse("DH9999ZZ")],
+      ["nopol hilang", { ...centralApiResponse("DH2506KA"), nopol: undefined }],
+      ["payload array", []],
+    ]
+    for (const [label, payload] of invalidPayloads) {
+      globalThis.fetch = async () => jsonUpstream(payload)
+      const response = await silently(() => callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }))
+      const text = await response.text()
+      assert.equal(response.status, 502, label)
+      assert.equal(JSON.parse(text).code, "NJKB_INVALID_PAYLOAD", label)
+      assert.equal(/DH9999ZZ|API OWNER|5371010101010001/.test(text), false, label)
+    }
+    // njub "0.00" valid.
+    globalThis.fetch = async () =>
+      jsonUpstream({ ...centralApiResponse("DH2506KA"), potensi: { njub: "0.00" } })
+    const zero = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
+    assert.equal(zero.status, 200)
+    assert.equal((await body(zero)).njub, 0)
+    pass("NJUB invalid, Nopol tidak cocok, struktur rusak → 502 NJKB_INVALID_PAYLOAD; njub 0.00 valid")
+  }
+
+  // Status referensi NJKB & invalid_request upstream → 502 dengan pesan aman.
+  for (const status of ["reference_unavailable", "conflict", "ambiguous"]) {
+    globalThis.fetch = async () =>
+      jsonUpstream({ ...officialApiResponse("DH2506KA"), njkb_status: status, njkb: null })
+    const response = await silently(() => callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }))
+    assert.equal(response.status, 502, status)
+    assert.equal(String((await body(response)).message).includes(status), false)
+  }
+  {
+    globalThis.fetch = async () => jsonUpstream({ status: "invalid_request" })
+    const response = await silently(() => callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }))
+    assert.equal(response.status, 502)
+    assert.equal((await body(response)).code, "NJKB_INVALID_PAYLOAD")
+  }
+  pass("njkb_status reference_unavailable/conflict/ambiguous dan invalid_request upstream → 502 aman")
+
+  // Warna plat registration → fallback vehicle.
+  for (const [registration, vehicle, expected] of [
+    ["MERAH", "HITAM", "merah"],
+    [undefined, "Hitam", "hitam"],
+    ["KUNING", "PUTIH", "putih"],
+    ["KUNING", undefined, null],
+    [undefined, undefined, null],
+  ] as const) {
+    globalThis.fetch = async () =>
+      jsonUpstream({
+        ...officialApiResponse("DH2506KA"),
+        registration: { stnk_valid_until: "2031-12-31", plate_color: registration },
+        vehicle: { category_raw: "MINIBUS", plate_color: vehicle },
       })
-    }
-    const response = await callEndpoint(
-      { DB: mockDb({}, d1Error), ...API_ENV },
-      "DH0001XX",
-      "d1_then_api",
-    )
+    const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
     assert.equal(response.status, 200)
-    assert.equal((await body(response)).source, "api")
-    assert.equal(apiCalls, 1)
+    assert.equal((await body(response)).warnaPlat, expected, `${registration}/${vehicle}`)
   }
-  pass("D1 miss dan D1 error fallback ke API")
+  pass("warnaPlat: registration.plate_color utama, fallback vehicle.plate_color, tak dikenal → null")
 
-  // D1 miss + API vehicle_status=found tapi njkb_status=not_found → HTTP 200 dengan njkb=0
-  {
-    globalThis.fetch = async () =>
-      new Response(
-        JSON.stringify({
-          ...officialApiResponse("DH0001XX"),
-          njkb_status: "not_found",
-          njkb: null,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      )
-    const response = await callEndpoint(
-      { DB: mockDb(), ...API_ENV },
-      "DH0001XX",
-      "d1_then_api",
-    )
-    const json = await body(response)
-    assert.equal(response.status, 200)
-    assert.equal(json.source, "api")
-    assert.equal(json.njkb, 0)
-    assert.equal(json.nama, "API OWNER")
-    pass("D1 miss + API vehicle_status=found & njkb_status=not_found → HTTP 200 (njkb=0)")
-  }
-
-  // D1 + API vehicle_status not_found → HTTP 404.
-  {
-    globalThis.fetch = async () =>
-      new Response(
-        JSON.stringify({
-          status: "vehicle_not_found",
-          vehicle_status: "not_found",
-          njkb_status: null,
-          nopol: "DH0000NF",
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      )
-    const response = await callEndpoint(
-      { DB: mockDb(), ...API_ENV },
-      "DH0000NF",
-      "d1_then_api",
-    )
-    assert.equal(response.status, 404)
-    pass("D1 + API vehicle_status not_found → HTTP 404")
-  }
-
-  // Regression screenshot: upstream HTTP 504 persisten → endpoint 504 (bukan 500), D1 tidak disentuh,
-  // satu log terstruktur tanpa NOPOL/URL/host/credential/body.
+  // Regression: upstream 504 persisten → 504, retry sekali, log privat.
   {
     const originalWarn = console.warn
     const originalError = console.error
     const logs: string[] = []
     console.warn = (...args: unknown[]) => logs.push(args.map(String).join(" "))
     console.error = (...args: unknown[]) => logs.push(args.map(String).join(" "))
-    let d1Calls = 0
+    const d1 = { calls: 0 }
     let apiCalls = 0
     globalThis.fetch = async () => {
       apiCalls++
@@ -454,14 +487,9 @@ try {
     }
     try {
       const response = await callEndpoint(
-        {
-          DB: mockDb({ DH2506KA: d1Row }, false, () => d1Calls++),
-          ...API_ENV,
-          // Timeout valid via env; tidak ada wait nyata karena fetch langsung resolve.
-          NJKB_API_TIMEOUT_MS: "15000",
-        },
+        { DB: trackingDb(d1), ...API_ENV, NJKB_API_TIMEOUT_MS: "15000" },
         "DH2506KA",
-        "api",
+        "d1",
       )
       const json = await body(response)
       assert.equal(response.status, 504)
@@ -469,38 +497,24 @@ try {
       assert.match(String(json.message), /Gateway NJKB/)
       assert.equal(response.headers.get("Cache-Control"), "no-store")
       assert.equal(apiCalls, 2, "504 transien diretry tepat sekali")
-      assert.equal(d1Calls, 0, "source=api tidak pernah fallback ke D1")
+      assert.equal(d1.calls, 0)
     } finally {
       console.warn = originalWarn
       console.error = originalError
     }
     assert.equal(logs.length, 1, "Tepat satu entri log")
     const entry = JSON.parse(logs[0]) as Record<string, unknown>
-    assert.deepEqual(Object.keys(entry).sort(), [
-      "code",
-      "elapsedMs",
-      "event",
-      "httpStatus",
-      "upstreamStatus",
-    ])
+    assert.deepEqual(Object.keys(entry).sort(), ["code", "elapsedMs", "event", "httpStatus", "upstreamStatus"])
     assert.equal(entry.code, "NJKB_UPSTREAM_TIMEOUT")
     assert.equal(entry.httpStatus, 504)
     assert.equal(entry.upstreamStatus, 504)
-    assert.equal(typeof entry.elapsedMs, "number")
-    for (const forbidden of [
-      "DH2506KA",
-      "uptdpenda",
-      "/api/v1/vehicle",
-      "test-client",
-      "test-secret",
-      "secret-body",
-    ]) {
+    for (const forbidden of ["DH2506KA", "uptdpenda", "/api/v1/vehicle", "test-client", "test-secret", "secret-body"]) {
       assert.equal(logs[0].includes(forbidden), false, `log memuat ${forbidden}`)
     }
-    pass("Regression: upstream 504 persisten → HTTP 504 + code, source=api tanpa D1, log privat")
+    pass("Regression: upstream 504 persisten → HTTP 504 + code, tanpa D1, log privat")
   }
 
-  // Redirect 3xx dari NJKB: redirect manual, satu call, tanpa retry, body dibatalkan, Location tidak bocor.
+  // Redirect 3xx: manual, satu call, body dibatalkan, Location tidak bocor.
   for (const status of [301, 302, 307, 308]) {
     const originalWarn = console.warn
     const logs: string[] = []
@@ -522,11 +536,7 @@ try {
       })
     }
     try {
-      const response = await callEndpoint(
-        { DB: mockDb(), ...API_ENV },
-        "DH2506KA",
-        "api",
-      )
+      const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
       const text = await response.text()
       assert.equal(response.status, 502)
       assert.equal(JSON.parse(text).code, "NJKB_UPSTREAM_HTTP_ERROR")
@@ -546,76 +556,56 @@ try {
   }
   pass("Redirect 301/302/307/308 → HTTP 502, satu call, body dibatalkan, Location tidak bocor")
 
-  // Upstream 504 transien → retry sukses 200.
+  // Upstream 504 transien → retry sukses.
   {
     let apiCalls = 0
     globalThis.fetch = async () => {
       apiCalls++
       return apiCalls === 1
         ? new Response(null, { status: 504 })
-        : new Response(JSON.stringify(officialApiResponse("DH2506KA")), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          })
+        : jsonUpstream(officialApiResponse("DH2506KA"))
     }
-    const response = await callEndpoint(
-      { DB: mockDb(), ...API_ENV },
-      "DH2506KA",
-      "api",
-    )
+    const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
     assert.equal(response.status, 200)
     assert.equal(apiCalls, 2)
     pass("Upstream 504 transien → retry sukses HTTP 200")
   }
 
-  // Abort client timeout → 504 dengan code berbeda, tanpa retry; env timeout malformed tetap aman.
-  for (const timeoutEnv of ["abc", "0", "-5", "Infinity", "10abc", "1.5", ""]) {
+  // Client abort → 504 tanpa retry; env timeout malformed (lama & baru) → default 8000ms.
+  for (const [key, timeoutEnv] of [
+    ...["abc", "0", "-5", "Infinity", "10abc", "1.5", ""].map((v) => ["NJKB_API_TIMEOUT_MS", v] as const),
+    ["VEHICLE_API_TIMEOUT_MS", "abc"] as const,
+  ]) {
     let apiCalls = 0
-    const originalWarn = console.warn
-    console.warn = () => undefined
     globalThis.fetch = async () => {
       apiCalls++
       throw Object.assign(new Error("aborted"), { name: "AbortError" })
     }
-    try {
-      const response = await callEndpoint(
-        { DB: mockDb(), ...API_ENV, NJKB_API_TIMEOUT_MS: timeoutEnv },
-        "DH2506KA",
-        "api",
-      )
-      const json = await body(response)
-      assert.equal(response.status, 504)
-      assert.equal(json.code, "NJKB_CLIENT_TIMEOUT")
-      // Malformed env jatuh ke default 8000ms, bukan NaN/0.
-      assert.match(String(json.message), /timed out after 8000ms/)
-      assert.equal(apiCalls, 1)
-    } finally {
-      console.warn = originalWarn
-    }
+    const response = await silently(() =>
+      callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, [key]: timeoutEnv }),
+    )
+    const json = await body(response)
+    assert.equal(response.status, 504)
+    assert.equal(json.code, "NJKB_CLIENT_TIMEOUT")
+    assert.match(String(json.message), /timed out after 8000ms/)
+    assert.equal(apiCalls, 1)
   }
   pass("Client abort → HTTP 504 NJKB_CLIENT_TIMEOUT tanpa retry; env timeout malformed → default 8000ms")
 
-  // Upstream 401/403 tidak diteruskan sebagai status auth ke client.
+  // Upstream 401/403 → 502 aman.
   for (const status of [401, 403]) {
-    const originalWarn = console.warn
-    console.warn = () => undefined
     globalThis.fetch = async () => new Response(null, { status })
-    try {
-      const response = await callEndpoint(
-        { DB: mockDb(), ...API_ENV },
-        "DH2506KA",
-        "api",
-      )
-      assert.equal(response.status, 502)
-      assert.equal((await body(response)).code, "NJKB_UPSTREAM_HTTP_ERROR")
-    } finally {
-      console.warn = originalWarn
-    }
+    const response = await silently(() => callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }))
+    assert.equal(response.status, 502)
+    assert.equal((await body(response)).code, "NJKB_UPSTREAM_HTTP_ERROR")
   }
   pass("Upstream 401/403 → HTTP 502 aman")
 
-  // Base URL invalid: tidak ada fetch, 500 config error tanpa membocorkan URL/credential.
-  {
+  // Base URL invalid / tidak dikonfigurasi: tanpa fetch, 500 config error tanpa bocor.
+  for (const env of [
+    { ...API_ENV, NJKB_API_BASE_URL: "https://user:hunter2@api.example.test" },
+    { NJKB_ACCESS_CLIENT_ID: "x", NJKB_ACCESS_CLIENT_SECRET: "test-secret" },
+  ]) {
     let apiCalls = 0
     const logs: string[] = []
     const originalWarn = console.warn
@@ -625,90 +615,51 @@ try {
       return new Response(null, { status: 200 })
     }
     try {
-      const response = await callEndpoint(
-        {
-          DB: mockDb(),
-          ...API_ENV,
-          NJKB_API_BASE_URL: "https://user:hunter2@api.example.test",
-        },
-        "DH2506KA",
-        "api",
-      )
+      const d1 = { calls: 0 }
+      const response = await callEndpoint({ DB: trackingDb(d1), ...env })
       const text = await response.text()
       assert.equal(response.status, 500)
       assert.equal(apiCalls, 0)
+      assert.equal(d1.calls, 0)
       assert.match(text, /NJKB_CONFIG_ERROR/)
       assert.equal(/hunter2|example\.test|test-secret/.test(text + logs.join()), false)
     } finally {
       console.warn = originalWarn
     }
-    pass("Base URL invalid → HTTP 500 config error, tanpa fetch dan tanpa bocor credential")
   }
+  pass("Base URL invalid/tidak ada → HTTP 500 config error, tanpa fetch/D1 dan tanpa bocor credential")
 
-  // source=d1 dengan D1 error: raw Error D1 tidak bocor ke response/log.
-  {
-    const logs: string[] = []
-    const originalWarn = console.warn
-    console.warn = (...args: unknown[]) => logs.push(args.map(String).join(" "))
-    try {
-      const response = await callEndpoint(
-        { DB: mockDb({}, true), ...API_ENV },
-        "DH2506KA",
-        "d1",
-      )
-      const text = await response.text()
-      assert.equal(response.status, 500)
-      assert.equal(text.includes("D1 failure"), false)
-      assert.match(text, /database D1/)
-      assert.equal(logs.join().includes("D1 failure"), false)
-      assert.equal(logs.join().includes("DH2506KA"), false)
-    } finally {
-      console.warn = originalWarn
-    }
-    pass("Raw D1 error tidak bocor ke response maupun log")
-  }
-
-  // Exception tak terduga: log hanya tipe error, bukan message/stack mentah.
+  // Exception tak terduga: log hanya tipe error.
   {
     const logs: string[] = []
     const originalError = console.error
     console.error = (...args: unknown[]) => logs.push(args.map(String).join(" "))
-    // D1 source menangkap error biasa; nilai yang gagal dikonversi ke string lolos ke catch endpoint.
-    const throwingDb = {
-      prepare() {
-        throw {
-          [Symbol.toPrimitive]() {
-            throw new Error("raw secret DH2506KA")
-          },
-        }
-      },
-    } as unknown as D1DatabaseLike
+    globalThis.fetch = async () => {
+      throw {
+        [Symbol.toPrimitive]() {
+          throw new Error("raw secret DH2506KA")
+        },
+      }
+    }
     try {
-      const response = await callEndpoint({ DB: throwingDb }, "DH2506KA", "d1")
-      assert.equal(response.status, 500)
+      const response = await silently(() => callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }))
+      assert.ok(response.status >= 500)
       assert.equal((await response.text()).includes("raw secret"), false)
     } finally {
       console.error = originalError
     }
-    assert.equal(logs.length, 1)
-    assert.equal(/raw secret|DH2506KA/.test(logs[0]), false)
-    const entry = JSON.parse(logs[0]) as Record<string, unknown>
-    assert.deepEqual(Object.keys(entry).sort(), ["elapsedMs", "errorType", "event"])
-    assert.equal(entry.errorType, "object")
-    pass("Catch logging tersanitasi")
+    assert.equal(logs.every((log) => !/raw secret|DH2506KA/.test(log)), true)
+    pass("Error tak terduga tidak membocorkan detail mentah")
   }
 
-  // Invalid source dan invalid Nopol tetap 400.
+  // Invalid Nopol tetap 400; ?source invalid tidak lagi 400 (diabaikan).
+  globalThis.fetch = async () => jsonUpstream(officialApiResponse("DH2506KA"))
+  assert.equal((await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }, "DH", "d1")).status, 400)
   assert.equal(
-    (await callEndpoint({ DB: mockDb(), ...API_ENV }, "DH2506KA", "invalid"))
-      .status,
-    400,
+    (await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }, "DH2506KA", "invalid")).status,
+    200,
   )
-  assert.equal(
-    (await callEndpoint({ DB: mockDb(), ...API_ENV }, "DH", "d1")).status,
-    400,
-  )
-  pass("Invalid source dan Nopol → HTTP 400")
+  pass("Nopol invalid → HTTP 400; ?source tidak dikenal diabaikan (200)")
 } finally {
   globalThis.fetch = originalFetch
 }

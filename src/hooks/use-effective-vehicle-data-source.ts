@@ -4,28 +4,24 @@ import {
   getAllowedSourceModes,
   resolveEffectiveSourceMode,
 } from "@/lib/permissions"
-import { useVehicleDataSourceSetting } from "./use-vehicle-data-source-setting"
 
 /**
- * Menggabungkan preferensi sumber data tersimpan dengan izin user.
- * Preferensi tersimpan tidak ditimpa: bila Admin kelak memberi izin, pilihan
- * semula otomatis berlaku kembali.
+ * Sumber data kendaraan efektif: selalu API bila user memiliki izin
+ * `vehicle_lookup.api`, selain itu null (lookup nonaktif, isi manual).
+ * Preferensi lama di localStorage tidak lagi dibaca.
  */
 export function useEffectiveVehicleDataSource() {
-  const { mode: storedMode, setMode } = useVehicleDataSourceSetting()
   const { hasPermission } = useAuth()
 
   const allowedModes = useMemo(
     () => getAllowedSourceModes(hasPermission),
     [hasPermission],
   )
-  const effectiveMode = resolveEffectiveSourceMode(storedMode, allowedModes)
+  const effectiveMode = resolveEffectiveSourceMode(null, allowedModes)
 
   return {
-    storedMode,
     effectiveMode,
     allowedModes,
-    setMode,
     lookupEnabled: effectiveMode !== null,
   }
 }

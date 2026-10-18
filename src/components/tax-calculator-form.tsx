@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/select";
 import { useEffectiveVehicleDataSource } from "@/hooks/use-effective-vehicle-data-source";
 import { useNopolLookup } from "@/hooks/use-nopol-lookup";
+import { resolveGempaEligibility } from "@/lib/gempa-eligibility";
 import { calculateTax } from "@/lib/tax-calculator";
 import {
   BIAYA_LAYANAN_INPUT_MAX_LENGTH,
@@ -238,6 +239,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     () => new Date(),
   );
   const [isDomisiliGempa, setIsDomisiliGempa] = useState(false);
+  // Nilai otomatis gempa saat hasil lookup diterapkan + penanda perubahan
+  // manual. Keduanya hanya di-reset oleh lookup baru atau perubahan Nopol.
+  const [gempaAutoValue, setGempaAutoValue] = useState(false);
   const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
   const [warnaPlat, setWarnaPlat] = useState<WarnaPlat>(DEFAULT_WARNA_PLAT);
   const { hasPermission } = useAuth();
@@ -320,6 +324,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setJatuhTempoPajak(undefined);
     setJatuhTempoStnk(undefined);
     setIsDomisiliGempa(false);
+    setGempaAutoValue(false);
     setIsMutasiMasuk(false);
     setIsTembakRu(false);
     setWarnaPlat(DEFAULT_WARNA_PLAT);
@@ -360,32 +365,51 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
     const plate = plateFromData(vehicleData.warnaPlat);
     const { tanggalBayar, biayaLayanan } = lookupInputRef.current;
+    // Gempa otomatis aktif hanya bila plat EB + UPT asal salah satu kabupaten
+    // terdampak. Status unknown/not_eligible tetap nonaktif (cek manual).
+    const autoGempa = resolveGempaEligibility({
+      nopol: vehicleData.nopol,
+      originUpt: vehicleData.originUpt,
+    }).status === "eligible";
+    const njubValue =
+      Number.isFinite(vehicleData.njub) && vehicleData.njub > 0
+        ? vehicleData.njub
+        : 0;
 
     // Reset fasilitas hanya untuk hasil lookup baru, tidak saat tanggal berubah.
-    setIsDomisiliGempa(false);
+    setIsDomisiliGempa(autoGempa);
+    setGempaAutoValue(autoGempa);
     setIsMutasiMasuk(false);
     setIsTembakRu(false);
     setWarnaPlat(plate);
 
     if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb));
-    setNjub(String(vehicleData.njub ?? 0));
+    setNjub(String(njubValue));
     if (vehicleData.bobot) setBobot(vehicleData.bobot);
     if (jenisNormal) setJenisKendaraan(jenisNormal);
     if (stnkDate) setJatuhTempoStnk(stnkDate);
     if (pajakDate) setJatuhTempoPajak(pajakDate);
 
     // Data ditemukan tetapi tidak lengkap: buka tahap yang perlu dilengkapi.
+    // NJUB > 0 juga membuka Dasar Pengenaan agar nilai tambahan terlihat.
     const sectionsToOpen: FormSection[] = [];
-    if (vehicleData.njkb <= 0 || !jenisNormal || !vehicleData.bobot) {
+    if (
+      vehicleData.njkb <= 0 ||
+      !jenisNormal ||
+      !vehicleData.bobot ||
+      njubValue > 0
+    ) {
       sectionsToOpen.push("assessment");
     }
     if (!stnkDate || !pajakDate) {
       sectionsToOpen.push("tax-period");
     }
+    if (autoGempa) sectionsToOpen.push("facilities");
     setOpenSections(sectionsToOpen);
 
     // Data Nopol lengkap langsung menghasilkan ringkasan penetapan.
-    // Fasilitas tambahan sengaja tetap nonaktif sampai pengguna mengaktifkannya.
+    // Gempa memakai nilai otomatis yang sama dengan state toggle; fasilitas
+    // lain tetap nonaktif sampai pengguna mengaktifkannya.
     if (
       vehicleData.njkb > 0 &&
       jenisNormal &&
@@ -397,13 +421,13 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       onResult(
         calculateTax({
           njkb: vehicleData.njkb,
-          njub: vehicleData.njub ?? 0,
+          njub: njubValue,
           bobot: vehicleData.bobot || BOBOT_MAP[jenisNormal],
           jenisKendaraan: jenisNormal,
           jatuhTempoPajak: pajakDate,
           jatuhTempoStnk: stnkDate,
           tanggalBayar,
-          isDomisiliGempa: false,
+          isDomisiliGempa: autoGempa,
           isMutasiMasuk: false,
           isTembakRu: false,
           warnaPlat: plate,
@@ -552,6 +576,45 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           : "Belum Lengkap"
         : undefined;
 
+  // Keterangan toggle gempa. Status dihitung ulang dari data lookup yang sedang
+  // diterapkan (murni, tanpa request); "Diubah manual" = state berbeda dari
+  // nilai otomatis saat lookup diterapkan.
+  const gempaEligibility =
+    lookupStatus === "found" && vehicleData
+      ? resolveGempaEligibility({
+          nopol: vehicleData.nopol,
+          originUpt: vehicleData.originUpt,
+        })
+      : null;
+  const gempaChangedManually =
+    gempaEligibility !== null && isDomisiliGempa !== gempaAutoValue;
+  let gempaNote: { text: string; tone: "auto" | "warning" | "neutral" } | null =
+    null;
+  if (gempaEligibility?.status === "eligible") {
+    gempaNote = gempaChangedManually
+      ? {
+          text: `Diubah manual. Terdeteksi otomatis: plat EB dan UPT asal ${gempaEligibility.kabupaten}.`,
+          tone: "neutral",
+        }
+      : {
+          text: `Otomatis: plat EB dan UPT asal ${gempaEligibility.kabupaten} (petunjuk, bukan bukti domisili). Nonaktifkan bila domisili pemilik di luar wilayah terdampak.`,
+          tone: "auto",
+        };
+  } else if (gempaEligibility?.status === "unknown") {
+    const reason =
+      gempaEligibility.reason === "origin_missing"
+        ? "UPT asal tidak tersedia"
+        : "UPT asal tidak dikenali";
+    gempaNote = {
+      text: gempaChangedManually
+        ? `Diubah manual. ${reason}; pastikan domisili pemilik.`
+        : `${reason}. Periksa domisili pemilik secara manual.`,
+      tone: "warning",
+    };
+  } else if (gempaChangedManually) {
+    gempaNote = { text: "Diubah manual.", tone: "neutral" };
+  }
+
   // Chip tahap 5 hanya tampil bila ada biaya terisi: "3 biaya · Rp 530.000".
   const feesStatus =
     biayaLayananStats.count > 0
@@ -679,8 +742,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 inputMode="numeric"
                 value={njkb}
                 onChange={(e) => {
+                  // Bobot dari API tetap dipakai saat NJKB dikoreksi; hanya
+                  // perubahan jenis kendaraan yang beralih ke bobot tabel.
                   setNjkb(e.target.value);
-                  setBobot(undefined);
                 }}
                 placeholder="0"
                 min={0}
@@ -754,7 +818,15 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               <FieldDescription className="flex flex-wrap items-center gap-1.5 text-xs">
                 {bobot !== undefined ? (
                   <span className="numeric step-badge inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6875rem] font-semibold leading-4">
-                    Bobot Data {bobot.toLocaleString("id-ID")}
+                    Bobot API {bobot.toLocaleString("id-ID")}
+                  </span>
+                ) : jenisKendaraan ? (
+                  <span>
+                    Bobot tabel jenis:{" "}
+                    <span className="numeric font-medium text-foreground">
+                      {BOBOT_MAP[jenisKendaraan].toLocaleString("id-ID")}
+                    </span>
+                    {vehicleData?.bobot ? " (dipilih manual)." : "."}
                   </span>
                 ) : (
                   <span>Bobot mengikuti jenis kendaraan.</span>
@@ -856,6 +928,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               checked={isDomisiliGempa}
               onCheckedChange={setIsDomisiliGempa}
               icon={<ShieldCheck />}
+              note={gempaNote?.text}
+              noteTone={gempaNote?.tone}
             />
             <FacilityToggle
               id="is-mutasi-masuk"

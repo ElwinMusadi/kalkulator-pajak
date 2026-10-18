@@ -82,7 +82,14 @@ function methodExport(method: string): string {
   return `onRequest${m[0]}${m.slice(1).toLowerCase()}`
 }
 
-let env: { DB: D1Database }
+let env: {
+  DB: D1Database
+  VEHICLE_API_BASE_URL: string
+  VEHICLE_ACCESS_CLIENT_ID: string
+  VEHICLE_ACCESS_CLIENT_SECRET: string
+}
+let vehicleApiCalls = 0
+const originalGlobalFetch = globalThis.fetch
 
 interface CallOptions {
   body?: unknown
@@ -206,7 +213,34 @@ console.log("Menjalankan auth endpoint integration tests (Miniflare D1)...\n")
 
 try {
   const db = (await mf.getD1Database("DB")) as unknown as D1Database
-  env = { DB: db }
+  env = {
+    DB: db,
+    VEHICLE_API_BASE_URL: "https://vehicle-api.test",
+    VEHICLE_ACCESS_CLIENT_ID: "test-client.access",
+    VEHICLE_ACCESS_CLIENT_SECRET: "test-secret",
+  }
+  // Mock hanya untuk API Data Kendaraan; request lain (Miniflare) diteruskan.
+  const passthroughFetch = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    const url = String(input instanceof Request ? input.url : input)
+    if (!url.startsWith("https://vehicle-api.test/")) return passthroughFetch(input, init)
+    vehicleApiCalls++
+    const nopol = decodeURIComponent(url.split("/").pop() ?? "")
+    return new Response(
+      JSON.stringify({
+        status: "vehicle_found",
+        vehicle_status: "found",
+        njkb_status: "matched",
+        nopol,
+        vehicle: { category_raw: "MINIBUS" },
+        registration: { stnk_valid_until: "2031-12-31" },
+        tax: { notice_valid_until: "2030-12-31" },
+        owner: { name: "API OWNER" },
+        njkb: { value: "50000000.00", weight: "1.050000" },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )
+  }
   for (const file of [
     "schema.sql",
     "migrations/0001_auth.sql",
@@ -340,6 +374,97 @@ try {
       "Migration 0003: upgrade user_permissions melestarikan data, mendukung fees.bbn_mutasi, tolak modul ilegal & duplikat, serta mempertahankan ON DELETE CASCADE",
     )
   }
+
+  // --- Regression test migration 0004: vehicle_lookup.d1 → api, hapus kunci lama ---
+  {
+    const iso = new Date(nowValue).toISOString()
+    const u = {
+      d1Calc: "00000000-0000-4000-9000-000000000011",
+      settingsOnly: "00000000-0000-4000-9000-000000000012",
+      all: "00000000-0000-4000-9000-000000000013",
+      d1Only: "00000000-0000-4000-9000-000000000014",
+      untouched: "00000000-0000-4000-9000-000000000015",
+    }
+    const legacyRows: Array<[string, string]> = [
+      [u.d1Calc, "calculator"],
+      [u.d1Calc, "vehicle_lookup.d1"],
+      [u.settingsOnly, "vehicle_source.settings"],
+      [u.all, "calculator"],
+      [u.all, "vehicle_lookup.d1"],
+      [u.all, "vehicle_lookup.api"],
+      [u.all, "vehicle_source.settings"],
+      [u.all, "facility.tembak_ru"],
+      [u.all, "fees.bbn_mutasi"],
+      [u.d1Only, "vehicle_lookup.d1"],
+      [u.untouched, "calculator"],
+      [u.untouched, "fees.bbn_mutasi"],
+    ]
+    await db.batch([
+      ...Object.values(u).map((id, index) =>
+        db
+          .prepare(
+            `INSERT INTO users (id, username, name, role, password_hash, active, created_at, updated_at)
+             VALUES (?, ?, ?, 'petugas', 'hash', 1, ?, ?)`,
+          )
+          .bind(id, `migr4_user${index}`, `Migr4 ${index}`, iso, iso),
+      ),
+      ...legacyRows.map(([id, key]) =>
+        db.prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, ?)`).bind(id, key),
+      ),
+      db
+        .prepare(
+          `INSERT INTO sessions (id, user_id, token_hash, is_petugas, device_label, created_at, last_seen_at, cookie_issued_at, expires_at)
+           VALUES ('00000000-0000-4000-9000-0000000000f1', ?, 'migr4-token-hash', 1, 'Chrome di Windows', ?, ?, ?, NULL)`,
+        )
+        .bind(u.d1Calc, iso, iso, iso),
+    ])
+    const snapshot = async (sql: string) => (await db.prepare(sql).all()).results
+    const usersBefore = await snapshot(`SELECT * FROM users ORDER BY id`)
+    const sessionsBefore = await snapshot(`SELECT * FROM sessions ORDER BY id`)
+
+    const sql0004 = await readFile(path.join(ROOT, "migrations/0004_vehicle_lookup_api_only.sql"), "utf8")
+    const expected = [
+      { user_id: u.d1Calc, module_key: "calculator" },
+      { user_id: u.d1Calc, module_key: "vehicle_lookup.api" },
+      { user_id: u.all, module_key: "calculator" },
+      { user_id: u.all, module_key: "facility.tembak_ru" },
+      { user_id: u.all, module_key: "fees.bbn_mutasi" },
+      { user_id: u.all, module_key: "vehicle_lookup.api" },
+      { user_id: u.d1Only, module_key: "vehicle_lookup.api" },
+      { user_id: u.untouched, module_key: "calculator" },
+      { user_id: u.untouched, module_key: "fees.bbn_mutasi" },
+    ]
+    // Dijalankan dua kali: hasil kedua identik (idempoten).
+    for (let run = 0; run < 2; run++) {
+      await db.batch(splitSql(sql0004).map((stmt) => db.prepare(stmt)))
+      const rows = await db
+        .prepare(`SELECT user_id, module_key FROM user_permissions ORDER BY user_id ASC, module_key ASC`)
+        .all<{ user_id: string; module_key: string }>()
+      assert.deepEqual(rows.results, expected, `0004 run ${run + 1}`)
+    }
+    // settings-only tidak menerima API; d1-only tidak menerima calculator.
+    const settingsOnlyCount = await db
+      .prepare(`SELECT COUNT(*) AS n FROM user_permissions WHERE user_id = ?`)
+      .bind(u.settingsOnly)
+      .first<{ n: number }>()
+    assert.equal(settingsOnlyCount?.n, 0)
+    assert.deepEqual(await snapshot(`SELECT * FROM users ORDER BY id`), usersBefore, "users tidak berubah")
+    assert.deepEqual(await snapshot(`SELECT * FROM sessions ORDER BY id`), sessionsBefore, "sessions tidak berubah")
+    // CHECK 0003 tetap (tanpa rebuild): kunci tak dikenal masih ditolak.
+    await assert.rejects(
+      () =>
+        db.prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, 'vehicle_lookup.x')`).bind(u.d1Calc).run(),
+      (err: Error) => /CHECK constraint failed/i.test(err.message),
+    )
+
+    await db.prepare(`DELETE FROM users WHERE id LIKE '00000000-0000-4000-9000-%'`).run()
+    assert.equal((await db.prepare(`SELECT COUNT(*) AS n FROM users`).first<{ n: number }>())?.n, 0)
+    assert.equal((await db.prepare(`SELECT COUNT(*) AS n FROM user_permissions`).first<{ n: number }>())?.n, 0)
+    assert.equal((await db.prepare(`SELECT COUNT(*) AS n FROM sessions`).first<{ n: number }>())?.n, 0)
+    pass(
+      "Migration 0004: d1→api tanpa menambah calculator, settings dihapus (settings-only tanpa API), idempoten, users/sessions tidak berubah",
+    )
+  }
   await db
     .prepare(
       `INSERT INTO vehicle_njkb (nopol, nama, jenis, jatuh_tempo_stnk, jatuh_tempo_pajak, njkb, njub, bobot)
@@ -369,7 +494,12 @@ try {
   }
   await seed(ids.admin, "admin", "admin", 1, [])
   await seed(ids.admin2, "admin2", "admin", 1, [])
-  await seed(ids.petugas, "petugas", "petugas", 1, ["calculator", "vehicle_lookup.d1"])
+  await seed(ids.petugas, "petugas", "petugas", 1, ["calculator"])
+  // Baris legacy (DB belum menerapkan 0004): dibaca sebagai vehicle_lookup.api.
+  await db
+    .prepare(`INSERT INTO user_permissions (user_id, module_key) VALUES (?, 'vehicle_lookup.d1')`)
+    .bind(ids.petugas)
+    .run()
   await seed(ids.inactive, "nonaktif", "petugas", 0, ["calculator"])
 
   const sessionCount = async (userId: string) =>
@@ -535,27 +665,27 @@ try {
     }
     const me = await json<AuthMeResponse>(await api("GET", "/api/auth/me", { token: petugasToken }))
     assert.equal(me.user.role, "petugas")
-    assert.deepEqual(me.user.permissions, ["calculator", "vehicle_lookup.d1"])
-    pass("Petugas → 403 FORBIDDEN pada seluruh endpoint admin; /me memuat permission tersimpan")
+    assert.deepEqual(me.user.permissions, ["calculator", "vehicle_lookup.api"])
+    pass("Petugas → 403 FORBIDDEN pada seluruh endpoint admin; /me memetakan legacy vehicle_lookup.d1 → api")
   }
 
-  // --- NJKB permission via full chain ----------------------------------------
+  // --- NJKB permission via full chain (API-only) ----------------------------
   {
-    const d1 = await api("GET", "/api/njkb/DH2506KA?source=d1", { token: petugasToken })
-    assert.equal(d1.status, 200)
-    assert.equal(d1.headers.get("Cache-Control"), "private, no-store")
-    const d1Json = await json(d1)
-    assert.equal(d1Json.source, "d1")
-    // D1 nyata dengan migration 0002: kolom warna_plat NULL → warnaPlat null.
-    assert.equal(d1Json.warnaPlat, null)
-    for (const source of ["api", "d1_then_api"]) {
-      const denied = await api("GET", `/api/njkb/DH2506KA?source=${source}`, { token: petugasToken })
-      assert.equal(denied.status, 403)
-      assert.equal((await json(denied)).code, "FORBIDDEN")
+    for (const source of [null, "d1", "api", "d1_then_api", "api_then_d1"]) {
+      const query = source === null ? "" : `?source=${source}`
+      const before = vehicleApiCalls
+      const response = await api("GET", `/api/njkb/DH2506KA${query}`, { token: petugasToken })
+      assert.equal(response.status, 200, `source=${source}`)
+      assert.equal(response.headers.get("Cache-Control"), "private, no-store")
+      const body = await json(response)
+      assert.equal(body.source, "api")
+      assert.equal(body.nama, "API OWNER", "bukan data vehicle_njkb D1")
+      assert.equal(vehicleApiCalls, before + 1)
     }
-    const adminD1 = await api("GET", "/api/njkb/DH2506KA?source=d1", { token: adminToken })
-    assert.equal(adminD1.status, 200)
-    pass("NJKB via middleware: petugas d1 diizinkan, api/d1_then_api 403; admin diizinkan")
+    const adminLookup = await api("GET", "/api/njkb/DH2506KA?source=d1", { token: adminToken })
+    assert.equal(adminLookup.status, 200)
+    assert.equal((await json(adminLookup)).source, "api")
+    pass("NJKB via middleware: legacy d1 petugas → API (semua ?source), tanpa D1; admin diizinkan")
   }
 
   // --- Admin list/create ---------------------------------------------------
@@ -611,16 +741,29 @@ try {
   {
     const put = await api("PUT", `/api/admin/users/${ids.petugas}/permissions`, {
       token: adminToken,
-      body: { permissions: ["calculator", "vehicle_lookup.api", "vehicle_lookup.d1"] },
+      body: { permissions: ["vehicle_lookup.api", "calculator"] },
     })
     assert.equal(put.status, 200)
     assert.deepEqual((await json<AdminUserResponse>(put)).user.permissions, [
       "calculator",
-      "vehicle_lookup.d1",
       "vehicle_lookup.api",
     ])
+    const storedLegacy = await db
+      .prepare(`SELECT COUNT(*) AS n FROM user_permissions WHERE user_id = ? AND module_key = 'vehicle_lookup.d1'`)
+      .bind(ids.petugas)
+      .first<{ n: number }>()
+    assert.equal(storedLegacy?.n, 0, "PUT mengganti baris legacy dengan kunci baru")
     const both = await api("GET", "/api/njkb/DH2506KA?source=d1_then_api", { token: petugasToken })
     assert.equal(both.status, 200, "permission baru berlaku tanpa login ulang")
+
+    // Kunci lama tidak dapat diberikan lagi.
+    for (const legacy of ["vehicle_lookup.d1", "vehicle_source.settings"]) {
+      const rejected = await api("PUT", `/api/admin/users/${ids.petugas}/permissions`, {
+        token: adminToken,
+        body: { permissions: ["calculator", legacy] },
+      })
+      assert.equal(rejected.status, 400, legacy)
+    }
 
     // Migration 0003: CHECK user_permissions menerima 'fees.bbn_mutasi'.
     const bbn = await api("PUT", `/api/admin/users/${ids.petugas}/permissions`, {
@@ -631,9 +774,12 @@ try {
     assert.deepEqual((await json<AdminUserResponse>(bbn)).user.permissions, ["calculator", "fees.bbn_mutasi"])
     const bbnMe = await json<AuthMeResponse>(await api("GET", "/api/auth/me", { token: petugasToken }))
     assert.deepEqual(bbnMe.user.permissions, ["calculator", "fees.bbn_mutasi"])
+    const noApi = await api("GET", "/api/njkb/DH2506KA?source=d1", { token: petugasToken })
+    assert.equal(noApi.status, 403, "tanpa vehicle_lookup.api → 403 apa pun ?source")
+    assert.equal((await json(noApi)).code, "FORBIDDEN")
     const restore = await api("PUT", `/api/admin/users/${ids.petugas}/permissions`, {
       token: adminToken,
-      body: { permissions: ["calculator", "vehicle_lookup.api", "vehicle_lookup.d1"] },
+      body: { permissions: ["calculator", "vehicle_lookup.api"] },
     })
     assert.equal(restore.status, 200)
 
@@ -930,6 +1076,7 @@ try {
 } finally {
   console.info = silenced.info
   console.warn = silenced.warn
+  globalThis.fetch = originalGlobalFetch
   await mf.dispose()
 }
 

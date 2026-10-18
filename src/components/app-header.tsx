@@ -109,7 +109,7 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
           />
           <div className="flex shrink-0 items-center gap-1.5">
             <PwaInstallButton />
-            {view === "calculator" && <VehicleDataSourceSettings />}
+            {view === "calculator" && <VehicleDataSourceSettings compact />}
             {isAdmin && (
               <LogoutButton
                 loading={loggingOut}

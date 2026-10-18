@@ -4,7 +4,6 @@ import { id as idLocale } from "date-fns/locale";
 import {
   CheckCircle2,
   CircleAlert,
-  Database,
   Globe2,
   Loader2,
   SearchX,
@@ -14,6 +13,7 @@ import { formatRupiah } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   getVehicleSourceLabel,
+  VEHICLE_DATA_SOURCE_DESCRIPTION,
   VEHICLE_NOT_FOUND_MESSAGE,
   VEHICLE_SOURCE_ERROR_MESSAGE,
   type VehicleLookupSource,
@@ -160,6 +160,34 @@ function Fact({
 
 const EMPTY_VALUE = <span className="text-muted-foreground">—</span>;
 
+/**
+ * Waktu sinkronisasi dataset; hanya ditampilkan bila ISO valid dan masuk akal
+ * (tidak di masa depan lebih dari 1 hari, tidak sebelum 2000).
+ */
+function formatSinkronisasi(iso: string | null | undefined): string | null {
+  if (typeof iso !== "string" || !iso.trim()) return null;
+  const date = parseISO(iso);
+  if (!isValid(date)) return null;
+  const time = date.getTime();
+  if (time < Date.UTC(2000, 0, 1) || time > Date.now() + 86_400_000) return null;
+  const hasTime = /T\d{2}:\d{2}/.test(iso);
+  return format(date, hasTime ? "d MMM yyyy, HH:mm" : "d MMM yyyy", {
+    locale: idLocale,
+  });
+}
+
+/**
+ * Rentang kolom sel tambahan agar bento selalu penuh:
+ * 2 kolom — sel ganjil terakhir melebar; 4 kolom — 1:4, 2:2+2, 3:2+1+1, 4:1×4.
+ */
+function extraFactSpan(index: number, count: number): string {
+  const base = count % 2 === 1 && index === count - 1 ? "col-span-2" : "col-span-1";
+  let wide = "@xl:col-span-1";
+  if (count === 1) wide = "@xl:col-span-4";
+  else if (count === 2 || (count === 3 && index === 0)) wide = "@xl:col-span-2";
+  return cn(base, wide);
+}
+
 export function NopolLookupMessage({
   status,
   vehicleData,
@@ -190,13 +218,77 @@ export function NopolLookupMessage({
   }
 
   if (status === "found" && vehicleData) {
-    const source = lookupSource ?? vehicleData.source ?? null;
-    const sourceLabel = getVehicleSourceLabel(source);
-    const SourceIcon = source === "api" ? Globe2 : Database;
+    // Hanya satu sumber aktif; label selalu "API Data Kendaraan".
+    const sourceLabel =
+      getVehicleSourceLabel(lookupSource ?? vehicleData.source ?? "api");
     const njkbMissing = vehicleData.njkb <= 0;
     const pajak = formatTanggal(vehicleData.jatuhTempoPajak);
     const stnk = formatTanggal(vehicleData.jatuhTempoStnk);
     const nama = vehicleData.nama ?? "Nama pemilik tidak tersedia";
+    const njub =
+      typeof vehicleData.njub === "number" &&
+      Number.isFinite(vehicleData.njub) &&
+      vehicleData.njub > 0
+        ? vehicleData.njub
+        : null;
+    const bobot =
+      typeof vehicleData.bobot === "number" &&
+      Number.isFinite(vehicleData.bobot) &&
+      vehicleData.bobot > 0
+        ? vehicleData.bobot
+        : null;
+    const originUpt = vehicleData.originUpt?.trim() || null;
+    const syncedAt = formatSinkronisasi(vehicleData.syncedAt);
+
+    // Sel tambahan opsional; rentang kolom dihitung agar grid selalu penuh.
+    const extraFacts: { key: string; label: string; content: ReactNode; tone?: string }[] = [];
+    if (njub !== null) {
+      extraFacts.push({
+        key: "njub",
+        label: "NJUB",
+        content: (
+          <span className="min-w-0">
+            <span className="numeric block truncate font-semibold">
+              {formatRupiah(njub)}
+            </span>
+            <span className="block text-xs font-normal text-muted-foreground">
+              Ditambahkan ke dasar pengenaan.
+            </span>
+          </span>
+        ),
+        tone: "bg-[color-mix(in_oklch,var(--primary)_6%,var(--card))]",
+      });
+    }
+    if (bobot !== null) {
+      extraFacts.push({
+        key: "bobot",
+        label: "Bobot",
+        content: (
+          <span className="numeric block truncate">
+            {bobot.toLocaleString("id-ID")}
+          </span>
+        ),
+      });
+    }
+    if (originUpt) {
+      extraFacts.push({
+        key: "origin",
+        label: "UPT asal",
+        content: (
+          <span className="block min-w-0 truncate" title={originUpt}>
+            {originUpt}
+          </span>
+        ),
+      });
+    }
+    if (syncedAt) {
+      extraFacts.push({
+        key: "synced",
+        label: "Sinkronisasi data",
+        content: <span className="numeric block truncate">{syncedAt}</span>,
+      });
+    }
+    const extraCount = extraFacts.length;
 
     return (
       <div className="animate-fade-up @container flex min-w-0 flex-col gap-2.5">
@@ -220,17 +312,13 @@ export function NopolLookupMessage({
             </span>
           </Fact>
           <Fact label="Sumber data">
-            {sourceLabel ? (
-              <span className="flex min-w-0 items-start gap-1.5">
-                <SourceIcon
-                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <span className="min-w-0 break-words">{sourceLabel}</span>
-              </span>
-            ) : (
-              EMPTY_VALUE
-            )}
+            <span className="flex min-w-0 items-start gap-1.5">
+              <Globe2
+                className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="min-w-0 break-words">{sourceLabel}</span>
+            </span>
           </Fact>
           <Fact
             label="NJKB"
@@ -266,7 +354,20 @@ export function NopolLookupMessage({
           <Fact label="Jatuh tempo STNK">
             {stnk ? <span className="numeric">{stnk}</span> : EMPTY_VALUE}
           </Fact>
+          {extraFacts.map((fact, index) => (
+            <Fact
+              key={fact.key}
+              label={fact.label}
+              className={cn(fact.tone, extraFactSpan(index, extraCount))}
+            >
+              {fact.content}
+            </Fact>
+          ))}
         </dl>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Data berupa salinan tersinkron dari {VEHICLE_DATA_SOURCE_DESCRIPTION},
+          bukan data langsung. Periksa kembali dengan dokumen kendaraan.
+        </p>
       </div>
     );
   }

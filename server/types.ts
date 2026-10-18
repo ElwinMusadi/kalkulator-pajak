@@ -6,10 +6,19 @@ import type { AuthUser } from "../src/types/auth.ts"
 
 export interface Env {
   DB: D1Database
+  /** API Data Kendaraan pusat (diutamakan). Alias NJKB_* lama tetap dibaca bila kosong. */
+  VEHICLE_API_BASE_URL?: string
+  VEHICLE_ACCESS_CLIENT_ID?: string
+  VEHICLE_ACCESS_CLIENT_SECRET?: string
+  VEHICLE_API_TIMEOUT_MS?: string
+  /** @deprecated alias kompatibilitas; gunakan VEHICLE_*. */
   NJKB_API_BASE_URL?: string
   NJKB_ACCESS_CLIENT_ID?: string
   NJKB_ACCESS_CLIENT_SECRET?: string
   NJKB_API_TIMEOUT_MS?: string
+  /** Fallback terakhir credential Access (mis. .dev.vars lokal); bila alias VEHICLE_* dan NJKB_* tidak tersedia. */
+  CF_ACCESS_CLIENT_ID?: string
+  CF_ACCESS_CLIENT_SECRET?: string
 }
 
 export interface AuthSession {

@@ -1,6 +1,20 @@
 # AI Context Snapshot: Kalkulator Pajak Kendaraan NTT
 
-Dokumen ini berisi rangkuman teknis, arsitektur, alur data, rumus perhitungan pajak, skema basis data, dan batasan implementasi pada repositori ini per September 2026. Ditujukan sebagai acuan cepat bagi engineer AI/developer sebelum melanjutkan pengembangan atau integrasi dengan NJKB API NTT.
+Dokumen ini berisi rangkuman teknis aplikasi. Pembaruan integrasi Oktober 2026 di bawah menjadi acuan untuk perilaku aktif; snapshot September pada bagian berikutnya bersifat historis jika bertentangan.
+
+## Pembaruan integrasi — Oktober 2026
+
+- Lookup kendaraan memakai satu sumber: API Data Potensi NTT, `GET /api/v1/vehicle/:nopol` pada server API pusat. Browser tetap memanggil Pages Function `/api/njkb/:nopol` dengan sesi pengguna; kredensial Cloudflare Access tidak dikirim ke browser.
+- Backend tidak memakai tabel `vehicle_njkb` sebagai fallback. API 404 adalah hasil akhir tidak ditemukan; kegagalan API ditampilkan, bukan diganti data kendaraan lokal yang mungkin usang. Parameter `source` lama diterima hanya untuk kompatibilitas dan tidak memilih sumber lagi.
+- NJKB berasal dari `njkb.value`, bobot dari `njkb.weight`, dan **NJUB dari `potensi.njub`**. NJUB nol valid; nominal yang dikirim tetapi rusak tidak boleh diam-diam dianggap nol. Dasar pengenaan tetap `(NJKB + NJUB) × bobot`, dengan seluruh kebijakan kalkulator yang sudah berlaku.
+- Warna plat dari `registration.plate_color` (cadangan `vehicle.plate_color`), UPT asal dari `administrative.origin_upt`, waktu sinkronisasi dari `potensi.synced_at`. Dataset merupakan salinan potensi tersinkronisasi, bukan lookup BPAD real-time.
+- Data pemilik sensitif (NIK, alamat lengkap, nomor rangka/mesin) tidak diteruskan ke browser. Hanya nama dan metadata yang diperlukan kalkulator dipetakan melalui allowlist.
+- Otomatisasi gempa memakai NOPOL `EB` diikuti angka + UPT asal yang cocok tepat dengan Sikka, Ende, Nagekeo, Ngada, Manggarai, Manggarai Timur, atau Manggarai Barat. Dokumen Nodis menyebut **domisili**; UPT asal hanya petunjuk sehingga petugas tetap harus dapat mengoreksi toggle. Nama kecamatan/kelurahan/alamat tidak dipakai untuk menebak kabupaten. Wilayah tidak dikenal tetap meminta pemeriksaan manual. Perubahan manual bertahan selama pengeditan transaksi; lookup NOPOL baru mengevaluasi kembali.
+- Izin lookup aktif adalah `vehicle_lookup.api`; pilihan sumber dan izin D1/settings lama tidak lagi ditawarkan. Migration `0004` memindahkan izin lookup D1 ke API tanpa memberikan izin kalkulator baru. User, sesi, dan hak akses lain dipertahankan.
+- Binding D1 aplikasi **tetap diperlukan** untuk autentikasi, sesi, hak akses, dan audit. Tabel kendaraan lama tidak dihapus; seed kendaraan lokal bukan bagian alur lookup aktif.
+- Aplikasi wajib online. Respons `/api/*` memakai `no-store`; service worker tidak menyimpan lookup kendaraan. PWA menggunakan auto-update dan menghapus cache kendaraan lama.
+- Migration `0004` aman dijalankan ulang, tetapi menghapus pembedaan izin D1/API serta izin Settings lama. **Sebelum production, cadangkan `user_permissions` atau ekspor D1 secara aman.** Jika rollback ke kode lama diperlukan, mengembalikan kode saja tidak mengembalikan izin lama; pulihkan izin dari cadangan yang sesuai, bukan memberi akses baru ke semua user. Hindari menerapkan 0004 sebelum masih diperlukannya kode lama yang mewajibkan izin gabungan D1+API.
+- Perubahan kode/migration lokal tidak berarti sudah di-deploy atau diterapkan di production. Periksa Git dan `d1_migrations` untuk status aktual.
 
 ---
 

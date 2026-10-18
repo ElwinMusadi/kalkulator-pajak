@@ -11,8 +11,18 @@ interface FacilityToggleProps {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   icon: ReactNode;
+  /** Keterangan kontekstual di bawah deskripsi (mis. asal pengisian otomatis). */
+  note?: ReactNode;
+  /** "auto" = terisi otomatis, "warning" = perlu diperiksa manual. */
+  noteTone?: "auto" | "warning" | "neutral";
   className?: string;
 }
+
+const NOTE_TONE = {
+  auto: "text-success",
+  warning: "text-warning",
+  neutral: "text-muted-foreground",
+} as const;
 
 /**
  * Kartu fasilitas yang dapat dipilih. Seluruh kartu dapat diklik melalui
@@ -27,9 +37,12 @@ export function FacilityToggle({
   checked,
   onCheckedChange,
   icon,
+  note,
+  noteTone = "neutral",
   className,
 }: FacilityToggleProps) {
   const descriptionId = `${id}-description`;
+  const noteId = `${id}-note`;
 
   return (
     <div
@@ -58,7 +71,7 @@ export function FacilityToggle({
           id={id}
           checked={checked}
           onCheckedChange={onCheckedChange}
-          aria-describedby={descriptionId}
+          aria-describedby={note ? `${descriptionId} ${noteId}` : descriptionId}
           className="relative z-10 mt-0.5"
         />
       </div>
@@ -75,6 +88,17 @@ export function FacilityToggle({
         >
           {description}
         </p>
+        {note && (
+          <p
+            id={noteId}
+            className={cn(
+              "text-xs font-medium leading-relaxed",
+              NOTE_TONE[noteTone],
+            )}
+          >
+            {note}
+          </p>
+        )}
       </div>
       {impact && (
         <p

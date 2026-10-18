@@ -42,7 +42,7 @@ export const WARNA_PLAT_LABEL: Record<WarnaPlat, string> = {
   merah: "Merah",
 }
 
-/** Default bila sumber data tidak menyediakan warna plat (mis. data D1). */
+/** Default bila sumber data tidak menyediakan warna plat; petugas dapat mengoreksi. */
 export const DEFAULT_WARNA_PLAT: WarnaPlat = "putih"
 
 /** Tarif PKB plat merah (kendaraan dinas), berlaku untuk seluruh periode. */
@@ -105,19 +105,22 @@ export interface VehicleData {
    * frontend memakai DEFAULT_WARNA_PLAT dan user dapat mengubah manual.
    */
   warnaPlat?: WarnaPlat | null
+  /** Label UPT asal dari Data Potensi, bukan alamat lengkap pemilik. */
+  originUpt?: string | null
+  /** Waktu sinkronisasi dataset pusat (ISO), null bila tidak tersedia. */
+  syncedAt?: string | null
   source?: "d1" | "api"
   njkbStatus?: "matched" | "not_found" | "reference_unavailable" | "conflict" | "ambiguous"
 }
 
 /**
- * Mode sumber data kendaraan.
- * - api_then_d1 (default): NJKB API dahulu, fallback D1 bila tidak ditemukan/error.
- * - d1_then_api: D1 dahulu, fallback NJKB API.
+ * Mode kompatibilitas sumber data. Lookup produksi selalu memakai API Data
+ * Kendaraan; nilai lama dipertahankan untuk adapter/test historis dan klien lama.
  */
 export type VehicleDataSourceMode = "d1" | "api" | "d1_then_api" | "api_then_d1"
 
-/** Mode default untuk frontend dan endpoint bila `source` tidak dikirim. */
-export const DEFAULT_VEHICLE_DATA_SOURCE_MODE: VehicleDataSourceMode = "api_then_d1"
+/** Sumber aktif tunggal. Mode lama dipertahankan sebagai tipe kompatibilitas. */
+export const DEFAULT_VEHICLE_DATA_SOURCE_MODE: VehicleDataSourceMode = "api"
 
 export const VEHICLE_DATA_SOURCE_MODES: readonly VehicleDataSourceMode[] = [
   "d1",

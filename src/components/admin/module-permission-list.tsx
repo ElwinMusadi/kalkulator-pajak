@@ -31,8 +31,7 @@ export function ModulePermissionList({
   const hasOtherModules = MODULE_KEYS.some(
     (key) => key !== "calculator" && selected.has(key),
   )
-  const hasD1 = selected.has("vehicle_lookup.d1")
-  const hasApi = selected.has("vehicle_lookup.api")
+  const hasLookup = selected.has("vehicle_lookup.api")
 
   return (
     <div className="flex flex-col gap-3">
@@ -72,14 +71,12 @@ export function ModulePermissionList({
         <Info className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <div className="flex flex-col gap-1">
           <p>
-            Mode default <span className="font-medium">NJKB API + Database D1</span>{" "}
-            (dan mode gabungan lainnya) hanya tersedia bila kedua izin pencarian Nopol
-            diaktifkan.
-            {hasD1 !== hasApi && (
+            Pencarian Nopol memakai satu izin dan satu sumber:{" "}
+            <span className="font-medium">API Data Kendaraan</span>.
+            {!hasLookup && (
               <span className="text-muted-foreground">
                 {" "}
-                Saat ini Petugas hanya dapat memakai{" "}
-                {hasD1 ? "Database D1" : "NJKB API"}.
+                Tanpa izin ini, Petugas mengisi data kendaraan secara manual.
               </span>
             )}
           </p>

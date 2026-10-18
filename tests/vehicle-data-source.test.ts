@@ -6,7 +6,11 @@ import {
   mapApiResponseToVehicleData,
   normalizeNopol,
   parseDecimalRupiahToInteger,
+  parseNonNegativeDecimalRupiah,
   parseOfficialWeight,
+  parseOptionalNjub,
+  parseSyncedAt,
+  sanitizeOriginUpt,
   parseRetryAfterSeconds,
   discardResponseBody,
   isValidNjkbBaseUrl,
@@ -88,6 +92,53 @@ assert.equal(normalizeNopol("dh-0001 xx"), "DH0001XX")
 assert.equal(parseDecimalRupiahToInteger("150000000.00"), 150_000_000)
 assert.equal(parseDecimalRupiahToInteger("150000000.50"), null)
 assert.equal(parseDecimalRupiahToInteger(150000000), null)
+assert.equal(parseDecimalRupiahToInteger("0.00"), null, "NJKB matched wajib positif")
+// NJUB: non-negatif, string desimal Rupiah utuh; tidak ada → 0; ada tetapi invalid → null (fail closed).
+assert.equal(parseNonNegativeDecimalRupiah("35000000.00"), 35_000_000)
+assert.equal(parseNonNegativeDecimalRupiah("0.00"), 0)
+assert.equal(parseNonNegativeDecimalRupiah("0"), 0)
+for (const bad of ["-1.00", "35000000.50", "1e7", "35.000.000", "", " ", "abc", 35000000, true, {}, "99999999999999999"]) {
+  assert.equal(parseNonNegativeDecimalRupiah(bad), null, `NJUB ${JSON.stringify(bad)}`)
+}
+// Batas safe integer: MAX_SAFE_INTEGER diterima, di atasnya ditolak (tanpa pembulatan diam-diam).
+assert.equal(parseNonNegativeDecimalRupiah("9007199254740991"), 9_007_199_254_740_991)
+assert.equal(parseNonNegativeDecimalRupiah("9007199254740991.00"), 9_007_199_254_740_991)
+assert.equal(parseNonNegativeDecimalRupiah("9007199254740993"), null)
+assert.equal(parseDecimalRupiahToInteger("9007199254740991"), 9_007_199_254_740_991)
+assert.equal(parseDecimalRupiahToInteger("9007199254740993"), null)
+assert.equal(parseOptionalNjub("9007199254740993"), null)
+// potensi {} / tanpa njub / njub null → NJUB 0 (kompatibel); potensi.njub invalid → 502.
+for (const potensi of [{}, { njub: null }, { synced_at: "2026-10-17T00:00:00Z" }, null, undefined]) {
+  const res = mapApiResponseToVehicleData({ ...officialMatchedResponse, potensi }, "DH0001XX")
+  assert.equal(res.status, "found", `potensi=${JSON.stringify(potensi)}`)
+  if (res.status === "found") assert.equal(res.data.njub, 0)
+}
+{
+  const res = mapApiResponseToVehicleData(
+    { ...officialMatchedResponse, potensi: { njub: "9007199254740993" } },
+    "DH0001XX",
+  )
+  assert.ok(res.status === "error" && res.code === "NJKB_INVALID_PAYLOAD" && res.httpStatus === 502)
+}
+assert.equal(parseOptionalNjub(undefined), 0)
+assert.equal(parseOptionalNjub(null), 0)
+assert.equal(parseOptionalNjub("12500000.00"), 12_500_000)
+assert.equal(parseOptionalNjub("-5"), null)
+assert.equal(parseOptionalNjub(12_500_000), null)
+// syncedAt: ISO finite → toISOString UTC; lainnya → null.
+assert.equal(parseSyncedAt("2026-10-17T03:15:00Z"), "2026-10-17T03:15:00.000Z")
+assert.equal(parseSyncedAt("2026-10-17T03:15:00+08:00"), "2026-10-16T19:15:00.000Z")
+assert.equal(parseSyncedAt("2026-10-17 03:15:00"), "2026-10-17T03:15:00.000Z")
+assert.equal(parseSyncedAt("2026-10-17"), "2026-10-17T00:00:00.000Z")
+for (const bad of ["2026-02-30", "2026-13-01T00:00:00Z", "kemarin", "1700000000", 1700000000, null, "", "0000-00-00"]) {
+  assert.equal(parseSyncedAt(bad), null, `syncedAt ${JSON.stringify(bad)}`)
+}
+// originUpt: label aman, trim, maks 120 karakter.
+assert.equal(sanitizeOriginUpt("  UPT  Pendapatan Daerah\nWilayah Kota Kupang "), "UPT Pendapatan Daerah Wilayah Kota Kupang")
+assert.equal(sanitizeOriginUpt("UPTD Kab. Timor Tengah Selatan (SoE)"), "UPTD Kab. Timor Tengah Selatan (SoE)")
+for (const bad of ["", "   ", "x".repeat(121), "<script>alert(1)</script>", "UPT; DROP", 7, null]) {
+  assert.equal(sanitizeOriginUpt(bad), null, `originUpt ${JSON.stringify(bad)}`)
+}
 assert.equal(parseOfficialWeight("1.050000"), 1.05)
 assert.equal(parseOfficialWeight(1.05), null)
 assert.equal(parseRetryAfterSeconds("30"), 30)
@@ -815,14 +866,16 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
     message: "Terjadi kesalahan server saat membaca database D1.",
   }
 
-  // Default mode resolver kini api_then_d1.
-  assert.equal(new VehicleDataResolver().getMode(), "api_then_d1")
+  // Resolver legacy (tanpa referensi produksi) mengikuti DEFAULT bersama ("api");
+  // kasus fallback di bawah memakai mode api_then_d1 eksplisit.
+  assert.equal(new VehicleDataResolver().getMode(), "api")
+  const legacyMode = { mode: "api_then_d1" as const }
 
   // a) API found → D1 tidak disentuh.
   {
     const api = scripted("api", foundApi)
     const d1 = scripted("d1", foundD1)
-    const result = await new VehicleDataResolver({ apiSource: api.source, d1Source: d1.source }).resolve("DH2506KA")
+    const result = await new VehicleDataResolver({ ...legacyMode, apiSource: api.source, d1Source: d1.source }).resolve("DH2506KA")
     assert.equal(result.status, "found")
     if (result.status === "found") assert.equal(result.source, "api")
     assert.equal(api.state.calls, 1)
@@ -834,7 +887,7 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   for (const apiOutcome of [apiNotFound, apiTimeout]) {
     const api = scripted("api", apiOutcome)
     const d1 = scripted("d1", foundD1)
-    const result = await new VehicleDataResolver({ apiSource: api.source, d1Source: d1.source }).resolve("DH2506KA")
+    const result = await new VehicleDataResolver({ ...legacyMode, apiSource: api.source, d1Source: d1.source }).resolve("DH2506KA")
     assert.equal(result.status, "found", `apiOutcome=${apiOutcome.status}`)
     if (result.status === "found") assert.equal(result.source, "d1")
     assert.equal(api.state.calls, 1)
@@ -844,6 +897,7 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   // d) Keduanya not_found → not_found.
   {
     const result = await new VehicleDataResolver({
+      ...legacyMode,
       apiSource: scripted("api", apiNotFound).source,
       d1Source: scripted("d1", d1NotFound).source,
     }).resolve("DH2506KA")
@@ -853,6 +907,7 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   // e) API error + D1 not_found → error API dipertahankan (bukan "tidak ditemukan").
   {
     const result = await new VehicleDataResolver({
+      ...legacyMode,
       apiSource: scripted("api", apiTimeout).source,
       d1Source: scripted("d1", d1NotFound).source,
     }).resolve("DH2506KA")
@@ -866,6 +921,7 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   // f) API not_found + D1 error → error D1.
   {
     const result = await new VehicleDataResolver({
+      ...legacyMode,
       apiSource: scripted("api", apiNotFound).source,
       d1Source: scripted("d1", d1Error).source,
     }).resolve("DH2506KA")
@@ -876,7 +932,7 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   // g) API tidak dikonfigurasi → langsung D1.
   {
     const d1 = scripted("d1", foundD1)
-    const result = await new VehicleDataResolver({ d1Source: d1.source }).resolve("DH2506KA")
+    const result = await new VehicleDataResolver({ ...legacyMode, d1Source: d1.source }).resolve("DH2506KA")
     assert.equal(result.status, "found")
     if (result.status === "found") assert.equal(result.source, "d1")
   }

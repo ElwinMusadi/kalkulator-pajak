@@ -3,22 +3,22 @@
  * Server tetap menjadi otoritas; fungsi ini hanya menyesuaikan tampilan.
  */
 
-import type { ModuleKey } from "@/types/auth"
-import type { VehicleDataSourceMode } from "@/types/tax"
+// Relatif (bukan alias "@/"): modul ini juga diimpor test Node via tsx.
+import type { ModuleKey } from "../types/auth"
+import type { VehicleDataSourceMode } from "../types/tax"
 
-/** Urutan prioritas fallback bila mode tersimpan tidak diizinkan. */
-export const SOURCE_MODE_PRIORITY: readonly VehicleDataSourceMode[] = [
-  "api_then_d1",
-  "d1_then_api",
-  "api",
-  "d1",
-]
+/** Satu-satunya sumber aktif. Mode lama hanya dipertahankan sebagai tipe. */
+export const SOURCE_MODE_PRIORITY: readonly VehicleDataSourceMode[] = ["api"]
 
+/**
+ * Seluruh mode (termasuk mode lama D1/gabungan) hanya membutuhkan izin API:
+ * permintaan dari UI selalu dikirim sebagai sumber API.
+ */
 export const SOURCE_MODE_REQUIREMENTS: Record<VehicleDataSourceMode, ModuleKey[]> = {
-  d1: ["vehicle_lookup.d1"],
+  d1: ["vehicle_lookup.api"],
   api: ["vehicle_lookup.api"],
-  d1_then_api: ["vehicle_lookup.d1", "vehicle_lookup.api"],
-  api_then_d1: ["vehicle_lookup.api", "vehicle_lookup.d1"],
+  d1_then_api: ["vehicle_lookup.api"],
+  api_then_d1: ["vehicle_lookup.api"],
 }
 
 export function getAllowedSourceModes(
@@ -29,11 +29,13 @@ export function getAllowedSourceModes(
   )
 }
 
-/** Mode tersimpan bila diizinkan, selain itu mode pertama yang diizinkan. */
+/**
+ * Mode efektif selalu "api" bila diizinkan. Argumen mode tersimpan diterima
+ * demi kompatibilitas, tetapi pilihan lama tidak lagi memengaruhi hasil.
+ */
 export function resolveEffectiveSourceMode(
-  storedMode: VehicleDataSourceMode,
+  _storedMode: VehicleDataSourceMode | null | undefined,
   allowedModes: readonly VehicleDataSourceMode[],
 ): VehicleDataSourceMode | null {
-  if (allowedModes.includes(storedMode)) return storedMode
-  return allowedModes[0] ?? null
+  return allowedModes.includes("api") ? "api" : null
 }

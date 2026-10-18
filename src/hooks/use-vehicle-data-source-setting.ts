@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from "react"
 // Relatif (bukan alias "@/"): modul ini juga diimpor test Node via tsx.
 import {
   DEFAULT_VEHICLE_DATA_SOURCE_MODE,
@@ -6,17 +5,18 @@ import {
   type VehicleDataSourceMode,
 } from "../types/tax"
 
+/**
+ * Kompatibilitas: pemilihan sumber data sudah dihapus. Pencarian Nopol selalu
+ * memakai API Data Kendaraan. Ekspor dipertahankan agar import lama tetap
+ * valid; pilihan tersimpan di perangkat (key v1/v2) diabaikan sepenuhnya.
+ */
 export { DEFAULT_VEHICLE_DATA_SOURCE_MODE }
 
-/**
- * Versi v2: default berubah menjadi api_then_d1. Key baru membuat pilihan lama
- * (yang tersimpan saat default masih D1) diabaikan sekali, sehingga semua
- * perangkat memakai default baru; pilihan berikutnya tersimpan seperti biasa.
- */
+/** Key preferensi lama; hanya disimpan untuk referensi/test, tidak dibaca. */
 export const VEHICLE_DATA_SOURCE_STORAGE_KEY =
   "kalkulator-pajak.vehicle-data-source.v2"
 
-const SOURCE_CHANGED_EVENT = "vehicle-data-source-changed"
+export const ACTIVE_VEHICLE_DATA_SOURCE_MODE = "api" as const satisfies VehicleDataSourceMode
 
 export function isVehicleDataSourceMode(
   value: unknown,
@@ -27,70 +27,14 @@ export function isVehicleDataSourceMode(
   )
 }
 
+/** Selalu "api"; storage sengaja tidak dibaca. */
 export function readVehicleDataSourceMode(
-  storage?: Pick<Storage, "getItem">,
+  _storage?: Pick<Storage, "getItem">,
 ): VehicleDataSourceMode {
-  if (!storage) return DEFAULT_VEHICLE_DATA_SOURCE_MODE
-
-  try {
-    const stored = storage.getItem(VEHICLE_DATA_SOURCE_STORAGE_KEY)
-    return isVehicleDataSourceMode(stored)
-      ? stored
-      : DEFAULT_VEHICLE_DATA_SOURCE_MODE
-  } catch {
-    return DEFAULT_VEHICLE_DATA_SOURCE_MODE
-  }
+  return ACTIVE_VEHICLE_DATA_SOURCE_MODE
 }
 
-export function writeVehicleDataSourceMode(
-  mode: VehicleDataSourceMode,
-  storage?: Pick<Storage, "setItem">,
-): void {
-  if (!storage) return
-  storage.setItem(VEHICLE_DATA_SOURCE_STORAGE_KEY, mode)
-}
-
-function getBrowserSnapshot(): VehicleDataSourceMode {
-  return readVehicleDataSourceMode(window.localStorage)
-}
-
-function getServerSnapshot(): VehicleDataSourceMode {
-  return DEFAULT_VEHICLE_DATA_SOURCE_MODE
-}
-
-function subscribe(callback: () => void): () => void {
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === VEHICLE_DATA_SOURCE_STORAGE_KEY) callback()
-  }
-  const onSourceChanged = () => callback()
-
-  window.addEventListener("storage", onStorage)
-  window.addEventListener(SOURCE_CHANGED_EVENT, onSourceChanged)
-
-  return () => {
-    window.removeEventListener("storage", onStorage)
-    window.removeEventListener(SOURCE_CHANGED_EVENT, onSourceChanged)
-  }
-}
-
-export function setVehicleDataSourceMode(mode: VehicleDataSourceMode): void {
-  writeVehicleDataSourceMode(mode, window.localStorage)
-  window.dispatchEvent(new Event(SOURCE_CHANGED_EVENT))
-}
-
-/**
- * Setting global sumber data kendaraan yang persisten di localStorage.
- * useSyncExternalStore membuat seluruh consumer dalam tab yang sama langsung sinkron.
- */
-export function useVehicleDataSourceSetting() {
-  const mode = useSyncExternalStore(
-    subscribe,
-    getBrowserSnapshot,
-    getServerSnapshot,
-  )
-
-  return {
-    mode,
-    setMode: setVehicleDataSourceMode,
-  }
+/** Hook kompatibilitas tanpa setter: mode selalu "api". */
+export function useVehicleDataSourceSetting(): { mode: VehicleDataSourceMode } {
+  return { mode: ACTIVE_VEHICLE_DATA_SOURCE_MODE }
 }

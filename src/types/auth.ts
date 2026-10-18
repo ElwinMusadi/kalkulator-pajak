@@ -12,9 +12,7 @@ export type UserRole = (typeof USER_ROLES)[number]
  */
 export const MODULE_KEYS = [
   "calculator",
-  "vehicle_lookup.d1",
   "vehicle_lookup.api",
-  "vehicle_source.settings",
   "facility.tembak_ru",
   "fees.bbn_mutasi",
 ] as const
@@ -25,17 +23,9 @@ export const MODULE_LABELS: Record<ModuleKey, { label: string; description: stri
     label: "Kalkulator Pajak",
     description: "Membuka dan menggunakan kalkulator penetapan pajak.",
   },
-  "vehicle_lookup.d1": {
-    label: "Pencarian Nopol · Database D1",
-    description: "Mencari data kendaraan dari Database D1.",
-  },
   "vehicle_lookup.api": {
-    label: "Pencarian Nopol · NJKB API",
-    description: "Mencari data kendaraan melalui NJKB API NTT.",
-  },
-  "vehicle_source.settings": {
-    label: "Pengaturan Sumber Data",
-    description: "Memilih sumber data kendaraan di antara sumber yang diizinkan.",
+    label: "Pencarian Nopol · Data Kendaraan",
+    description: "Mencari data kendaraan dari API Data Potensi seluruh UPT di NTT.",
   },
   "facility.tembak_ru": {
     label: "Biaya Tembak RU/STNK",

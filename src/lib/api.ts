@@ -3,23 +3,23 @@
  */
 
 // Relatif (bukan alias "@/"): modul ini juga diimpor test Node via tsx.
-import {
-  DEFAULT_VEHICLE_DATA_SOURCE_MODE,
-  type VehicleData,
-  type VehicleDataSourceMode,
-} from "../types/tax"
+import type { VehicleData, VehicleDataSourceMode } from "../types/tax"
 import { API_BASE_URL, notifyUnauthenticated, readApiError } from "./http"
 
+/**
+ * Lookup kendaraan via API Data Kendaraan. Argumen `source` dipertahankan
+ * demi kompatibilitas pemanggil lama, tetapi request selalu `source=api`.
+ */
 export async function fetchVehicleByNopol(
   nopol: string,
-  source: VehicleDataSourceMode = DEFAULT_VEHICLE_DATA_SOURCE_MODE,
+  _source?: VehicleDataSourceMode | null,
   signal?: AbortSignal
 ): Promise<VehicleData | null> {
   const normalized = nopol.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9]/g, "")
 
   if (!normalized || normalized.length < 4) return null
 
-  const query = new URLSearchParams({ source })
+  const query = new URLSearchParams({ source: "api" })
   const res = await fetch(
     `${API_BASE_URL}/api/njkb/${encodeURIComponent(normalized)}?${query.toString()}`,
     {

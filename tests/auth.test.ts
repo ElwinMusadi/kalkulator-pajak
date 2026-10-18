@@ -18,7 +18,9 @@ import { deviceLabelFromUserAgent } from "../server/auth/device.ts"
 import {
   effectivePermissions,
   hasModules,
+  requireApiLookupModules,
   requiredModulesForVehicleSource,
+  VEHICLE_LOOKUP_REQUIRED_MODULES,
 } from "../server/auth/permissions.ts"
 import {
   isValidId,
@@ -146,10 +148,13 @@ console.log("Menjalankan auth unit tests...\n")
   assert.equal(validatePassword("1234567").ok, false)
   assert.equal(validatePassword("12345678").ok, true)
   assert.equal(validatePassword("x".repeat(129)).ok, false)
-  assert.deepEqual(validatePermissions(["vehicle_lookup.d1", "calculator"]), {
+  assert.deepEqual(validatePermissions(["vehicle_lookup.api", "calculator"]), {
     ok: true,
-    value: ["calculator", "vehicle_lookup.d1"],
+    value: ["calculator", "vehicle_lookup.api"],
   })
+  // Kunci lama tidak dapat lagi diberikan melalui API admin.
+  assert.equal(validatePermissions(["vehicle_lookup.d1"]).ok, false)
+  assert.equal(validatePermissions(["vehicle_source.settings"]).ok, false)
   assert.equal(validatePermissions(["calculator", "calculator"]).ok, false)
   assert.equal(validatePermissions(["admin"]).ok, false)
   assert.equal(validatePermissions("calculator").ok, false)
@@ -203,17 +208,24 @@ console.log("Menjalankan auth unit tests...\n")
     "calculator",
     "facility.tembak_ru",
   ])
-  assert.deepEqual(requiredModulesForVehicleSource("d1"), ["calculator", "vehicle_lookup.d1"])
-  assert.deepEqual(requiredModulesForVehicleSource("api"), ["calculator", "vehicle_lookup.api"])
-  assert.deepEqual(requiredModulesForVehicleSource("d1_then_api"), [
+  // Kompatibilitas sebelum migration 0004: d1 lama → api; settings dibuang; calculator tidak ditambah.
+  assert.deepEqual(effectivePermissions("petugas", ["vehicle_lookup.d1"]), ["vehicle_lookup.api"])
+  assert.deepEqual(effectivePermissions("petugas", ["calculator", "vehicle_lookup.d1", "vehicle_lookup.api"]), [
     "calculator",
-    "vehicle_lookup.d1",
     "vehicle_lookup.api",
   ])
+  assert.deepEqual(effectivePermissions("petugas", ["vehicle_source.settings"]), [])
+  assert.deepEqual(effectivePermissions("petugas", ["calculator", "vehicle_source.settings"]), ["calculator"])
+  for (const mode of ["d1", "api", "d1_then_api", "api_then_d1", undefined, "garbage"] as const) {
+    assert.deepEqual(requiredModulesForVehicleSource(mode), ["calculator", "vehicle_lookup.api"], `mode=${mode}`)
+  }
+  assert.deepEqual(requireApiLookupModules(), ["calculator", "vehicle_lookup.api"])
+  assert.deepEqual([...VEHICLE_LOOKUP_REQUIRED_MODULES], ["calculator", "vehicle_lookup.api"])
+  assert.deepEqual([...MODULE_KEYS], ["calculator", "vehicle_lookup.api", "facility.tembak_ru", "fees.bbn_mutasi"])
   const petugas = { id: "x", username: "p", name: "P", role: "petugas" as const, permissions: ["calculator" as const] }
   assert.equal(hasModules(petugas, ["calculator"]), true)
-  assert.equal(hasModules(petugas, ["calculator", "vehicle_lookup.d1"]), false)
-  pass("Permission efektif admin/petugas dan modul per sumber NJKB")
+  assert.equal(hasModules(petugas, ["calculator", "vehicle_lookup.api"]), false)
+  pass("Permission efektif admin/petugas, alias legacy d1→api, lookup selalu calculator+api")
 }
 
 // HTTP helpers
