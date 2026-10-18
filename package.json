@@ -14,6 +14,7 @@
     "test:tax": "tsx tests/tax-calculator.regression.ts",
     "test:fees": "tsx tests/biaya-layanan-input.test.ts",
     "test:gempa": "tsx tests/gempa-eligibility.test.ts",
+    "test:typography": "tsx tests/typography.test.ts",
     "test:vehicle": "tsx tests/vehicle-data-source.test.ts && tsx tests/njkb-endpoint.integration.test.ts && tsx tests/vehicle-data-source-settings.test.ts && tsx tests/vehicle-api-client.test.ts && tsx tests/vehicle-lookup-metadata.test.ts",
     "typecheck": "tsc -b",
     "db:migrate:local": "wrangler d1 migrations apply kalkulator-pajak-db --local",

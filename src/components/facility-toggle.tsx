@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 interface FacilityToggleProps {
   id: string;
   title: string;
-  description: string;
+  description: ReactNode;
   /** Ringkasan dampak (mis. "Diskon tunggakan 75%"); kosong = tidak ditampilkan. */
   impact: string;
   checked: boolean;

@@ -23,7 +23,7 @@ export function MobileResultBar({ result }: { result: TaxCalculationResult }) {
             <p className="eyebrow">Total bayar</p>
             <p
               key={result.total}
-              className="animate-value-settle font-plate mt-0.5 whitespace-nowrap text-2xl font-bold leading-none tracking-tight tabular-nums text-navy-900 sm:text-3xl"
+              className="animate-value-settle monetary mt-0.5 whitespace-nowrap text-[clamp(1.125rem,6vw,1.5rem)] font-bold leading-none tracking-tight text-navy-900 sm:text-3xl"
             >
               {formatRupiah(result.total)}
             </p>

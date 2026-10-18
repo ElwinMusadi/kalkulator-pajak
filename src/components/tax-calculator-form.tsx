@@ -177,7 +177,7 @@ function BiayaLayananField({
       <div className="relative mt-auto min-w-0">
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground"
+          className="monetary pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground"
         >
           Rp
         </span>
@@ -206,7 +206,7 @@ function BiayaLayananField({
           placeholder="0"
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? errorId : undefined}
-          className="numeric h-10 bg-card pl-10 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
+          className="monetary h-10 bg-card pl-10 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
         />
       </div>
       {parsed.status === "invalid" && (
@@ -618,9 +618,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
   // Chip tahap 5 hanya tampil bila ada biaya terisi: "3 biaya · Rp 530.000".
   const feesStatus =
-    biayaLayananStats.count > 0
-      ? `${biayaLayananStats.count} biaya · ${formatRupiah(biayaLayananStats.sum)}`
-      : undefined;
+    biayaLayananStats.count > 0 ? (
+      <>
+        {biayaLayananStats.count} biaya ·{" "}
+        <span className="monetary">{formatRupiah(biayaLayananStats.sum)}</span>
+      </>
+    ) : undefined;
 
   // Strip memakai tanggal form terkini, termasuk hasil koreksi manual.
   // PAJAK: tanggal lengkap; STNK: bulan + tahun pendek seperti plat fisik.
@@ -679,8 +682,10 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   spellCheck={false}
                   maxLength={12}
                   className={cn(
-                    "h-full w-full rounded-none border-0 bg-transparent px-12 py-0 text-center shadow-none",
-                    "font-plate text-3xl font-bold uppercase leading-none tracking-wide sm:text-4xl",
+                    // IBM Plex Sans lebih lebar dari font plat kondensasi: ukuran
+                    // mengikuti viewport agar 12 karakter tetap muat pada 320px.
+                    "h-full w-full rounded-none border-0 bg-transparent px-10 py-0 text-center shadow-none sm:px-12",
+                    "font-plate text-[clamp(1rem,5.2vw,1.875rem)] font-bold uppercase leading-none tracking-normal sm:text-[2rem]",
                     "focus-visible:ring-0 focus-visible:ring-offset-0",
                   )}
                 />
@@ -786,12 +791,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 min={0}
                 step={1000}
                 aria-invalid={invalidField === "njkb" || undefined}
-                className="numeric h-10 bg-card aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
+                className="monetary h-10 bg-card aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
               />
               <FieldDescription
                 className={cn(
                   "text-xs",
-                  !isNaN(njkbNumber) && njkbNumber > 0 && "numeric font-medium text-foreground",
+                  !isNaN(njkbNumber) && njkbNumber > 0 && "monetary font-medium text-foreground",
                 )}
               >
                 {!isNaN(njkbNumber) && njkbNumber > 0
@@ -811,12 +816,17 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 placeholder="0"
                 min={0}
                 step={1000}
-                className="numeric h-10 bg-card"
+                className="monetary h-10 bg-card"
               />
               <FieldDescription className="text-xs">
-                {!isNaN(njubNumber) && njubNumber > 0
-                  ? `${formatRupiah(njubNumber)} ditambahkan ke dasar pengenaan.`
-                  : "Nilai ubah bentuk, jika ada."}
+                {!isNaN(njubNumber) && njubNumber > 0 ? (
+                  <>
+                    <span className="monetary">{formatRupiah(njubNumber)}</span>{" "}
+                    ditambahkan ke dasar pengenaan.
+                  </>
+                ) : (
+                  "Nilai ubah bentuk, jika ada."
+                )}
               </FieldDescription>
             </Field>
 
@@ -980,7 +990,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               <FacilityToggle
                 id="is-tembak-ru"
                 title="Biaya Tembak RU/STNK"
-                description="Motor Rp150.000 · Mobil Rp250.000."
+                description={
+                  <>
+                    Motor <span className="monetary">Rp150.000</span> · Mobil{" "}
+                    <span className="monetary">Rp250.000</span>.
+                  </>
+                }
                 impact="Biaya tambahan"
                 checked={isTembakRu}
                 onCheckedChange={setIsTembakRu}

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Saira+Semi+Condensed:wght@600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -120,8 +120,13 @@
 }
 
 @theme inline {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-plate: "Saira Semi Condensed", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+  /* UI: font sistem Apple di perangkat Apple (-apple-system/BlinkMacSystemFont
+     hanya dikenali di sana); Windows/Android jatuh ke Plus Jakarta Sans.
+     Segoe UI/Roboto hanya cadangan bila font web gagal dimuat. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Nominal uang & nomor polisi: IBM Plex Sans di semua perangkat. */
+  --font-money: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, sans-serif;
+  --font-plate: var(--font-money);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -216,9 +221,18 @@ h6 {
   background-color: color-mix(in oklch, var(--navy-600) 22%, transparent);
 }
 
-/* Angka nominal & tanggal: figur tabular agar kolom rupiah sejajar. */
+/* Angka non-uang (tanggal, persen, bobot, nomor tahap): font UI, figur tabular. */
 .numeric {
   font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Nominal uang (biaya, total bayar): IBM Plex Sans, figur tabular.
+   Sengaja dideklarasikan setelah `.numeric` di lapisan yang sama (tanpa
+   @layer) sehingga menang bila keduanya terpasang pada satu elemen. */
+.monetary {
+  font-family: var(--font-money);
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
@@ -364,10 +378,9 @@ h6 {
   color: color-mix(in oklch, var(--plate-fg) 32%, transparent);
 }
 
-/* Strip masa berlaku di bagian bawah plat. */
+/* Strip masa berlaku di bagian bawah plat — tanggal memakai font UI. */
 .tnkb-strip {
   border-top: 1.5px solid color-mix(in oklch, var(--plate-fg) 70%, transparent);
-  font-family: var(--font-plate);
 }
 
 /* ==========================================================================

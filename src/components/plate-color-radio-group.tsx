@@ -88,7 +88,7 @@ export function PlateColorRadioGroup({
             {/* Plat mini memakai token TNKB yang sama dengan plat Nomor Polisi. */}
             <span
               data-plate={option}
-              className="tnkb-plate flex h-9 w-full min-w-0 items-center justify-center rounded-md! px-1 font-plate text-[0.8125rem] font-bold uppercase tracking-[0.1em] sm:text-sm"
+              className="tnkb-plate flex h-9 w-full min-w-0 items-center justify-center rounded-md! px-1 font-sans text-[0.8125rem] font-bold uppercase tracking-[0.1em] sm:text-sm"
             >
               <span className="truncate">{WARNA_PLAT_LABEL[option]}</span>
             </span>

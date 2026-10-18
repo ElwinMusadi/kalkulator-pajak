@@ -137,7 +137,7 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         </div>
         <p
           key={result.total}
-          className="animate-value-settle font-plate mt-1.5 whitespace-nowrap text-[clamp(2rem,9vw,2.75rem)] font-bold leading-none tracking-tight tabular-nums text-white lg:text-[2.5rem] xl:text-[2.75rem]"
+          className="animate-value-settle monetary mt-1.5 whitespace-nowrap text-[clamp(2rem,9vw,2.75rem)] font-bold leading-none tracking-tight text-white lg:text-[2.5rem] xl:text-[2.75rem]"
         >
           {formatRupiah(result.total)}
         </p>

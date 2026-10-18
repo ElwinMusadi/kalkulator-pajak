@@ -167,7 +167,7 @@ function DetailRow({ label, value, waived = false }: DetailRowData) {
       </span>
       <span
         className={cn(
-          "numeric shrink-0 text-sm font-semibold",
+          "monetary shrink-0 text-sm font-semibold",
           waived ? "text-success" : "text-foreground",
         )}
       >
@@ -242,7 +242,7 @@ export function ResultBreakdown({ result }: ResultBreakdownProps) {
                   )}
                 />
               </span>
-              <span className="numeric block truncate text-base font-bold leading-tight tracking-tight text-navy-900 sm:text-[1.0625rem]">
+              <span className="monetary block truncate text-base font-bold leading-tight tracking-tight text-navy-900 sm:text-[1.0625rem]">
                 {formatRupiah(tile.amount)}
               </span>
             </button>

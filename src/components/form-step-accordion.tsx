@@ -22,7 +22,7 @@ function StepStatusChip({
   label,
   tone,
 }: {
-  label: string;
+  label: ReactNode;
   tone: StepStatusTone;
 }) {
   return (
@@ -45,7 +45,7 @@ interface FormStepHeadingProps {
   step: string;
   title: string;
   hint: string;
-  status?: string;
+  status?: ReactNode;
   statusTone?: StepStatusTone;
   className?: string;
 }
@@ -99,7 +99,7 @@ interface FormStepAccordionProps {
   step: string;
   title: string;
   hint: string;
-  status?: string;
+  status?: ReactNode;
   statusTone?: StepStatusTone;
   children: ReactNode;
 }
