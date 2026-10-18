@@ -294,6 +294,7 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     pkbBerjalan,
     pkbDiscount,
     isMutasiMasuk,
+    isDomisiliGempa,
     pkbTunggakanPra2025,
     pkbTunggakanPost2025,
     warnaPlat,

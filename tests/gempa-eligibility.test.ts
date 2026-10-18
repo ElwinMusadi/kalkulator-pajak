@@ -47,6 +47,8 @@ const input: TaxCalculatorInput = {
 const auto = resolveGempaEligibility({ nopol: "EB1234AB", originUpt: "Sikka" })
 const aktif = calculateTax({ ...input, isDomisiliGempa: auto.status === "eligible" })
 const manualOff = calculateTax(input)
+assert.equal(aktif.isDomisiliGempa, true)
+assert.equal(manualOff.isDomisiliGempa, false)
 assert.equal(aktif.pkbTunggakanPost2025, manualOff.pkbTunggakanPost2025 / 2)
 assert.equal(aktif.pkbBerjalan, manualOff.pkbBerjalan)
 assert.equal(aktif.swdklljBerjalan, manualOff.swdklljBerjalan)
@@ -54,5 +56,5 @@ assert.ok(aktif.total < manualOff.total)
 // NJUB baru tidak hilang: perbandingan pajak berjalan dengan NJUB nol.
 const tanpaNjub = calculateTax({ ...input, njub: 0 })
 assert.ok(manualOff.pkbBerjalan > tanpaNjub.pkbBerjalan)
-count += 5
+count += 7
 console.log(`Gempa eligibility: PASS (${count} cases, exact kabupaten match; tidak menebak alamat/kecamatan)`)

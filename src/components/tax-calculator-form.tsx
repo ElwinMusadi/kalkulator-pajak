@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { format, parseISO } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
 import {
   ArrowLeftRight,
   Calculator,
@@ -621,10 +622,10 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       ? `${biayaLayananStats.count} biaya · ${formatRupiah(biayaLayananStats.sum)}`
       : undefined;
 
-  // Strip masa berlaku pada plat: "MM · YY" dari jatuh tempo pajak, bila ada.
-  const plateStripText = jatuhTempoPajak
-    ? format(jatuhTempoPajak, "MM · yy")
-    : "NTT";
+  // Strip masa berlaku pada plat: "MM · YY" dari jatuh tempo pajak pada form
+  // (termasuk hasil edit manual). Tanpa tanggal valid → strip default "NTT".
+  const plateDueDate =
+    jatuhTempoPajak && isValid(jatuhTempoPajak) ? jatuhTempoPajak : undefined;
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col">
@@ -688,11 +689,28 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   <NopolLookupIndicator status={lookupStatus} />
                 </span>
               </div>
-              <div
-                className="tnkb-strip mx-3 flex h-7 items-center justify-center text-xs font-semibold tracking-[0.3em]"
-                aria-hidden="true"
-              >
-                <span className="numeric">{plateStripText}</span>
+              <div className="tnkb-strip mx-3 flex h-7 min-w-0 items-center justify-center gap-2 text-xs font-semibold">
+                {plateDueDate ? (
+                  <>
+                    <span className="min-w-0 truncate text-[0.625rem] font-semibold uppercase tracking-normal opacity-75">
+                      Jatuh Tempo Pajak
+                    </span>
+                    <time
+                      dateTime={format(plateDueDate, "yyyy-MM-dd")}
+                      title={format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
+                      className="numeric shrink-0 tracking-[0.3em]"
+                    >
+                      <span aria-hidden="true">{format(plateDueDate, "MM · yy")}</span>
+                      <span className="sr-only">
+                        {format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
+                      </span>
+                    </time>
+                  </>
+                ) : (
+                  <span className="numeric tracking-[0.3em]" aria-hidden="true">
+                    NTT
+                  </span>
+                )}
               </div>
             </div>
 

@@ -38,6 +38,7 @@ const innoBase: Omit<TaxCalculatorInput, "jatuhTempoPajak" | "jatuhTempoStnk"> =
   })
   // PKB berjalan: (329e6 × 1,05) × 1,2% = 4.145.400
   assert.equal(r.pkbBerjalan, 4_145_400, "Contoh 1 - pkbBerjalan")
+  assert.equal(r.isDomisiliGempa, true, "Status gempa mengikuti hasil perhitungan")
   // PKB tunggak post-2025: 4.145.400 × 25% = 1.036.350
   assert.equal(r.pkbTunggakanPost2025, 1_036_350, "Contoh 1 - pkbPost2025")
   // PKB tunggak pra-2025: 3 thn × 1,5% × 329e6×1,05 = 15.545.250 × 25% = 3.886.312,5 → ~3.886.313
@@ -502,6 +503,19 @@ const dh3088wk: TaxCalculatorInput = {
   assert.equal(batas.biayaLayanan.cekFisik, 0)
   assert.equal(batas.total, tanpa.total + 100_000_000)
   pass("Biaya BBN & Mutasi – dijumlahkan ke total, komponen pajak tetap, nilai tidak valid diabaikan")
+}
+
+// Metadata wilayah gempa untuk badge: tampil walaupun belum ada tunggakan,
+// tetapi tidak mengesankan diskon 75% berlaku pada PKB berjalan.
+{
+  const biasa = calculateTax(dh3088wk)
+  const gempa = calculateTax({ ...dh3088wk, isDomisiliGempa: true })
+  assert.equal(gempa.isDomisiliGempa, true)
+  assert.equal(biasa.isDomisiliGempa, false)
+  assert.equal(gempa.tahunTunggakan, 0)
+  assert.equal(gempa.total, biasa.total, "Tanpa tunggakan: toggle gempa tidak mengubah total")
+  assert.equal(gempa.pkbBerjalan, biasa.pkbBerjalan)
+  pass("Metadata gempa – badge tanpa tunggakan tidak mengubah PKB berjalan atau total")
 }
 
 console.log("\nSemua regression test: PASS ✓\n")

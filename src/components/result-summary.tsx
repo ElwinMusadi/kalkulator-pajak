@@ -46,6 +46,13 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
       : isPajakAktif
         ? "Pajak Aktif"
         : "Tidak ada tunggakan · bayar tahun berjalan";
+  // Mengikuti pilihan gempa yang benar-benar dipakai perhitungan (termasuk
+  // override manual). Diskon 75% hanya berlaku pada pokok tunggakan.
+  const gempaLine = result.isDomisiliGempa
+    ? result.tahunTunggakan > 0
+      ? "Wilayah Terdampak Gempa — Diskon Tunggakan 75%."
+      : "Wilayah Terdampak Gempa — Diskon Tunggakan 75% berlaku bila ada tunggakan."
+    : null;
 
   async function copySummary() {
     const text = [
@@ -72,6 +79,7 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         : []),
       `Total bayar: ${formatRupiah(result.total)}`,
       "Denda PKB dan Opsen: dibebaskan 100%",
+      gempaLine,
     ]
       .filter(Boolean)
       .join("\n");
@@ -163,11 +171,16 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
           className="mt-0.5 size-4 shrink-0 text-success"
           aria-hidden="true"
         />
-        <p className="text-xs leading-relaxed text-foreground">
-          <span className="font-semibold">Tax Amnesty aktif.</span> Denda PKB
-          dan Opsen dibebaskan 100%; pokok pajak dan SWDKLLJ tetap
-          diperhitungkan.
-        </p>
+        <div className="min-w-0 text-xs leading-relaxed text-foreground">
+          <p>
+            <span className="font-semibold">Tax Amnesty aktif.</span> Denda PKB
+            dan Opsen dibebaskan 100%; pokok pajak dan SWDKLLJ tetap
+            diperhitungkan.
+          </p>
+          {gempaLine && (
+            <p className="mt-1 font-semibold">{gempaLine}</p>
+          )}
+        </div>
       </div>
 
       <ResultBreakdown result={result} compact={compact} />

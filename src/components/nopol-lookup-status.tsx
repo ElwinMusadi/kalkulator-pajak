@@ -4,15 +4,12 @@ import { id as idLocale } from "date-fns/locale";
 import {
   CheckCircle2,
   CircleAlert,
-  Globe2,
   Loader2,
   SearchX,
   ShieldAlert,
 } from "lucide-react";
-import { formatRupiah } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
-  getVehicleSourceLabel,
   VEHICLE_DATA_SOURCE_DESCRIPTION,
   VEHICLE_NOT_FOUND_MESSAGE,
   VEHICLE_SOURCE_ERROR_MESSAGE,
@@ -23,6 +20,7 @@ import type { NopolLookupStatus, VehicleData } from "@/types/tax";
 interface NopolLookupStatusProps {
   status: NopolLookupStatus;
   vehicleData: VehicleData | null;
+  /** Dipertahankan untuk kompatibilitas pemanggil; tidak lagi ditampilkan. */
   lookupSource: VehicleLookupSource | null;
   errorMessage: string | null;
   /** Lookup ditolak server karena izin (HTTP 403). */
@@ -132,12 +130,6 @@ export function NopolLookupDisabledMessage() {
   );
 }
 
-function formatTanggal(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const date = parseISO(iso);
-  return isValid(date) ? format(date, "d MMM yyyy", { locale: idLocale }) : null;
-}
-
 /** Satu sel bento fakta kendaraan. */
 function Fact({
   label,
@@ -176,22 +168,9 @@ function formatSinkronisasi(iso: string | null | undefined): string | null {
   });
 }
 
-/**
- * Rentang kolom sel tambahan agar bento selalu penuh:
- * 2 kolom — sel ganjil terakhir melebar; 4 kolom — 1:4, 2:2+2, 3:2+1+1, 4:1×4.
- */
-function extraFactSpan(index: number, count: number): string {
-  const base = count % 2 === 1 && index === count - 1 ? "col-span-2" : "col-span-1";
-  let wide = "@xl:col-span-1";
-  if (count === 1) wide = "@xl:col-span-4";
-  else if (count === 2 || (count === 3 && index === 0)) wide = "@xl:col-span-2";
-  return cn(base, wide);
-}
-
 export function NopolLookupMessage({
   status,
   vehicleData,
-  lookupSource,
   errorMessage,
   forbidden = false,
 }: NopolLookupStatusProps) {
@@ -218,155 +197,62 @@ export function NopolLookupMessage({
   }
 
   if (status === "found" && vehicleData) {
-    // Hanya satu sumber aktif; label selalu "API Data Kendaraan".
-    const sourceLabel =
-      getVehicleSourceLabel(lookupSource ?? vehicleData.source ?? "api");
+    // Hanya identitas & asal data; NJKB, NJUB, bobot, jenis, dan tanggal
+    // sudah tampil (dan dapat dikoreksi) di tahap 2–3.
     const njkbMissing = vehicleData.njkb <= 0;
-    const pajak = formatTanggal(vehicleData.jatuhTempoPajak);
-    const stnk = formatTanggal(vehicleData.jatuhTempoStnk);
-    const nama = vehicleData.nama ?? "Nama pemilik tidak tersedia";
-    const njub =
-      typeof vehicleData.njub === "number" &&
-      Number.isFinite(vehicleData.njub) &&
-      vehicleData.njub > 0
-        ? vehicleData.njub
-        : null;
-    const bobot =
-      typeof vehicleData.bobot === "number" &&
-      Number.isFinite(vehicleData.bobot) &&
-      vehicleData.bobot > 0
-        ? vehicleData.bobot
-        : null;
+    const nama = vehicleData.nama?.trim() || null;
     const originUpt = vehicleData.originUpt?.trim() || null;
     const syncedAt = formatSinkronisasi(vehicleData.syncedAt);
 
-    // Sel tambahan opsional; rentang kolom dihitung agar grid selalu penuh.
-    const extraFacts: { key: string; label: string; content: ReactNode; tone?: string }[] = [];
-    if (njub !== null) {
-      extraFacts.push({
-        key: "njub",
-        label: "NJUB",
-        content: (
-          <span className="min-w-0">
-            <span className="numeric block truncate font-semibold">
-              {formatRupiah(njub)}
-            </span>
-            <span className="block text-xs font-normal text-muted-foreground">
-              Ditambahkan ke dasar pengenaan.
-            </span>
-          </span>
-        ),
-        tone: "bg-[color-mix(in_oklch,var(--primary)_6%,var(--card))]",
-      });
-    }
-    if (bobot !== null) {
-      extraFacts.push({
-        key: "bobot",
-        label: "Bobot",
-        content: (
-          <span className="numeric block truncate">
-            {bobot.toLocaleString("id-ID")}
-          </span>
-        ),
-      });
-    }
-    if (originUpt) {
-      extraFacts.push({
-        key: "origin",
-        label: "UPT asal",
-        content: (
-          <span className="block min-w-0 truncate" title={originUpt}>
-            {originUpt}
-          </span>
-        ),
-      });
-    }
-    if (syncedAt) {
-      extraFacts.push({
-        key: "synced",
-        label: "Sinkronisasi data",
-        content: <span className="numeric block truncate">{syncedAt}</span>,
-      });
-    }
-    const extraCount = extraFacts.length;
-
     return (
-      <div className="animate-fade-up @container flex min-w-0 flex-col gap-2.5">
+      <div className="animate-fade-up flex min-w-0 flex-col gap-2.5">
         <p className="flex items-center gap-1.5 text-xs font-semibold text-success">
           <CheckCircle2 className="size-3.5 shrink-0" aria-hidden="true" />
           Data ditemukan
         </p>
-        {/*
-          Bento hairline: gap-px di atas bg-border. Rentang kolom dipilih agar
-          grid selalu penuh (2 kolom: 2·1+1·2+1+1 / 4 kolom: 2+1+1 · 2+1+1).
-        */}
-        <dl className="grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border @xl:grid-cols-4">
-          <Fact label="Pemilik" className="col-span-2">
-            <span className="block truncate" title={nama}>
-              {nama}
-            </span>
-          </Fact>
-          <Fact label="Jenis">
-            <span className="block truncate">
-              {vehicleData.jenis ?? EMPTY_VALUE}
-            </span>
-          </Fact>
-          <Fact label="Sumber data">
-            <span className="flex min-w-0 items-start gap-1.5">
-              <Globe2
-                className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <span className="min-w-0 break-words">{sourceLabel}</span>
-            </span>
-          </Fact>
-          <Fact
-            label="NJKB"
-            // Warna solid (bukan alpha): latar sel tidak boleh tembus ke garis bento.
-            className={cn(
-              "col-span-2",
-              njkbMissing &&
-                "bg-[color-mix(in_oklch,var(--warning)_8%,var(--card))]",
-            )}
-          >
-            {njkbMissing ? (
-              <span className="flex min-w-0 items-start gap-1.5">
-                <CircleAlert
-                  className="mt-0.5 size-3.5 shrink-0 text-warning"
-                  aria-hidden="true"
-                />
-                <span className="min-w-0">
-                  <span className="block">Referensi NJKB tidak tersedia.</span>
-                  <span className="block text-xs font-normal text-muted-foreground">
-                    Masukkan NJKB secara manual.
-                  </span>
-                </span>
+        {/* Bento hairline: gap-px di atas bg-border; nama selebar penuh. */}
+        <dl className="grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border">
+          <Fact label="Nama Pemilik" className="col-span-2">
+            {nama ? (
+              <span className="block truncate" title={nama}>
+                {nama}
               </span>
             ) : (
-              <span className="numeric block truncate font-semibold">
-                {formatRupiah(vehicleData.njkb)}
-              </span>
+              EMPTY_VALUE
             )}
           </Fact>
-          <Fact label="Jatuh tempo pajak">
-            {pajak ? <span className="numeric">{pajak}</span> : EMPTY_VALUE}
+          <Fact label="UPT Asal">
+            {originUpt ? (
+              <span className="line-clamp-2 break-words" title={originUpt}>
+                {originUpt}
+              </span>
+            ) : (
+              EMPTY_VALUE
+            )}
           </Fact>
-          <Fact label="Jatuh tempo STNK">
-            {stnk ? <span className="numeric">{stnk}</span> : EMPTY_VALUE}
+          <Fact label="Sinkronisasi Data">
+            {syncedAt ? (
+              <span className="numeric break-words">{syncedAt}</span>
+            ) : (
+              EMPTY_VALUE
+            )}
           </Fact>
-          {extraFacts.map((fact, index) => (
-            <Fact
-              key={fact.key}
-              label={fact.label}
-              className={cn(fact.tone, extraFactSpan(index, extraCount))}
-            >
-              {fact.content}
-            </Fact>
-          ))}
         </dl>
+        {njkbMissing && (
+          <p className="flex min-w-0 items-start gap-1.5 text-xs leading-relaxed text-foreground">
+            <CircleAlert
+              className="mt-0.5 size-3.5 shrink-0 text-warning"
+              aria-hidden="true"
+            />
+            <span className="min-w-0">
+              <span className="font-semibold">Referensi NJKB tidak tersedia.</span>{" "}
+              Isi NJKB secara manual pada Dasar Pengenaan.
+            </span>
+          </p>
+        )}
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Data berupa salinan tersinkron dari {VEHICLE_DATA_SOURCE_DESCRIPTION},
-          bukan data langsung. Periksa kembali dengan dokumen kendaraan.
+          Salinan tersinkron dari {VEHICLE_DATA_SOURCE_DESCRIPTION}; periksa
+          kembali dengan dokumen kendaraan.
         </p>
       </div>
     );

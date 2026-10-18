@@ -210,6 +210,8 @@ export interface TaxCalculationResult {
   pkbBerjalan: number
   pkbDiscount: number              // Persentase diskon PKB berjalan (0–0.5)
   isMutasiMasuk: boolean
+  /** Pilihan wilayah gempa yang benar-benar digunakan pada hasil perhitungan. */
+  isDomisiliGempa: boolean
   pkbTunggakanPra2025: number      // PKB tunggakan periode sebelum 5 Jan 2025 (tanpa Opsen)
   pkbTunggakanPost2025: number     // PKB tunggakan periode mulai 5 Jan 2025 (kena Opsen)
   warnaPlat: WarnaPlat             // Warna plat yang dipakai dalam perhitungan
