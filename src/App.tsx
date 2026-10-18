@@ -25,10 +25,10 @@ import type { TaxCalculationResult } from "@/types/tax";
 /**
  * `grid-cols-1` (= minmax(0,1fr)) wajib di mobile. Tanpa itu kolom grid implisit
  * berukuran "auto" melebar mengikuti konten nowrap (nama pemilik, badge sumber
- * data) sehingga kartu Data Penetapan melampaui lebar layar.
+ * data) sehingga form melampaui lebar layar. ≥1024px: form + inspector hasil.
  */
 const CALCULATOR_GRID_CLASS =
-  "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_440px]";
+  "grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_440px]";
 
 export default function App() {
   return (
@@ -64,7 +64,7 @@ function AuthenticatedApp() {
   const showResult = view === "calculator" && canUseCalculator && result;
 
   return (
-    <div className="app-background min-h-screen overflow-x-hidden pb-0!">
+    <div className="app-background min-h-screen overflow-x-clip">
       <AppHeader
         view={view}
         onViewChange={(next) => {
@@ -74,10 +74,9 @@ function AuthenticatedApp() {
         onError={setHeaderError}
       />
 
-      {/* Konten ditarik ke atas agar kartu "mengapung" di atas band navy. */}
-      <div className="relative z-10 mx-auto -mt-8 flex max-w-7xl flex-col gap-6 px-4 sm:px-6 md:-mt-10 lg:px-8">
+      <div className="ios-page flex flex-col gap-5 pt-5 sm:pt-7">
         {headerError && (
-          <Alert variant="destructive" className="bg-card pr-12 shadow-card">
+          <Alert variant="destructive" className="pr-14">
             <CircleAlert aria-hidden="true" />
             <AlertTitle>Tindakan gagal</AlertTitle>
             <AlertDescription>{headerError}</AlertDescription>
@@ -85,46 +84,39 @@ function AuthenticatedApp() {
               type="button"
               onClick={() => setHeaderError(null)}
               aria-label="Tutup pesan"
-              className="absolute right-2 top-2 inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="absolute right-1.5 top-1.5 inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
           </Alert>
         )}
 
-        <PwaInstallPrompt />
-
         {view === "admin" ? (
           <main>
             <UserManagementPage />
           </main>
         ) : canUseCalculator ? (
-          <main className={CALCULATOR_GRID_CLASS}>
-            <section
-              aria-labelledby="data-penetapan-title"
-              className="surface-card min-w-0"
-            >
-              <div className="flex flex-col gap-1 border-b border-border/80 px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
-                <p className="eyebrow">Langkah penetapan</p>
-                <h2
-                  id="data-penetapan-title"
-                  className="text-xl font-bold leading-tight tracking-tight text-foreground"
-                >
-                  Data Penetapan
-                </h2>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Cari nomor polisi atau isi data kendaraan secara manual, lalu
-                  hitung penetapan.
-                </p>
-              </div>
-              <div className="px-5 py-5 sm:px-6 sm:py-6">
-                <TaxCalculatorForm onResult={setResult} />
-              </div>
-            </section>
+          <main aria-labelledby="data-penetapan-title" className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1 px-1">
+              <h2 id="data-penetapan-title" className="ios-page-title">
+                Penetapan Pajak
+              </h2>
+              <p className="ios-page-subtitle max-w-2xl">
+                Cari nomor polisi atau isi data kendaraan secara manual. PKB,
+                Opsen, SWDKLLJ, dan PNBP sesuai Pergub NTT No. 54 Tahun 2026.
+              </p>
+            </div>
 
-            <aside className="lg:sticky lg:top-6 lg:self-start">
-              <div className="surface-card hidden lg:block">
-                <div className="p-5 xl:p-6">
+            <div className={CALCULATOR_GRID_CLASS}>
+              <section aria-label="Data penetapan" className="min-w-0">
+                <TaxCalculatorForm onResult={setResult} />
+              </section>
+
+              <aside
+                aria-label="Hasil penetapan"
+                className="hidden lg:sticky lg:top-[calc(env(safe-area-inset-top)+4.5rem)] lg:block lg:self-start"
+              >
+                <div className="surface-card p-5 xl:p-6">
                   {result ? (
                     <div key={result.total} className="animate-result-panel-in">
                       <TaxResultPanel result={result} />
@@ -133,13 +125,13 @@ function AuthenticatedApp() {
                     <ResultEmpty />
                   )}
                 </div>
-              </div>
-            </aside>
+              </aside>
+            </div>
           </main>
         ) : (
           <main>
-            <div className="surface-card">
-              <Empty className="min-h-[24rem] border-0">
+            <div className="ios-group">
+              <Empty className="min-h-[22rem] border-0">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <Lock aria-hidden="true" />
@@ -154,17 +146,22 @@ function AuthenticatedApp() {
           </main>
         )}
 
+        {/* Ajakan instal setelah konten utama: konten tugas tetap prioritas. */}
+        <PwaInstallPrompt />
+
         <footer
           className={
             showResult
-              ? "border-t border-border/70 pt-6 pb-28 text-center text-sm leading-normal text-muted-foreground lg:pb-8"
-              : "border-t border-border/70 py-6 text-center text-sm leading-normal text-muted-foreground lg:pb-8"
+              ? "pt-4 pb-32 text-center text-xs leading-relaxed text-muted-foreground lg:pb-8"
+              : "pt-4 pb-[max(2rem,env(safe-area-inset-bottom))] text-center text-xs leading-relaxed text-muted-foreground"
           }
         >
-          <div className="md:flex items-center justify-center">
-            <p>© 2026 &nbsp;·&nbsp; Elwin Musadi Bessiesura &nbsp;</p>
-            <p>·&nbsp; UPT Pendapatan Daerah Wilayah Kota Kupang</p>
-          </div>
+          <p>
+            © 2026 Elwin Musadi Bessiesura
+            <span aria-hidden="true"> · </span>
+            <br className="sm:hidden" />
+            UPT Pendapatan Daerah Wilayah Kota Kupang
+          </p>
         </footer>
       </div>
 

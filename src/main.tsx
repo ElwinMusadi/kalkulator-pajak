@@ -1,3 +1,5 @@
+// Harus impor pertama: kelas tema diterapkan sebelum CSS dan React.
+import "./theme-init"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import "./index.css"

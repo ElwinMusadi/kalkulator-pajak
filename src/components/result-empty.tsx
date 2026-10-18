@@ -18,7 +18,7 @@ export function ResultEmpty() {
         <EmptyMedia variant="icon">
           <Calculator aria-hidden="true" />
         </EmptyMedia>
-        <EmptyTitle>Belum ada penetapan</EmptyTitle>
+        <EmptyTitle>Belum Ada Penetapan</EmptyTitle>
         <EmptyDescription>
           Masukkan nomor polisi atau lengkapi data kendaraan, lalu tekan Hitung
           Penetapan.
@@ -27,14 +27,14 @@ export function ResultEmpty() {
       <EmptyContent>
         <ol
           aria-label="Urutan langkah"
-          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+          className="flex flex-wrap items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground"
         >
           {STEPS.map((step, index) => (
             <li key={step} className="flex items-center gap-1.5">
-              <span className="flex items-center gap-1.5 rounded-full border border-border bg-card py-1 pl-1 pr-2.5">
+              <span className="flex items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-3">
                 <span
                   aria-hidden="true"
-                  className="numeric flex size-5 items-center justify-center rounded-full bg-navy-50 text-[10px] font-bold text-navy-800"
+                  className="numeric flex size-6 items-center justify-center rounded-full bg-card text-xs font-semibold text-primary"
                 >
                   {index + 1}
                 </span>

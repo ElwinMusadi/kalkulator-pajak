@@ -35,9 +35,14 @@ export function VehicleDataSourceSettings({ compact = false }: { compact?: boole
           <DialogTrigger asChild>
             <Button
               type="button"
-              variant="onDark"
+              variant="ghost"
               size={compact ? "icon" : "default"}
               aria-label={compact ? "Sumber data: Data Kendaraan" : undefined}
+              className={
+                compact
+                  ? "size-11 rounded-full text-primary hover:bg-primary/10 hover:text-primary [&_svg]:stroke-[1.75]"
+                  : "h-11 rounded-full px-4 text-primary hover:bg-primary/10 hover:text-primary [&_svg]:stroke-[1.75]"
+              }
             >
               <Globe2 aria-hidden="true" />
               {!compact && "Data Kendaraan"}
@@ -46,39 +51,42 @@ export function VehicleDataSourceSettings({ compact = false }: { compact?: boole
         </TooltipTrigger>
         <TooltipContent>{VEHICLE_DATA_SOURCE_DESCRIPTION}</TooltipContent>
       </Tooltip>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Sumber Data Kendaraan</DialogTitle>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto rounded-[1.25rem]">
+        <DialogHeader className="text-left">
+          <DialogTitle className="text-[1.25rem] font-semibold">
+            Sumber Data Kendaraan
+          </DialogTitle>
           <DialogDescription>
             Pencarian Nomor Polisi memakai satu sumber data.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-start gap-3 rounded-xl border border-navy-800 bg-navy-50 p-3.5 ring-1 ring-navy-800 dark:bg-muted/40">
-          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy-800 text-white">
-            <Globe2 className="size-4" aria-hidden="true" />
+        {/* Informasi saja, bukan pilihan: tidak ada state terpilih/radio. */}
+        <div className="flex items-start gap-3 rounded-2xl bg-muted/60 p-3.5">
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-primary/10 text-primary">
+            <Globe2 className="size-[1.125rem] stroke-[1.75]" aria-hidden="true" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-foreground">
+            <span className="block text-[0.9375rem] font-semibold text-foreground">
               {VEHICLE_DATA_SOURCE_LABEL}
             </span>
-            <span className="mt-1 block text-[13px] leading-relaxed text-muted-foreground">
+            <span className="mt-0.5 block text-sm leading-relaxed text-muted-foreground">
               {VEHICLE_DATA_SOURCE_DESCRIPTION} — data kendaraan seluruh UPT di NTT.
             </span>
           </span>
         </div>
 
-        <ul className="flex flex-col gap-2.5 text-[13px] leading-relaxed text-muted-foreground">
-          <li className="flex items-start gap-2">
-            <RefreshCw className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+        <ul className="flex flex-col gap-2.5 text-sm leading-relaxed text-muted-foreground">
+          <li className="flex items-start gap-2.5">
+            <RefreshCw className="mt-0.5 size-4 shrink-0 stroke-[1.75] text-primary" aria-hidden="true" />
             <span>
               Data berasal dari salinan (snapshot) yang disinkronkan berkala, bukan
               data langsung (real-time). Waktu sinkronisasi ditampilkan pada hasil
               pencarian bila tersedia.
             </span>
           </li>
-          <li className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <li className="flex items-start gap-2.5">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 stroke-[1.75] text-primary" aria-hidden="true" />
             <span>
               Periksa kembali dokumen kendaraan; seluruh nilai tetap dapat
               disesuaikan secara manual.

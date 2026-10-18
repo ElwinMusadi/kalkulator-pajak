@@ -15,13 +15,13 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
+      className={cn("p-2 sm:p-3", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
-        caption: "relative flex h-9 items-center justify-center",
-        caption_label: "flex items-center gap-1 rounded-md text-sm font-medium",
-        caption_dropdowns: "flex h-full w-full items-center justify-center gap-1.5 px-9 text-sm font-medium",
+        caption: "relative flex h-11 items-center justify-center",
+        caption_label: "flex items-center gap-1 rounded-md text-[0.9375rem] font-semibold",
+        caption_dropdowns: "flex h-full w-full items-center justify-center gap-1.5 px-12 text-[0.9375rem] font-semibold",
         dropdown_month: "relative inline-flex items-center",
         dropdown_year: "relative inline-flex items-center",
         dropdown: "absolute inset-0 h-full w-full cursor-pointer opacity-0",
@@ -29,30 +29,32 @@ function Calendar({
         vhidden: "sr-only",
         nav: "absolute inset-x-1 flex items-center justify-between",
         nav_button: cn(
-          buttonVariants({ variant: "outline" }),
-          "size-8 bg-transparent p-0 opacity-60 hover:opacity-100"
+          buttonVariants({ variant: "ghost" }),
+          "size-10 rounded-full p-0 text-primary pointer-coarse:size-11"
         ),
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
         table: "w-full border-collapse space-y-1",
         head_row: "flex",
-        head_cell: "text-muted-foreground rounded-md w-8 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2",
+        // Sel hari 40px (pointer presisi) / hingga 44px (sentuh), menyusut
+        // proporsional agar 7 kolom tetap muat di layar 320px.
+        head_cell: "w-10 text-[0.8125rem] font-medium text-muted-foreground pointer-coarse:w-[clamp(2.25rem,calc((100vw-2.5rem)/7),2.75rem)]",
+        row: "flex w-full mt-1",
         cell: cn(
-          "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected].day-range-end)]:rounded-r-md",
+          "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected].day-range-end)]:rounded-r-full",
           props.mode === "range"
             ? "[&:has(>.day-range-end)]:rounded-r-md [&:has(>.day-range-start)]:rounded-l-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md"
-            : "[&:has([aria-selected])]:rounded-md"
+            : "[&:has([aria-selected])]:rounded-full"
         ),
         day: cn(
           buttonVariants({ variant: "ghost" }),
-          "size-8 rounded-md p-0 font-normal aria-selected:opacity-100"
+          "size-10 rounded-full p-0 text-base font-normal aria-selected:opacity-100 pointer-coarse:size-[clamp(2.25rem,calc((100vw-2.5rem)/7),2.75rem)]"
         ),
         day_range_start: "day-range-start",
         day_range_end: "day-range-end",
         day_selected:
           "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-        day_today: "bg-accent text-accent-foreground",
+        day_today: "font-semibold text-primary aria-selected:text-primary-foreground",
         day_outside:
           "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
         day_disabled: "text-muted-foreground opacity-50",

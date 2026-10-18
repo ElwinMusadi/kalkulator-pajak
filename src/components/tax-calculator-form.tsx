@@ -145,10 +145,22 @@ function RequiredMark() {
 }
 
 /**
- * Konten tahap diindentasi sejajar teks judul pada ≥sm (badge 28px + gap 12px);
- * pada mobile selebar kartu agar lebar 320px tidak terbuang.
+ * Konten tahap diindentasi sejajar teks judul pada ≥sm (padding 20px + badge
+ * 28px + gap 12px); pada mobile selebar grup agar lebar 320px tidak terbuang.
  */
-const STEP_INDENT = "sm:pl-10";
+const STEP_INDENT = "sm:pl-15";
+
+/** Grup inset ala Settings: permukaan solid, sudut 20px, garis tipis. */
+const GROUP_CLASS =
+  "min-w-0 overflow-hidden rounded-[1.25rem] border border-border/70 bg-card";
+
+/** Label field selalu terlihat; ukuran 15px, Title Case, bukan micro caps. */
+const FIELD_LABEL_CLASS =
+  "text-[0.9375rem] font-medium leading-snug text-foreground";
+
+/** Target sentuh 44px, teks input 16px agar iOS tidak auto-zoom. */
+const INPUT_CLASS =
+  "h-11 rounded-xl bg-card text-base md:text-base aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25";
 
 interface BiayaLayananFieldProps {
   fieldKey: BiayaLayananKey;
@@ -168,16 +180,16 @@ function BiayaLayananField({
   const invalid = parsed.status === "invalid";
 
   return (
-    <Field data-invalid={invalid || undefined} className="min-w-0 gap-2">
+    <Field data-invalid={invalid || undefined} className="min-w-0 gap-1.5">
       {/* Label dapat 2 baris; mt-auto pada input menjaga kotak input sebaris
           dengan field lain di baris grid yang sama. */}
-      <FieldLabel htmlFor={id} className="leading-snug">
+      <FieldLabel htmlFor={id} className={FIELD_LABEL_CLASS}>
         {BIAYA_LAYANAN_LABEL[fieldKey]}
       </FieldLabel>
       <div className="relative mt-auto min-w-0">
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-muted-foreground"
+          className="monetary pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-base text-muted-foreground"
         >
           Rp
         </span>
@@ -206,11 +218,11 @@ function BiayaLayananField({
           placeholder="0"
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? errorId : undefined}
-          className="numeric h-10 bg-card pl-10 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
+          className={cn(INPUT_CLASS, "monetary pl-11")}
         />
       </div>
       {parsed.status === "invalid" && (
-        <FieldError id={errorId} className="text-xs leading-snug">
+        <FieldError id={errorId} className="text-[0.8125rem] leading-snug">
           {parsed.error}
         </FieldError>
       )}
@@ -618,9 +630,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
   // Chip tahap 5 hanya tampil bila ada biaya terisi: "3 biaya · Rp 530.000".
   const feesStatus =
-    biayaLayananStats.count > 0
-      ? `${biayaLayananStats.count} biaya · ${formatRupiah(biayaLayananStats.sum)}`
-      : undefined;
+    biayaLayananStats.count > 0 ? (
+      <>
+        {biayaLayananStats.count} biaya ·{" "}
+        <span className="monetary">{formatRupiah(biayaLayananStats.sum)}</span>
+      </>
+    ) : undefined;
 
   // Strip memakai tanggal form terkini, termasuk hasil koreksi manual.
   // PAJAK: tanggal lengkap; STNK: bulan + tahun pendek seperti plat fisik.
@@ -630,14 +645,17 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     jatuhTempoStnk && isValid(jatuhTempoStnk) ? jatuhTempoStnk : undefined;
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       {/* ── 1 · Kendaraan ── */}
       {/*
         min-w-0 wajib: <fieldset> punya min-inline-size: min-content bawaan browser,
-        sehingga konten nowrap (nama pemilik, sel bento) membuatnya melebar
-        melewati Card di layar sempit.
+        sehingga konten nowrap (nama pemilik, sel fakta) membuatnya melebar
+        melewati grup di layar sempit.
       */}
-      <FieldSet className="min-w-0 gap-5 pb-6">
+      {/* Bingkai grup pada div pembungkus: padding <fieldset> tidak berlaku
+          di atas <legend> yang dirender pada garis tepi. */}
+      <div className={cn(GROUP_CLASS, "px-4 pb-5 pt-4 sm:px-5")}>
+      <FieldSet className="min-w-0 gap-0">
         <FieldLegend className="mb-0 w-full p-0 font-normal">
           <FormStepHeading
             step="1"
@@ -650,17 +668,17 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           />
         </FieldLegend>
 
-        {/* pt-5: flex `gap` tidak berlaku pada <legend>, jarak dibuat eksplisit. */}
-        <div className={cn("w-full min-w-0 pt-5", STEP_INDENT)}>
-          <Field className="min-w-0 gap-4">
-            <FieldLabel htmlFor="nopol" className="eyebrow">
+        {/* pt-4: flex `gap` tidak berlaku pada <legend>, jarak dibuat eksplisit. */}
+        <div className={cn("w-full min-w-0 pt-4", STEP_INDENT)}>
+          <Field className="min-w-0 gap-3">
+            <FieldLabel htmlFor="nopol" className={FIELD_LABEL_CLASS}>
               Nomor Polisi
             </FieldLabel>
 
             {/* Plat TNKB: warna mengikuti pilihan Warna Plat (tahap 2) secara langsung. */}
             <div
               data-plate={warnaPlat}
-              className="tnkb-plate w-full max-w-[26rem] select-none"
+              className="tnkb-plate w-full max-w-[26rem]"
             >
               <div className="relative h-[4.5rem]">
                 <Input
@@ -679,19 +697,29 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   spellCheck={false}
                   maxLength={12}
                   className={cn(
-                    "h-full w-full rounded-none border-0 bg-transparent px-12 py-0 text-center shadow-none",
-                    "font-plate text-3xl font-bold uppercase leading-none tracking-wide sm:text-4xl",
-                    "focus-visible:ring-0 focus-visible:ring-offset-0",
+                    "h-full w-full rounded-none border-0 bg-transparent py-0 text-center shadow-none",
+                    // IBM Plex Sans lebih lebar dari font condensed: ukuran & padding
+                    // diskalakan agar 12 karakter (maxLength) muat pada 320px.
+                    "font-plate font-bold uppercase leading-none tracking-normal",
+                    // Nopol panjang juga harus muat saat font jaringan gagal.
+                    // Minimal 16px mencegah auto-zoom input Safari di iPhone.
+                    nopol.length >= 11
+                      ? "px-8 text-base sm:px-12 sm:text-[1.625rem]"
+                      : "px-10 text-[clamp(1.0625rem,5.3vw,1.875rem)] sm:px-12 sm:text-[2rem]",
+                    "select-text focus-visible:ring-0 focus-visible:ring-offset-0",
                   )}
                 />
                 <span
-                  className="pointer-events-none absolute right-4 top-1/2 flex -translate-y-1/2 items-center"
+                  className={cn(
+                    "pointer-events-none absolute top-1/2 flex -translate-y-1/2 items-center",
+                    nopol.length >= 11 ? "right-2 sm:right-4" : "right-4",
+                  )}
                   aria-hidden="true"
                 >
                   <NopolLookupIndicator status={lookupStatus} />
                 </span>
               </div>
-              <div className="tnkb-strip mx-3 flex min-h-7 min-w-0 flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 py-1 text-[0.625rem] font-semibold sm:gap-x-2 sm:text-xs">
+              <div className="tnkb-strip mx-3 flex select-none min-h-7 min-w-0 flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 py-1 text-[0.6875rem] font-semibold sm:gap-x-2 sm:text-xs">
                 {plateDueDate || plateStnkDate ? (
                   <>
                     <span className="inline-flex items-center gap-1 whitespace-nowrap">
@@ -748,13 +776,14 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           </Field>
         </div>
       </FieldSet>
+      </div>
 
-      {/* ── Tahap 2–4 · Controlled Accordion ── */}
+      {/* ── Tahap 2–5 · Controlled Accordion dalam satu grup inset ── */}
       <Accordion
         type="multiple"
         value={openSections}
         onValueChange={(values) => setOpenSections(values as FormSection[])}
-        className="flex w-full min-w-0 flex-col"
+        className={cn(GROUP_CLASS, "flex w-full flex-col divide-y divide-border/70")}
       >
         <FormStepAccordion
           value="assessment"
@@ -769,7 +798,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               data-invalid={invalidField === "njkb" || undefined}
               className="min-w-0 gap-2"
             >
-              <FieldLabel htmlFor="njkb">
+              <FieldLabel htmlFor="njkb" className={FIELD_LABEL_CLASS}>
                 NJKB <RequiredMark />
               </FieldLabel>
               <Input
@@ -786,12 +815,14 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 min={0}
                 step={1000}
                 aria-invalid={invalidField === "njkb" || undefined}
-                className="numeric h-10 bg-card aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
+                aria-describedby="njkb-description"
+                className={cn(INPUT_CLASS, "monetary")}
               />
               <FieldDescription
+                id="njkb-description"
                 className={cn(
-                  "text-xs",
-                  !isNaN(njkbNumber) && njkbNumber > 0 && "numeric font-medium text-foreground",
+                  "text-[0.8125rem] leading-snug",
+                  !isNaN(njkbNumber) && njkbNumber > 0 && "monetary font-medium text-foreground",
                 )}
               >
                 {!isNaN(njkbNumber) && njkbNumber > 0
@@ -801,7 +832,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             </Field>
 
             <Field className="min-w-0 gap-2">
-              <FieldLabel htmlFor="njub">NJUB</FieldLabel>
+              <FieldLabel htmlFor="njub" className={FIELD_LABEL_CLASS}>
+                NJUB
+              </FieldLabel>
               <Input
                 id="njub"
                 type="number"
@@ -811,12 +844,23 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 placeholder="0"
                 min={0}
                 step={1000}
-                className="numeric h-10 bg-card"
+                aria-describedby="njub-description"
+                className={cn(INPUT_CLASS, "monetary")}
               />
-              <FieldDescription className="text-xs">
-                {!isNaN(njubNumber) && njubNumber > 0
-                  ? `${formatRupiah(njubNumber)} ditambahkan ke dasar pengenaan.`
-                  : "Nilai ubah bentuk, jika ada."}
+              <FieldDescription
+                id="njub-description"
+                className="text-[0.8125rem] leading-snug"
+              >
+                {!isNaN(njubNumber) && njubNumber > 0 ? (
+                  <>
+                    <span className="monetary font-medium text-foreground">
+                      {formatRupiah(njubNumber)}
+                    </span>{" "}
+                    ditambahkan ke dasar pengenaan.
+                  </>
+                ) : (
+                  "Nilai ubah bentuk, jika ada."
+                )}
               </FieldDescription>
             </Field>
 
@@ -824,7 +868,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               data-invalid={invalidField === "jenis" || undefined}
               className="min-w-0 gap-2"
             >
-              <FieldLabel htmlFor="jenis">
+              <FieldLabel htmlFor="jenis" className={FIELD_LABEL_CLASS}>
                 Jenis Kendaraan <RequiredMark />
               </FieldLabel>
               <Select
@@ -837,7 +881,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 <SelectTrigger
                   id="jenis"
                   aria-invalid={invalidField === "jenis" || undefined}
-                  className="h-10 bg-card aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
+                  aria-describedby="jenis-description"
+                  className={cn(INPUT_CLASS, "w-full")}
                 >
                   <SelectValue placeholder="Pilih Jenis" />
                 </SelectTrigger>
@@ -851,9 +896,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <FieldDescription className="flex flex-wrap items-center gap-1.5 text-xs">
+              <FieldDescription
+                id="jenis-description"
+                className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] leading-snug"
+              >
                 {bobot !== undefined ? (
-                  <span className="numeric step-badge inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6875rem] font-semibold leading-4">
+                  <span className="numeric inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium leading-5 text-primary">
                     Bobot API {bobot.toLocaleString("id-ID")}
                   </span>
                 ) : jenisKendaraan ? (
@@ -876,8 +924,10 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
             */}
             <Field className="min-w-0 gap-2 md:col-span-3">
               {/* Bukan <label>: radiogroup dilabeli via aria-labelledby. */}
-              <FieldTitle id="warna-plat-label">Warna Plat (TNKB)</FieldTitle>
-              <div className="grid w-full min-w-0 grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] md:items-start">
+              <FieldTitle id="warna-plat-label" className={FIELD_LABEL_CLASS}>
+                Warna Plat (TNKB)
+              </FieldTitle>
+              <div className="grid w-full min-w-0 grid-cols-1 gap-x-5 gap-y-2.5 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start">
                 <PlateColorRadioGroup
                   value={warnaPlat}
                   onValueChange={setWarnaPlat}
@@ -886,13 +936,13 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                 />
                 <div
                   id="warna-plat-description"
-                  className="flex min-w-0 flex-col gap-1.5 text-xs leading-relaxed text-muted-foreground md:pt-1"
+                  className="flex min-w-0 flex-col gap-1.5 text-[0.8125rem] leading-relaxed text-muted-foreground md:pt-1"
                 >
                   <p>{plateSourceHint}</p>
                   {warnaPlat === "merah" && (
-                    <p className="flex items-start gap-1.5 text-[0.8125rem] font-medium text-foreground">
+                    <p className="flex items-start gap-1.5 text-sm font-medium text-foreground">
                       <Info
-                        className="mt-0.5 size-3.5 shrink-0 text-primary"
+                        className="mt-0.5 size-4 shrink-0 text-primary"
                         aria-hidden="true"
                       />
                       <span>
@@ -955,7 +1005,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           status={activeFacilityCount > 0 ? `${activeFacilityCount} Aktif` : undefined}
           statusTone="info"
         >
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {/* Daftar ala Settings: satu baris penuh per fasilitas, dipisah garis. */}
+          <div className="flex w-full min-w-0 flex-col divide-y divide-border/70 overflow-hidden rounded-2xl border border-border/70 bg-background/60">
             <FacilityToggle
               id="is-gempa"
               title="Wilayah Terdampak Gempa"
@@ -980,7 +1031,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               <FacilityToggle
                 id="is-tembak-ru"
                 title="Biaya Tembak RU/STNK"
-                description="Motor Rp150.000 · Mobil Rp250.000."
+                description={
+                  <>
+                    Motor <span className="monetary">Rp150.000</span> · Mobil{" "}
+                    <span className="monetary">Rp250.000</span>.
+                  </>
+                }
                 impact="Biaya tambahan"
                 checked={isTembakRu}
                 onCheckedChange={setIsTembakRu}
@@ -1027,9 +1083,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       </Accordion>
 
       {/* ── Validasi + aksi utama ── */}
-      <div className="flex flex-col gap-4 border-t pt-6">
+      <div className="flex flex-col gap-3">
         {validationError && (
-          <Alert variant="destructive" className="animate-fade-up">
+          <Alert variant="destructive" className="animate-fade-up rounded-2xl bg-card">
             <CircleAlert aria-hidden="true" />
             <AlertTitle>Data Belum Lengkap</AlertTitle>
             <AlertDescription>{validationError}</AlertDescription>
@@ -1039,7 +1095,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
         <Button
           type="submit"
           size="lg"
-          className="h-12 w-full text-base font-semibold shadow-card"
+          className="h-12 w-full rounded-2xl text-[1.0625rem] font-semibold"
         >
           <Calculator data-icon="inline-start" aria-hidden="true" />
           Hitung Penetapan

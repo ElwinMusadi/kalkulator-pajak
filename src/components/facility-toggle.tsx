@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 interface FacilityToggleProps {
   id: string;
   title: string;
-  description: string;
+  /** ReactNode agar nominal di dalamnya dapat memakai `.monetary`. */
+  description: ReactNode;
   /** Ringkasan dampak (mis. "Diskon tunggakan 75%"); kosong = tidak ditampilkan. */
   impact: string;
   checked: boolean;
@@ -25,9 +26,10 @@ const NOTE_TONE = {
 } as const;
 
 /**
- * Kartu fasilitas yang dapat dipilih. Seluruh kartu dapat diklik melalui
- * label yang direntangkan (`after:inset-0`); Switch tetap satu-satunya
- * kontrol interaktif sehingga semantik dan navigasi keyboard tidak berubah.
+ * Baris pengaturan selebar penuh (gaya Settings): ikon | judul, dampak,
+ * deskripsi, catatan | switch. Seluruh baris dapat diklik melalui label yang
+ * direntangkan (`after:inset-0`); Switch tetap satu-satunya kontrol interaktif
+ * sehingga semantik, aria-describedby, dan navigasi keyboard tidak berubah.
  */
 export function FacilityToggle({
   id,
@@ -47,44 +49,47 @@ export function FacilityToggle({
   return (
     <div
       className={cn(
-        "relative flex h-full min-w-0 flex-col gap-3 rounded-xl border p-4 transition-colors duration-200",
-        "has-[:focus-visible]:border-ring",
-        checked
-          ? "facility-active"
-          : "border-border bg-card hover:border-navy-600/30 hover:bg-navy-50/50 dark:hover:bg-muted/40",
+        "relative flex min-h-11 min-w-0 items-start gap-3 bg-card px-4 py-3.5 transition-colors duration-150",
+        "has-[:focus-visible]:bg-muted/60 hover:bg-muted/40",
+        checked && "facility-active",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <span
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors duration-200 [&_svg]:size-4",
-            checked
-              ? "border-navy-800 bg-navy-800 text-white dark:border-primary dark:bg-primary dark:text-primary-foreground"
-              : "step-badge",
+      <span
+        className={cn(
+          "mt-0.5 hidden size-8 shrink-0 items-center min-[400px]:flex justify-center rounded-[0.625rem] transition-colors duration-150 [&_svg]:size-[1.125rem] [&_svg]:stroke-[1.75]",
+          checked
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground",
+        )}
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <label
+            htmlFor={id}
+            className="cursor-pointer text-base font-medium leading-snug text-foreground after:absolute after:inset-0 after:content-['']"
+          >
+            {title}
+          </label>
+          {impact && (
+            <span
+              className={cn(
+                "rounded-full px-2 py-px text-xs font-medium leading-5 transition-colors",
+                checked
+                  ? "bg-primary/12 text-primary"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {impact}
+            </span>
           )}
-          aria-hidden="true"
-        >
-          {icon}
-        </span>
-        <Switch
-          id={id}
-          checked={checked}
-          onCheckedChange={onCheckedChange}
-          aria-describedby={note ? `${descriptionId} ${noteId}` : descriptionId}
-          className="relative z-10 mt-0.5"
-        />
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <label
-          htmlFor={id}
-          className="cursor-pointer text-sm font-semibold leading-snug text-foreground after:absolute after:inset-0 after:rounded-xl after:content-['']"
-        >
-          {title}
-        </label>
+        </div>
         <p
           id={descriptionId}
-          className="text-[0.8125rem] leading-relaxed text-muted-foreground"
+          className="text-sm leading-relaxed text-muted-foreground"
         >
           {description}
         </p>
@@ -92,7 +97,7 @@ export function FacilityToggle({
           <p
             id={noteId}
             className={cn(
-              "text-xs font-medium leading-relaxed",
+              "text-[0.8125rem] font-medium leading-relaxed",
               NOTE_TONE[noteTone],
             )}
           >
@@ -100,18 +105,13 @@ export function FacilityToggle({
           </p>
         )}
       </div>
-      {impact && (
-        <p
-          className={cn(
-            "mt-auto w-fit rounded-full border px-2 py-0.5 text-[0.6875rem] font-semibold leading-4 transition-colors",
-            checked
-              ? "step-badge"
-              : "border-border bg-muted/60 text-muted-foreground",
-          )}
-        >
-          {impact}
-        </p>
-      )}
+      <Switch
+        id={id}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        aria-describedby={note ? `${descriptionId} ${noteId}` : descriptionId}
+        className="relative z-10 mt-1 shrink-0"
+      />
     </div>
   );
 }

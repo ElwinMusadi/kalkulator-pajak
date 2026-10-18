@@ -1,87 +1,120 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Saira+Semi+Condensed:wght@600;700&display=swap");
+/* Tipografi lintas perangkat (tanpa deteksi user agent; murni urutan font-family):
+   - UI: font sistem Apple (-apple-system/BlinkMacSystemFont hanya ada di Apple),
+     selain itu Plus Jakarta Sans (Windows, Android, Linux).
+   - Nomor polisi (input plat TNKB) dan nominal Rupiah: IBM Plex Sans di semua
+     perangkat, dengan figur tabular. Tanggal, bobot, dan persen tetap font UI. */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
+/* `dark:` aktif HANYA untuk kelas `.dark` eksplisit pada <html> (dipasang oleh
+   src/lib/theme.ts). Preferensi OS sengaja diabaikan: default selalu Terang. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* Varian tinggi viewport — dipakai layar penuh (login, status sesi) agar tetap
-   muat tanpa scroll pada layar pendek dan ponsel landscape. */
+   ringkas pada layar pendek dan ponsel landscape. */
 @custom-variant short (@media (max-height: 640px));
 @custom-variant xshort (@media (max-height: 500px));
 @custom-variant short-wide (@media (max-height: 500px) and (min-width: 560px));
 @custom-variant tiny (@media (max-height: 420px));
 
 /* ==========================================================================
-   Design system — "Modern Government Utility"
-   Teal (primary, dengan gradasi) + kertas dingin + aksen emas lambang NTT
-   (dipakai sangat hemat).
+   Design system — "iOS Utility, Identitas Teal NTT"
+   Latar grouped netral, permukaan solid, separator halus; teal hanya untuk
+   aksi utama/aksen. Material kaca hanya untuk toolbar & bar mengambang.
 
-   Catatan: nama token `--navy-*` / kelas `bg-navy-*` dipertahankan agar
-   komponen tidak perlu diubah; nilainya kini skala TEAL (950 tergelap → 50).
+   Nama token `--navy-*` / `bg-navy-*` dipertahankan untuk kompatibilitas;
+   nilainya skala TEAL (950 tergelap → 50). Pada mode gelap skala ini dibalik
+   agar teks `text-navy-900` tetap terbaca dan latar `bg-navy-50` tetap redup.
    ========================================================================== */
 :root {
-  /* Skala teal merek */
-  --navy-950: #042f2c;   /* teal-tinta tergelap: overlay, teks di atas terang */
-  --navy-900: #0a4743;   /* band header & blok total (titik akhir gradasi) */
-  --navy-800: #0d6b63;   /* primary */
-  --navy-700: #0f8076;   /* hover primary */
-  --navy-600: #14968a;   /* teal hidup: aksen, ring, hover border */
-  --navy-100: #d5efeb;
-  --navy-50: #ecf8f6;
-  --teal-glow: #2bb5a3;  /* titik terang gradasi */
-  --gold-500: #c9a24a;   /* aksen lambang NTT — hanya garis/dot kecil */
-  --gold-100: #f6eedb;
-  --paper: #f3f7f7;
+  color-scheme: light;
 
-  /* Gradasi teal bersama */
-  --gradient-teal: linear-gradient(135deg, var(--navy-700) 0%, var(--navy-800) 45%, var(--navy-900) 100%);
-  --gradient-teal-soft: linear-gradient(135deg, var(--navy-50) 0%, #f6fbfa 60%, #ffffff 100%);
+  /* Skala teal merek (alias lama) */
+  --navy-950: #042f2c;
+  --navy-900: #0a4743;
+  --navy-800: #0d6b63;
+  --navy-700: #0f7a71;
+  --navy-600: #14968a;
+  --navy-100: #d5efeb;
+  --navy-50: #ebf6f4;
+  --teal-glow: #2bb5a3;
+  --gold-500: #c9a24a;
+  --gold-100: #f6eedb;
+  --paper: #f2f2f7;
+
+  /* iOS grouped tokens */
+  --ios-grouped-bg: #f2f2f7;
+  --ios-surface: #ffffff;
+  --ios-surface-elevated: #ffffff;
+  --ios-label: #172522;
+  --ios-label-secondary: #596663;
+  --ios-label-tertiary: #6b7774; /* ≥4.5:1 pada putih (placeholder) */
+  --ios-separator: #dde3e1;
+  --ios-fill: #eef1f0;
+  --ios-fill-strong: #e3e8e6;
+  --ios-field: #ffffff;
+  --ios-tint: #0d6b63;
+  --ios-switch-off: #c4cdca;
+  --ios-material: rgb(255 255 255 / 0.72);
+  --ios-material-opaque: #f9f9fb;
+  --ios-material-stroke: rgb(255 255 255 / 0.7);
+  --ios-material-hairline: rgb(23 37 34 / 0.12);
+  --ios-radius-group: 1.25rem;
+  --ios-radius-control: 0.75rem;
+  --ios-hit: 2.75rem;
+  --ios-gutter: 1rem;
+
+  /* Gradasi teal lembut untuk aksi utama */
+  --gradient-teal: linear-gradient(180deg, #13786f 0%, #0d6b63 100%);
+  --gradient-teal-hover: linear-gradient(180deg, #0f7a71 0%, #0a5d56 100%);
+  --gradient-teal-soft: linear-gradient(180deg, #f1f9f7 0%, #ffffff 100%);
 
   /* Token shadcn */
-  --background: var(--paper);
-  --foreground: #0b2422;
-  --card: #ffffff;
-  --card-foreground: #0b2422;
-  --popover: #ffffff;
-  --popover-foreground: #0b2422;
-  --primary: var(--navy-800);
+  --background: var(--ios-grouped-bg);
+  --foreground: var(--ios-label);
+  --card: var(--ios-surface);
+  --card-foreground: var(--ios-label);
+  --popover: var(--ios-surface-elevated);
+  --popover-foreground: var(--ios-label);
+  --primary: #0d6b63;
   --primary-foreground: #ffffff;
-  --secondary: #eaf3f2;
-  --secondary-foreground: var(--navy-800);
-  --muted: #eff4f4;
-  --muted-foreground: #556a68;
-  --accent: var(--navy-100);
-  --accent-foreground: var(--navy-800);
+  --secondary: #e6f2ef;
+  --secondary-foreground: #0d6b63;
+  --muted: var(--ios-fill);
+  --muted-foreground: var(--ios-label-secondary);
+  --accent: #e3f2ef;
+  --accent-foreground: #0b5e57;
   --destructive: #c0362c;
-  --border: #dfe8e7;
-  --input: #cfdcda;
-  --ring: var(--navy-600);
-  --chart-1: var(--navy-800);
-  --chart-2: var(--navy-600);
-  --chart-3: var(--teal-glow);
-  --chart-4: var(--gold-500);
+  --border: var(--ios-separator);
+  --input: #bcc6c3;
+  --ring: #14968a;
+  --chart-1: #0d6b63;
+  --chart-2: #14968a;
+  --chart-3: #2bb5a3;
+  --chart-4: #c9a24a;
   --chart-5: #94aaa7;
   --radius: 0.75rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #0b2422;
-  --sidebar-primary: var(--navy-800);
+  --sidebar-foreground: var(--ios-label);
+  --sidebar-primary: #0d6b63;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: var(--navy-50);
-  --sidebar-accent-foreground: var(--navy-800);
-  --sidebar-border: #dfe8e7;
-  --sidebar-ring: var(--navy-600);
+  --sidebar-accent-foreground: #0d6b63;
+  --sidebar-border: var(--ios-separator);
+  --sidebar-ring: #14968a;
 
-  /* Status semantik (hijau sukses digeser ke arah hijau daun agar terbedakan dari teal) */
+  /* Status semantik */
   --success: #23794a;
   --success-foreground: #ffffff;
-  --warning: #a8650a;
+  --warning: #9a5c08;
   --warning-foreground: #ffffff;
-  --info: var(--navy-600);
+  --info: #0f7a71;
   --info-foreground: #ffffff;
 
-  /* Elevasi — bayangan dingin bernuansa teal, rendah, berlapis */
-  --shadow-xs: 0 1px 2px rgb(4 47 44 / 0.05);
-  --shadow-card: 0 1px 2px rgb(4 47 44 / 0.04), 0 8px 24px -12px rgb(4 47 44 / 0.14);
-  --shadow-float: 0 2px 6px rgb(4 47 44 / 0.06), 0 18px 40px -16px rgb(4 47 44 / 0.26);
+  /* Elevasi rendah — grouped surfaces hampir datar */
+  --shadow-xs: 0 1px 1px rgb(16 24 22 / 0.04);
+  --shadow-card: 0 1px 2px rgb(16 24 22 / 0.04);
+  --shadow-float: 0 1px 3px rgb(16 24 22 / 0.06), 0 12px 32px -12px rgb(16 24 22 / 0.22);
 
   /* Plat TNKB (Perpol 7/2021): putih/hitam = pribadi, merah = dinas */
   --plate-putih-bg: #fbfcfd;
@@ -92,36 +125,86 @@
   --plate-merah-fg: #fff7f5;
 }
 
+/* Token gelap — hanya untuk `.dark` eksplisit (pilihan pengguna di navbar). */
 .dark {
-  --background: #061f1d;
-  --foreground: #e6f2f0;
-  --card: #0b2b28;
-  --card-foreground: #e6f2f0;
-  --popover: #0b2b28;
-  --popover-foreground: #e6f2f0;
-  --primary: #5fd0bf;
-  --primary-foreground: #042f2c;
-  --secondary: #123a36;
-  --secondary-foreground: #e6f2f0;
-  --muted: #10332f;
-  --muted-foreground: #96b5b1;
-  --accent: #134540;
-  --accent-foreground: #e6f2f0;
-  --destructive: #ef6b61;
-  --border: rgb(255 255 255 / 0.1);
-  --input: rgb(255 255 255 / 0.16);
-  --ring: #5fd0bf;
-  --success: #57c785;
-  --success-foreground: #042f2c;
-  --warning: #e6a447;
-  --warning-foreground: #042f2c;
-  --info: #5fd0bf;
-  --info-foreground: #042f2c;
+  color-scheme: dark;
+  --navy-950: #e9f7f4;
+  --navy-900: #d2f1ec;
+  --navy-800: #65d6c5;
+  --navy-700: #7fdecf;
+  --navy-600: #4fc4b2;
+  --navy-100: #1d4440;
+  --navy-50: #16302d;
+  --paper: #111214;
+  --ios-grouped-bg: #111214;
+  --ios-surface: #1c1c1e;
+  --ios-surface-elevated: #242426;
+  --ios-label: #f4f7f6;
+  --ios-label-secondary: #abb7b3;
+  --ios-label-tertiary: #8a9592;
+  --ios-separator: #39413e;
+  --ios-fill: #2a2c2e;
+  --ios-fill-strong: #343739;
+  --ios-field: #2a2b2d;
+  --ios-tint: #65d6c5;
+  --ios-switch-off: #4a4d50;
+  --ios-material: rgb(28 28 30 / 0.72);
+  --ios-material-opaque: #1c1c1e;
+  --ios-material-stroke: rgb(255 255 255 / 0.08);
+  --ios-material-hairline: rgb(255 255 255 / 0.12);
+  --gradient-teal: linear-gradient(180deg, #74dccc 0%, #5ccdbb 100%);
+  --gradient-teal-hover: linear-gradient(180deg, #86e3d5 0%, #6ad4c3 100%);
+  --gradient-teal-soft: linear-gradient(180deg, #19302d 0%, #1c1c1e 100%);
+  --primary: #65d6c5;
+  --primary-foreground: #082220;
+  --secondary: #1d3532;
+  --secondary-foreground: #c9efe9;
+  --accent: #193a36;
+  --accent-foreground: #9be7dc;
+  --destructive: #ff6b60;
+  --input: #5a6461;
+  --ring: #65d6c5;
+  --sidebar: #1c1c1e;
+  --sidebar-primary: #65d6c5;
+  --sidebar-primary-foreground: #082220;
+  --sidebar-accent-foreground: #9be7dc;
+  --sidebar-ring: #65d6c5;
+  --success: #5fd08f;
+  --success-foreground: #072414;
+  --warning: #f0b45a;
+  --warning-foreground: #2a1a03;
+  --info: #65d6c5;
+  --info-foreground: #082220;
+  --shadow-xs: 0 1px 1px rgb(0 0 0 / 0.3);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-float: 0 1px 3px rgb(0 0 0 / 0.4), 0 16px 36px -12px rgb(0 0 0 / 0.6);
 }
 
+
+/* Kontras ditingkatkan: label sekunder, separator, dan batas kontrol lebih tegas. */
+@media (prefers-contrast: more) {
+  :root {
+    --ios-label-secondary: #3f4a47;
+    --ios-separator: #a9b4b1;
+    --input: #6f7b78;
+    --ios-material-hairline: rgb(23 37 34 / 0.4);
+  }
+  .dark {
+    --ios-label-secondary: #d0d9d6;
+    --ios-separator: #6c7672;
+    --input: #8d9895;
+    --ios-material-hairline: rgb(255 255 255 / 0.4);
+  }
+}
+
+
 @theme inline {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-plate: "Saira Semi Condensed", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+  /* Font sistem Apple didahulukan. Segoe UI/Roboto sengaja SETELAH Plus
+     Jakarta Sans agar Windows/Android memakainya hanya sebagai fallback bila
+     font jaringan tidak termuat. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-money: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-plate: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -171,6 +254,19 @@
   --color-gold-500: var(--gold-500);
   --color-gold-100: var(--gold-100);
 
+  /* Warna iOS sebagai utilitas: bg-grouped, bg-surface, text-label-secondary, bg-fill, bg-field, border-separator */
+  --color-grouped: var(--ios-grouped-bg);
+  --color-surface: var(--ios-surface);
+  --color-surface-elevated: var(--ios-surface-elevated);
+  --color-label: var(--ios-label);
+  --color-label-secondary: var(--ios-label-secondary);
+  --color-label-tertiary: var(--ios-label-tertiary);
+  --color-separator: var(--ios-separator);
+  --color-fill: var(--ios-fill);
+  --color-fill-strong: var(--ios-fill-strong);
+  --color-field: var(--ios-field);
+  --color-tint: var(--ios-tint);
+
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 3px);
   --radius-lg: var(--radius);
@@ -184,79 +280,256 @@
   --shadow-float: var(--shadow-float);
 }
 
-* {
-  border-color: var(--border);
+/* Gaya dasar di @layer base agar utilitas Tailwind (border-*, tracking-*,
+   font-*) selalu dapat menimpanya. */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklch, var(--ring) 26%, transparent);
+  }
 }
 
-html {
-  -webkit-text-size-adjust: 100%;
-  text-rendering: optimizeLegibility;
-}
-
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: var(--font-sans);
-  letter-spacing: -0.015em;
-}
-
-::selection {
-  background-color: color-mix(in oklch, var(--navy-600) 22%, transparent);
-}
-
-/* Angka nominal & tanggal: figur tabular agar kolom rupiah sejajar. */
-.numeric {
-  font-family: var(--font-sans);
-  font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-}
-
-/* Label kecil kapital (eyebrow). Di dalam @layer components agar utilitas
-   Tailwind (mis. `text-white/65` di atas band teal) dapat menimpa warnanya. */
 @layer components {
+  /* Angka non-uang (tanggal, bobot, persen, hitungan): font UI, figur tabular. */
+  .numeric {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  /* Nominal Rupiah (tampilan & input): IBM Plex Sans tabular di semua
+     perangkat. Dideklarasikan setelah `.numeric` di layer yang sama sehingga
+     tetap menang bila kedua kelas terpasang. */
+  .monetary {
+    font-family: var(--font-money);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  /* Label kecil (eyebrow): tenang, tanpa tracking berlebihan. */
   .eyebrow {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--muted-foreground);
+  }
+
+  /* ---------------- iOS grouped primitives ---------------- */
+
+  /* Kontainer halaman: lebar maks 1280px, gutter simetris + safe area. */
+  .ios-page {
+    width: 100%;
+    max-width: 80rem;
+    margin-inline: auto;
+    padding-left: max(var(--ios-gutter), env(safe-area-inset-left));
+    padding-right: max(var(--ios-gutter), env(safe-area-inset-right));
+  }
+
+  /* Large title + subjudul halaman. */
+  .ios-page-title {
+    font-size: clamp(1.75rem, 1.45rem + 1.2vw, 2.125rem);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.022em;
+    color: var(--foreground);
+    text-wrap: balance;
+  }
+
+  .ios-page-subtitle {
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+    text-wrap: pretty;
+  }
+
+  /* Header section grouped (di atas .ios-group). */
+  .ios-section-header {
+    padding-inline: 1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
+    color: var(--muted-foreground);
+  }
+
+  .ios-section-footer {
+    padding-inline: 1rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--muted-foreground);
+  }
+
+  /* Inset grouped section: permukaan solid, tanpa bayangan tebal. */
+  .ios-group {
+    background-color: var(--card);
+    color: var(--card-foreground);
+    border-radius: var(--ios-radius-group);
+    border: 1px solid color-mix(in oklch, var(--border) 65%, transparent);
+    overflow: clip;
+  }
+
+  /* Baris grouped minimal 44px; separator inset antar-baris. */
+  .ios-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: var(--ios-hit);
+    padding: 0.6875rem 1rem;
+  }
+
+  .ios-row + .ios-row::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: var(--ios-row-inset, 1rem);
+    right: 0;
+    height: 1px;
+    background-color: var(--border);
+    pointer-events: none;
+  }
+
+  /* Kontrol segmented: track fill + segmen aktif terangkat. */
+  .ios-segmented {
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 2px;
+    padding: 2px;
+    border-radius: 0.75rem;
+    background-color: var(--ios-fill-strong);
+  }
+
+  .ios-segmented > button {
+    display: inline-flex;
+    min-height: 2.5rem;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 0.625rem;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--foreground);
+    transition: background-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .ios-segmented > button:hover:not([aria-current="page"], [aria-pressed="true"], [data-state="active"]) {
+    background-color: color-mix(in oklch, var(--card) 45%, transparent);
+  }
+
+  .ios-segmented > button[aria-current="page"],
+  .ios-segmented > button[aria-pressed="true"],
+  .ios-segmented > button[data-state="active"] {
+    background-color: var(--ios-surface-elevated);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 0 0 0.5px rgb(0 0 0 / 0.04);
+  }
+
+  .ios-segmented > button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+
+  /* 44px di layar sentuh/sempit; 40px hanya untuk pointer presisi ≥1024px. */
+  @media (max-width: 1023.98px), (pointer: coarse) {
+    .ios-segmented > button {
+      min-height: var(--ios-hit);
+    }
+  }
+
+  /* Toolbar navigasi atas — material kaca tipis (Liquid Glass approximation). */
+  .ios-toolbar {
+    background-color: var(--ios-material);
+    -webkit-backdrop-filter: saturate(1.8) blur(20px);
+    backdrop-filter: saturate(1.8) blur(20px);
+    box-shadow: 0 0.5px 0 var(--ios-material-hairline);
+  }
+
+  /* Kapsul kaca mengambang (bar bawah, toolbar bawah). */
+  .ios-capsule {
+    background-color: var(--ios-material);
+    -webkit-backdrop-filter: saturate(1.8) blur(24px);
+    backdrop-filter: saturate(1.8) blur(24px);
+    border-radius: 1.9375rem;
+    box-shadow:
+      inset 0 0 0 1px var(--ios-material-stroke),
+      0 0 0 0.5px var(--ios-material-hairline),
+      var(--shadow-float);
+  }
+
+  /* Tombol bundar 44px untuk aksi toolbar. */
+  .ios-toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-width: var(--ios-hit);
+    height: var(--ios-hit);
+    border-radius: 9999px;
+    padding-inline: 0.75rem;
+    color: var(--foreground);
+    background-color: var(--ios-fill);
   }
 }
 
 /* ==========================================================================
-   Latar & permukaan
+   Latar & permukaan (kelas lama, dipertahankan)
    ========================================================================== */
 
-/* Latar aplikasi: kertas dingin dengan cahaya teal sangat halus di atas. */
 .app-background {
-  background:
-    radial-gradient(60rem 22rem at 50% -6rem, color-mix(in oklch, var(--navy-600) 10%, transparent), transparent 70%),
-    var(--background);
+  background-color: var(--background);
 }
 
-/* Band merek teal (header, blok total). Gradasi diagonal teal hidup → teal
-   tinta, cahaya lembut di kiri atas, pendaran teal terang di kanan bawah. */
+/* Band merek teal (blok total). Tetap teal-gelap di kedua mode; teks putih. */
 .brand-band {
   background:
-    radial-gradient(40rem 16rem at 10% -4rem, rgb(255 255 255 / 0.12), transparent 70%),
-    radial-gradient(30rem 16rem at 100% 120%, color-mix(in oklch, var(--teal-glow) 45%, transparent), transparent 70%),
-    linear-gradient(135deg, var(--navy-800) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
+    radial-gradient(28rem 12rem at 100% 120%, rgb(43 181 163 / 0.28), transparent 70%),
+    linear-gradient(160deg, #0f7a71 0%, #0d6b63 45%, #0a4f49 100%);
   color: #fff;
 }
 
-/* Gradasi teal untuk tombol utama & elemen terpilih. */
+.dark .brand-band {
+  background:
+    radial-gradient(28rem 12rem at 100% 120%, rgb(43 181 163 / 0.22), transparent 70%),
+    linear-gradient(160deg, #0d5f58 0%, #0b4a45 55%, #08332f 100%);
+}
+
+
 .bg-gradient-teal {
   background-image: var(--gradient-teal);
 }
@@ -270,39 +543,57 @@ h6 {
   height: 1px;
 }
 
-/* Kartu permukaan standar */
+/* Kartu permukaan standar = inset grouped surface. */
 .surface-card {
   background-color: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in oklch, var(--border) 65%, transparent);
+  border-radius: var(--ios-radius-group);
   box-shadow: var(--shadow-card);
 }
 
-/* Glass — aksen 5%: bar total mobile & header lengket. */
+/* Glass — HANYA untuk bar/toolbar mengambang, bukan kartu konten. */
 .glass {
-  background-color: color-mix(in oklch, var(--card) 78%, transparent);
-  -webkit-backdrop-filter: saturate(1.6) blur(14px);
-  backdrop-filter: saturate(1.6) blur(14px);
+  background-color: var(--ios-material);
+  -webkit-backdrop-filter: saturate(1.8) blur(20px);
+  backdrop-filter: saturate(1.8) blur(20px);
 }
 
 .glass-dark {
-  background-color: color-mix(in oklch, var(--navy-900) 82%, transparent);
-  -webkit-backdrop-filter: saturate(1.4) blur(14px);
-  backdrop-filter: saturate(1.4) blur(14px);
+  background-color: rgb(10 71 67 / 0.86);
+  -webkit-backdrop-filter: saturate(1.4) blur(16px);
+  backdrop-filter: saturate(1.4) blur(16px);
   color: #fff;
 }
 
+/* Fallback opaque: tanpa backdrop-filter atau saat pengguna meminta
+   transparansi dikurangi / kontras lebih tinggi. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass {
-    background-color: var(--card);
+  .glass,
+  .ios-toolbar,
+  .ios-capsule {
+    background-color: var(--ios-material-opaque);
   }
   .glass-dark {
-    background-color: var(--navy-900);
+    background-color: #0a4743;
   }
 }
 
-/* Layar penuh setinggi viewport yang terlihat; tidak pernah scroll.
-   100vh adalah fallback untuk browser tanpa dukungan satuan dvh. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .glass,
+  .ios-toolbar,
+  .ios-capsule {
+    background-color: var(--ios-material-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .glass-dark {
+    background-color: #0a4743;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Layar penuh tanpa scroll (kompatibilitas). */
 .viewport-screen {
   position: fixed;
   inset: 0;
@@ -312,9 +603,33 @@ h6 {
   overscroll-behavior: none;
 }
 
+/* Layar penuh yang tidak scroll pada kondisi normal, tetapi mengizinkan scroll
+   vertikal internal bila zoom/teks besar/keyboard membuat isi tidak muat.
+   Isi dipusatkan dengan margin auto pada `.viewport-screen-inner > *` agar
+   bagian atas tidak pernah terpotong (safe centering). */
+.viewport-screen-scroll {
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.viewport-screen-inner {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1.25rem, env(safe-area-inset-left));
+  padding-right: max(1.25rem, env(safe-area-inset-right));
+}
+
 /* ==========================================================================
    Plat nomor TNKB — elemen khas aplikasi.
-   Pakai: <div class="tnkb-plate" data-plate="putih|hitam|merah">.
    ========================================================================== */
 .tnkb-plate {
   --plate-bg: var(--plate-putih-bg);
@@ -323,12 +638,11 @@ h6 {
   background-color: var(--plate-bg);
   color: var(--plate-fg);
   border-radius: 0.875rem;
-  /* Bingkai timbul ganda: tepi luar gelap + garis dalam seperti plat aluminium. */
   box-shadow:
     0 0 0 1px color-mix(in oklch, var(--plate-fg) 85%, transparent),
     inset 0 0 0 3px var(--plate-bg),
     inset 0 0 0 4.5px color-mix(in oklch, var(--plate-fg) 80%, transparent),
-    0 10px 24px -14px rgb(4 47 44 / 0.45);
+    0 6px 16px -10px rgb(16 24 22 / 0.35);
   transition:
     background-color 220ms ease,
     color 220ms ease,
@@ -345,13 +659,21 @@ h6 {
   --plate-fg: var(--plate-merah-fg);
 }
 
+/* Plat putih di mode gelap: tepi terang agar bingkai tetap terlihat. */
+.dark .tnkb-plate[data-plate="hitam"] {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.35),
+    inset 0 0 0 3px var(--plate-bg),
+    inset 0 0 0 4.5px color-mix(in oklch, var(--plate-fg) 80%, transparent);
+}
+
+
 .tnkb-plate:focus-within {
   box-shadow:
     0 0 0 1px color-mix(in oklch, var(--plate-fg) 85%, transparent),
     inset 0 0 0 3px var(--plate-bg),
     inset 0 0 0 4.5px color-mix(in oklch, var(--plate-fg) 80%, transparent),
-    0 0 0 4px color-mix(in oklch, var(--ring) 35%, transparent),
-    0 10px 24px -14px rgb(4 47 44 / 0.45);
+    0 0 0 4px color-mix(in oklch, var(--ring) 40%, transparent);
 }
 
 .tnkb-plate input {
@@ -361,21 +683,20 @@ h6 {
 }
 
 .tnkb-plate input::placeholder {
-  color: color-mix(in oklch, var(--plate-fg) 32%, transparent);
+  color: color-mix(in oklch, var(--plate-fg) 36%, transparent);
 }
 
-/* Strip masa berlaku di bagian bawah plat. */
+/* Strip tanggal di bawah plat memakai font UI (tanggal bukan nomor polisi). */
 .tnkb-strip {
   border-top: 1.5px solid color-mix(in oklch, var(--plate-fg) 70%, transparent);
-  font-family: var(--font-plate);
 }
 
 /* ==========================================================================
-   Kelas status — dipertahankan untuk kompatibilitas komponen yang ada.
+   Kelas status — dipertahankan untuk kompatibilitas komponen.
    ========================================================================== */
 .info-subtle {
-  background-color: color-mix(in oklch, var(--navy-600) 6%, var(--card));
-  border-color: color-mix(in oklch, var(--navy-600) 22%, transparent);
+  background-color: color-mix(in oklch, var(--info) 7%, var(--card));
+  border-color: color-mix(in oklch, var(--info) 24%, transparent);
 }
 
 .text-success {
@@ -387,32 +708,75 @@ h6 {
 }
 
 .bg-success-subtle {
-  background-color: color-mix(in oklch, var(--success) 8%, var(--card));
+  background-color: color-mix(in oklch, var(--success) 9%, var(--card));
 }
 
 .border-success-subtle {
-  border-color: color-mix(in oklch, var(--success) 26%, transparent);
+  border-color: color-mix(in oklch, var(--success) 28%, transparent);
 }
 
 .step-badge {
-  background-color: var(--navy-50);
-  border-color: color-mix(in oklch, var(--navy-800) 18%, transparent);
-  color: var(--navy-800);
+  background-color: var(--accent);
+  border-color: color-mix(in oklch, var(--primary) 20%, transparent);
+  color: var(--accent-foreground);
 }
 
 .amnesty-badge {
-  background-color: color-mix(in oklch, var(--success) 7%, var(--card));
-  border-color: color-mix(in oklch, var(--success) 24%, transparent);
+  background-color: color-mix(in oklch, var(--success) 8%, var(--card));
+  border-color: color-mix(in oklch, var(--success) 26%, transparent);
 }
 
 .facility-active {
-  background-color: color-mix(in oklch, var(--navy-600) 5%, var(--card));
-  border-color: color-mix(in oklch, var(--navy-800) 36%, transparent);
+  background-color: color-mix(in oklch, var(--primary) 7%, var(--card));
+  border-color: color-mix(in oklch, var(--primary) 40%, transparent);
 }
 
 .total-block {
-  background-color: var(--navy-50);
-  border-color: color-mix(in oklch, var(--navy-800) 16%, transparent);
+  background-color: var(--accent);
+  border-color: color-mix(in oklch, var(--primary) 18%, transparent);
+}
+
+/* Toolbar terang: tombol lama `variant="onDark"` (dibuat untuk header gelap)
+   diterjemahkan ke gaya toolbar terang. Unlayered agar menimpa utilitas. */
+.ios-toolbar [data-slot="button"][data-variant="onDark"] {
+  border-color: transparent;
+  background-color: var(--ios-fill);
+  color: var(--foreground);
+  border-radius: 9999px;
+}
+
+.ios-toolbar [data-slot="button"][data-variant="onDark"]:hover {
+  background-color: var(--ios-fill-strong);
+  color: var(--foreground);
+}
+
+.ios-toolbar [data-slot="button"][data-variant="onDark"]:focus-visible {
+  --tw-ring-color: color-mix(in oklch, var(--ring) 55%, transparent);
+}
+
+/* ==========================================================================
+   Forced colors (Windows High Contrast)
+   ========================================================================== */
+@media (forced-colors: active) {
+  .ios-group,
+  .surface-card,
+  .ios-capsule,
+  .ios-segmented {
+    border: 1px solid CanvasText;
+  }
+  .ios-toolbar {
+    border-bottom: 1px solid CanvasText;
+  }
+  .ios-segmented > button[aria-current="page"],
+  .ios-segmented > button[aria-pressed="true"],
+  .ios-segmented > button[data-state="active"] {
+    outline: 2px solid Highlight;
+  }
+  /* Warna plat adalah informasi (putih/hitam/merah); pertahankan. */
+  .tnkb-plate {
+    forced-color-adjust: none;
+    outline: 1px solid CanvasText;
+  }
 }
 
 /* ==========================================================================
@@ -482,7 +846,6 @@ h6 {
   animation: fade-up 220ms ease-out both;
 }
 
-/* Angka total berganti: kilau lembut satu kali. */
 @keyframes value-settle {
   from {
     opacity: 0.35;
@@ -508,7 +871,12 @@ h6 {
     animation: none;
   }
 
-  .tnkb-plate {
+  .tnkb-plate,
+  .ios-segmented > button {
     transition: none;
+  }
+
+  html:focus-within {
+    scroll-behavior: auto;
   }
 }

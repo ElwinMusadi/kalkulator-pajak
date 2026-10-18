@@ -61,7 +61,10 @@ export function PlateColorRadioGroup({
       role="radiogroup"
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      className={cn("grid w-full min-w-0 grid-cols-3 gap-2 sm:gap-3", className)}
+      className={cn(
+        "grid w-full min-w-0 grid-cols-3 gap-1 rounded-[0.875rem] bg-muted p-1",
+        className,
+      )}
     >
       {WARNA_PLAT_OPTIONS.map((option, index) => {
         const checked = option === value;
@@ -78,23 +81,23 @@ export function PlateColorRadioGroup({
             onClick={() => onValueChange(option)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={cn(
-              "relative flex min-w-0 rounded-lg border bg-card p-1 transition-[border-color,box-shadow] duration-150",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+              "relative flex min-h-11 min-w-0 items-center gap-1.5 rounded-[0.625rem] px-1.5 py-1 transition-[background-color,box-shadow] duration-150",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-muted",
               checked
-                ? "border-navy-800 ring-1 ring-navy-800 dark:border-primary dark:ring-primary"
-                : "border-border hover:border-navy-600/40",
+                ? "bg-card shadow-xs ring-1 ring-primary/40"
+                : "hover:bg-card/60",
             )}
           >
             {/* Plat mini memakai token TNKB yang sama dengan plat Nomor Polisi. */}
             <span
               data-plate={option}
-              className="tnkb-plate flex h-9 w-full min-w-0 items-center justify-center rounded-md! px-1 font-plate text-[0.8125rem] font-bold uppercase tracking-[0.1em] sm:text-sm"
+              className="tnkb-plate flex h-8 w-full min-w-0 items-center justify-center rounded-md! px-1 font-sans text-[0.8125rem] font-bold uppercase tracking-[0.08em] sm:text-sm"
             >
               <span className="truncate">{WARNA_PLAT_LABEL[option]}</span>
             </span>
             {checked && (
               <span
-                className="absolute -right-1 -top-1.5 flex size-4 items-center justify-center rounded-full bg-navy-800 text-white ring-2 ring-card dark:bg-primary dark:text-primary-foreground"
+                className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-card"
                 aria-hidden="true"
               >
                 <Check className="size-2.5" strokeWidth={3.5} />

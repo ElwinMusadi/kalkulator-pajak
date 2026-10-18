@@ -114,7 +114,7 @@ function InstallGuideDialog({
   const guide = GUIDES[platform]
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto rounded-[1.25rem]">
         <DialogHeader className="text-left">
           <DialogTitle>Instal Kalkulator Pajak</DialogTitle>
           <DialogDescription>
@@ -123,12 +123,12 @@ function InstallGuideDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <p className="eyebrow">{guide.title}</p>
+          <p className="text-[0.9375rem] font-semibold text-foreground">{guide.title}</p>
           <ol className="flex flex-col gap-2.5">
             {guide.steps.map((step, index) => (
-              <li key={index} className="flex items-start gap-3 text-sm leading-relaxed">
+              <li key={index} className="flex items-start gap-3 text-[0.9375rem] leading-relaxed">
                 <span
-                  className="numeric step-badge mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
+                  className="numeric mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
                   aria-hidden="true"
                 >
                   {index + 1}
@@ -144,7 +144,11 @@ function InstallGuideDialog({
           )}
         </div>
         <DialogFooter>
-          <Button type="button" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            className="h-11 rounded-full px-6 font-semibold"
+            onClick={() => onOpenChange(false)}
+          >
             Mengerti
           </Button>
         </DialogFooter>
@@ -190,10 +194,13 @@ export function PwaInstallButton({ className }: { className?: string }) {
         <TooltipTrigger asChild>
           <Button
             type="button"
-            variant="onDark"
+            variant="ghost"
             onClick={() => void start()}
             aria-label="Instal aplikasi"
-            className={cn("w-10 px-0 sm:w-auto sm:px-4", className)}
+            className={cn(
+              "size-11 rounded-full px-0 text-primary hover:bg-primary/10 hover:text-primary sm:w-auto sm:px-4 [&_svg]:stroke-[1.75]",
+              className,
+            )}
           >
             <Download aria-hidden="true" />
             <span className="hidden sm:inline">Instal</span>
@@ -253,22 +260,21 @@ export function PwaInstallPrompt() {
 
   return (
     <>
-      <div className="surface-card flex items-start gap-3 p-4 lg:hidden">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-navy-800">
-          <Download className="size-4" aria-hidden="true" />
+      <div className="flex items-start gap-3 rounded-[1.25rem] border border-border/70 bg-card p-4 lg:hidden">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Download className="size-[1.125rem] stroke-[1.75]" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground">
+          <p className="text-[0.9375rem] font-semibold text-foreground">
             Instal Kalkulator Pajak
           </p>
-          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
             Pasang aplikasi agar dapat dibuka langsung dari layar utama. Koneksi
             internet tetap diperlukan.
           </p>
           <Button
             type="button"
-            size="sm"
-            className="mt-3"
+            className="mt-3 h-11 rounded-full px-5 font-semibold [&_svg]:stroke-[1.75]"
             onClick={() => void start()}
           >
             <Download aria-hidden="true" />
@@ -279,7 +285,7 @@ export function PwaInstallPrompt() {
           type="button"
           variant="ghost"
           size="icon"
-          className="-mr-2 -mt-2 size-9 shrink-0 text-muted-foreground"
+          className="-mr-2 -mt-2 size-11 shrink-0 rounded-full text-muted-foreground"
           aria-label="Tutup ajakan instalasi"
           onClick={dismiss}
         >

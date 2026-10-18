@@ -161,13 +161,13 @@ function buildTiles(result: TaxCalculationResult): ComponentTile[] {
 
 function DetailRow({ label, value, waived = false }: DetailRowData) {
   return (
-    <div className="flex min-w-0 items-baseline justify-between gap-3 py-1.5">
-      <span className="min-w-0 text-sm leading-snug text-muted-foreground">
+    <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2">
+      <span className="min-w-0 flex-1 basis-40 text-sm leading-snug text-muted-foreground">
         {label}
       </span>
       <span
         className={cn(
-          "numeric shrink-0 text-sm font-semibold",
+          "monetary ml-auto text-right text-sm font-medium",
           waived ? "text-success" : "text-foreground",
         )}
       >
@@ -184,9 +184,9 @@ interface ResultBreakdownProps {
 }
 
 /**
- * Daftar kartu komponen pajak: PKB / Opsen / SWDKLLJ / PNBP.
- * Setiap kartu adalah tombol disclosure; rinciannya muncul sebagai panel
- * di bawah daftar.
+ * Daftar komponen biaya bergaya faktur: PKB / Opsen / SWDKLLJ / PNBP / BBN.
+ * Setiap baris adalah tombol disclosure; rinciannya terbuka tepat di bawah
+ * baris tersebut di dalam grup yang sama.
  */
 export function ResultBreakdown({ result }: ResultBreakdownProps) {
   const [open, setOpen] = useState<ComponentKey[]>([]);
@@ -200,85 +200,74 @@ export function ResultBreakdown({ result }: ResultBreakdownProps) {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-3">
-      {/* Satu kolom di semua ukuran: singkatan + kepanjangan muat utuh dalam
-          satu baris dan setiap kartu tetap rendah (±64px). */}
-      <div className="grid grid-cols-1 gap-2.5">
+    <div className="min-w-0">
+      <p
+        id={`${baseId}-heading`}
+        className="px-1 pb-1.5 text-[0.8125rem] font-medium text-muted-foreground"
+      >
+        Komponen Biaya
+      </p>
+      <ul
+        aria-labelledby={`${baseId}-heading`}
+        className="min-w-0 divide-y divide-border/70 overflow-hidden rounded-[1.25rem] border border-border/70 bg-card"
+      >
         {tiles.map((tile) => {
           const expanded = open.includes(tile.key);
           const panelId = `${baseId}-${tile.key}`;
           return (
-            <button
-              key={tile.key}
-              type="button"
-              aria-expanded={expanded}
-              aria-controls={panelId}
-              onClick={() => toggle(tile.key)}
-              className={cn(
-                "group/tile flex min-w-0 flex-col gap-1.5 rounded-xl border px-3.5 py-2.5 text-left transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2",
-                expanded
-                  ? "border-navy-600/45 bg-gradient-teal-soft shadow-xs"
-                  : "border-border bg-card hover:border-navy-600/35 hover:bg-navy-50/60",
-              )}
-            >
-              {/* Singkatan + kepanjangan dalam satu baris; kepanjangan terpotong
-                  rapi bila kolom sempit, singkatan tidak pernah terpotong. */}
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 text-[13px] font-semibold leading-none text-foreground">
-                  {tile.label}
+            <li key={tile.key} className="min-w-0">
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                onClick={() => toggle(tile.key)}
+                className={cn(
+                  "flex min-h-11 w-full min-w-0 items-center gap-2 px-4 py-2.5 text-left transition-colors duration-150",
+                  "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  expanded && "bg-muted/40",
+                )}
+              >
+                {/* Singkatan + kepanjangan satu baris pada ruang normal; boleh
+                    wrap saat teks diperbesar. Nominal punya kolom sendiri di
+                    kanan, tidak pernah dipotong. */}
+                <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0">
+                  <span className="text-[0.9375rem] font-semibold leading-snug text-foreground">
+                    {tile.label}
+                  </span>
+                  <span className="text-[0.8125rem] leading-snug text-muted-foreground">
+                    {tile.hint}
+                  </span>
                 </span>
-                <span
-                  aria-hidden="true"
-                  className="size-1 shrink-0 rounded-full bg-muted-foreground/40"
-                />
-                <span className="min-w-0 flex-1 truncate text-[11px] leading-none text-muted-foreground">
-                  {tile.hint}
+                <span className="monetary shrink-0 text-right text-[0.9375rem] font-semibold leading-snug text-foreground">
+                  {formatRupiah(tile.amount)}
                 </span>
                 <ChevronDown
                   aria-hidden="true"
                   className={cn(
-                    "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                    expanded && "rotate-180 text-navy-800",
+                    "size-4 shrink-0 stroke-[1.75] text-muted-foreground transition-transform duration-200",
+                    expanded && "rotate-180 text-primary",
                   )}
                 />
-              </span>
-              <span className="numeric block truncate text-base font-bold leading-tight tracking-tight text-navy-900 sm:text-[1.0625rem]">
-                {formatRupiah(tile.amount)}
-              </span>
-            </button>
+              </button>
+              <div
+                id={panelId}
+                role="region"
+                aria-label={`Rincian ${tile.label}`}
+                hidden={!expanded}
+                className="animate-fade-up border-t border-border/60 bg-muted/30 px-4 py-1"
+              >
+                {expanded && (
+                  <div className="divide-y divide-border/60">
+                    {tile.rows.map((row) => (
+                      <DetailRow key={row.label} {...row} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </li>
           );
         })}
-      </div>
-
-      {/* Panel rincian: dirender untuk setiap tile yang terbuka, berurutan. */}
-      {tiles.map((tile) => {
-        const expanded = open.includes(tile.key);
-        const panelId = `${baseId}-${tile.key}`;
-        if (!expanded) {
-          return <div key={tile.key} id={panelId} hidden />;
-        }
-        return (
-          <section
-            key={tile.key}
-            id={panelId}
-            aria-label={`Rincian ${tile.label}`}
-            className="animate-fade-up rounded-xl border border-navy-800/15 bg-navy-50/50 px-4 py-2.5"
-          >
-            <p className="eyebrow flex items-center gap-2 py-1">
-              <span
-                aria-hidden="true"
-                className="size-1.5 rounded-full bg-gold-500"
-              />
-              Rincian {tile.label}
-            </p>
-            <div className="divide-y divide-border/70">
-              {tile.rows.map((row) => (
-                <DetailRow key={row.label} {...row} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      </ul>
     </div>
   );
 }

@@ -9,14 +9,21 @@
 import type { ApiErrorBody } from "@/types/auth"
 
 /**
- * Base URL API. Sesi berbasis cookie same-origin (`__Host-`, SameSite=Strict)
- * dan pemeriksaan Origin (CSRF) mengharuskan API berada di origin yang sama.
- * Saat `npm run dev`, nilai VITE_API_BASE_URL diabaikan: request /api relatif
- * dan diteruskan proxy Vite ke `wrangler pages dev` (lihat vite.config.ts).
+ * Base URL API — SELALU string kosong (request `/api/...` relatif).
+ *
+ * Sesi berbasis cookie same-origin (`__Host-`, SameSite=Strict), request
+ * memakai `credentials: "same-origin"`, server melakukan pemeriksaan Origin
+ * (CSRF) dan tidak menyediakan CORS. Akibatnya API terautentikasi hanya bisa
+ * dipanggil dari origin yang sama dengan frontend (Cloudflare Pages + Functions,
+ * atau proxy Vite ke `wrangler pages dev` saat `npm run dev`).
+ *
+ * `VITE_API_BASE_URL` lama sengaja TIDAK dibaca lagi: nilai di `.env.local`
+ * (mis. URL produksi) ikut ter-bundle pada `vite build`, sehingga build lokal
+ * (`wrangler pages dev dist`) mengirim request lintas origin tanpa cookie dan
+ * berakhir NETWORK_ERROR. Deployment di origin lain tidak didukung; pasang
+ * frontend dan /api pada origin yang sama.
  */
-export const API_BASE_URL: string = import.meta.env?.DEV
-  ? ""
-  : (import.meta.env?.VITE_API_BASE_URL ?? "")
+export const API_BASE_URL = ""
 
 /** Event global saat server menyatakan sesi tidak ada/berakhir (HTTP 401). */
 export const AUTH_UNAUTHENTICATED_EVENT = "auth:unauthenticated"

@@ -82,10 +82,10 @@ export function PwaUpdateNotice() {
               focusTarget.current = "apply"
               setMode("expanded")
             }}
-            className="fixed right-3 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center gap-2 rounded-full border border-navy-600/30 bg-card pl-3 pr-4 text-[13px] font-semibold text-navy-800 shadow-float transition-colors hover:bg-navy-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:right-4 lg:bottom-6 xshort:left-3 xshort:right-auto"
+            className="fixed right-3 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center gap-2 rounded-full border border-border/70 bg-card pl-2 pr-4 text-sm font-semibold text-primary shadow-float transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-4 lg:bottom-6 xshort:left-3 xshort:right-auto"
           >
-            <span className="flex size-6 items-center justify-center rounded-full bg-navy-50" aria-hidden="true">
-              <RefreshCw className="size-3.5" />
+            <span className="flex size-7 items-center justify-center rounded-full bg-primary/10" aria-hidden="true">
+              <RefreshCw className="size-3.5 stroke-[1.75]" />
             </span>
             Pembaruan tersedia
           </button>
@@ -95,26 +95,26 @@ export function PwaUpdateNotice() {
             aria-labelledby="pwa-update-title"
             className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 mx-auto max-w-sm sm:left-auto sm:right-4 sm:top-4 sm:mx-0 sm:w-96"
           >
-            <div className="flex items-start gap-3 rounded-xl border border-navy-600/30 bg-card p-3 shadow-float sm:p-4">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-navy-800">
-                <RefreshCw className="size-4" aria-hidden="true" />
+            <div className="flex items-start gap-3 rounded-[1.25rem] border border-border/70 bg-card p-3.5 shadow-float sm:p-4">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-primary/10 text-primary">
+                <RefreshCw className="size-[1.125rem] stroke-[1.75]" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <h2 id="pwa-update-title" className="text-sm font-semibold text-foreground">
+                <h2 id="pwa-update-title" className="text-[0.9375rem] font-semibold text-foreground">
                   Versi Baru Tersedia
                 </h2>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
                   Perbarui untuk memakai versi terbaru. Isian yang belum disimpan
                   akan direset.
                 </p>
-                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Button
                     ref={applyRef}
                     type="button"
-                    size="sm"
                     onClick={applyUpdate}
                     disabled={applying || !online}
                     aria-busy={applying || undefined}
+                    className="h-11 rounded-full px-5 font-semibold"
                   >
                     {applying ? (
                       <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -126,8 +126,8 @@ export function PwaUpdateNotice() {
                   {!applying && (
                     <Button
                       type="button"
-                      size="sm"
                       variant="ghost"
+                      className="h-11 rounded-full px-5 text-primary hover:bg-primary/10 hover:text-primary"
                       onClick={() => {
                         focusTarget.current = "pill"
                         setMode("collapsed")

@@ -36,8 +36,11 @@ export function DatePickerField({
   };
 
   return (
-    <Field data-invalid={invalid || undefined} className="min-w-0 gap-2">
-      <FieldLabel htmlFor={id}>
+    <Field data-invalid={invalid || undefined} className="min-w-0 gap-1.5">
+      <FieldLabel
+        htmlFor={id}
+        className="text-[0.9375rem] font-medium leading-snug text-foreground"
+      >
         {label}
         {required && (
           <span className="text-destructive" aria-hidden="true">
@@ -53,8 +56,8 @@ export function DatePickerField({
             variant="outline"
             aria-invalid={invalid || undefined}
             className={cn(
-              "h-10 w-full min-w-0 justify-start gap-2.5 bg-card px-3 text-left font-normal shadow-xs",
-              "[&_svg]:text-muted-foreground",
+              "h-11 w-full min-w-0 justify-start gap-2.5 rounded-xl bg-card px-3.5 text-left font-normal shadow-none",
+              "[&_svg]:text-muted-foreground [&_svg]:stroke-[1.75]",
               invalid && "border-destructive ring-1 ring-destructive/25",
             )}
           >
@@ -64,17 +67,17 @@ export function DatePickerField({
               `hover:[&_span]` pada varian), jadi tidak dikunci di sini.
             */}
             {value ? (
-              <span className="numeric min-w-0 truncate text-sm font-medium leading-none text-foreground">
+              <span className="numeric min-w-0 truncate text-base leading-none text-foreground">
                 {format(value, "dd/MM/yyyy")}
               </span>
             ) : (
-              <span className="min-w-0 truncate text-sm leading-none text-muted-foreground">
+              <span className="min-w-0 truncate text-base leading-none text-muted-foreground">
                 {placeholder}
               </span>
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto rounded-2xl p-0" align="start">
           <Calendar
             mode="single"
             selected={value}

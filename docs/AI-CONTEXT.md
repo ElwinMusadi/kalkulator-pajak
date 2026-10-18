@@ -348,9 +348,10 @@ CREATE INDEX IF NOT EXISTS idx_vehicle_njkb_nopol ON vehicle_njkb(nopol);
 
 ## 10. Known Issues / Technical Debt / Limitations
 
-1. **Konfigurasi Environment Base URL**:
-   - File `.env.local` saat ini mengarah ke `VITE_API_BASE_URL=https://kalkulator.uptdpenda-kupang.web.id`.
-   - Untuk pengembangan lokal dengan Pages Functions mock, dev server perlu dijalankan via `npm run pages:dev` (`wrangler pages dev dist --d1 DB`) dan `VITE_API_BASE_URL` dikosongkan agar request mengarah ke relative path `/api/njkb/...`.
+1. **API autentikasi wajib same-origin**:
+   - `src/lib/http.ts` selalu memakai URL relatif `/api/...`, baik di development maupun build. `VITE_API_BASE_URL` tidak lagi dibaca agar konfigurasi lokal tidak mengarahkan build ke API production lintas origin.
+   - Jalankan `npm run dev:api` untuk Pages Functions + D1 lokal di port 8788, lalu `npm run dev` untuk Vite/hot reload (biasanya port 5173). Buka alamat Vite; proxy `/api` meneruskan request ke 8788 dengan Host tetap sama.
+   - `http://localhost:8788` juga dapat dipakai untuk memeriksa hasil build lokal. Setelah perubahan ini, build ulang dan lakukan hard reload atau hapus service worker localhost bila masih menyajikan bundle lama. Jangan gunakan `--d1 DB`, karena bisa menunjuk database lokal kosong yang berbeda dari binding `wrangler.toml`.
 2. **Kuota Harian D1 Free Tier**:
    - Free tier Cloudflare D1 memiliki limit penulisan harian 100.000 rows written. Script re-seeding penuh (920k baris) melebihi batas free tier harian jika dijalankan sekaligus tanpa upgrade plan.
 3. **Data Offline Terbatas**:

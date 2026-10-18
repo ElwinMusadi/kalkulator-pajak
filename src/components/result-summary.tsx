@@ -95,29 +95,31 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
       className={cn("flex min-w-0 flex-col", compact ? "gap-3" : "gap-4")}
     >
       {!compact && (
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="eyebrow">Hasil penetapan</p>
-            <h3 className="mt-0.5 text-lg font-bold leading-tight tracking-tight text-foreground">
-              Rincian Pembayaran
-            </h3>
-          </div>
+        <div className="min-w-0">
+          <p className="text-[0.8125rem] font-medium text-muted-foreground">
+            Hasil Penetapan
+          </p>
+          <h3 className="mt-0.5 text-[1.375rem] font-semibold leading-tight text-foreground">
+            Rincian Pembayaran
+          </h3>
         </div>
       )}
 
-      {/* Tile total — fokus utama panel. */}
-      <div className="brand-band relative overflow-hidden rounded-xl p-5">
+      {/* Blok total — fokus utama: permukaan solid, aksen teal lembut. */}
+      <div className="relative overflow-hidden rounded-[1.25rem] border border-primary/15 bg-primary/[0.06] p-5 dark:bg-primary/10">
         {/* Tombol salin diposisikan absolut agar tingginya tidak menambah
             jarak antara label "Total Bayar" dan nominal. */}
-        <p className="eyebrow pr-10 text-white/65">Total Bayar</p>
-        <div className="absolute right-3.5 top-3.5">
+        <p className="pr-12 text-[0.9375rem] font-medium leading-tight text-muted-foreground">
+          Total Bayar
+        </p>
+        <div className="absolute right-2.5 top-2.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                variant="onDark"
+                variant="ghost"
                 size="icon"
-                className="size-9 border-transparent bg-transparent"
+                className="size-11 rounded-full text-primary hover:bg-primary/10 hover:text-primary [&_svg]:stroke-[1.75]"
                 aria-label={
                   copied ? "Ringkasan disalin" : "Salin ringkasan penetapan"
                 }
@@ -137,25 +139,25 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         </div>
         <p
           key={result.total}
-          className="animate-value-settle font-plate mt-1.5 whitespace-nowrap text-[clamp(2rem,9vw,2.75rem)] font-bold leading-none tracking-tight tabular-nums text-white lg:text-[2.5rem] xl:text-[2.75rem]"
+          className="animate-value-settle monetary mt-1.5 break-words text-[clamp(1.875rem,8.5vw,2.5rem)] font-bold leading-none tracking-tight text-primary lg:text-[2.25rem] xl:text-[2.5rem]"
         >
           {formatRupiah(result.total)}
         </p>
-        <div className="gold-rule my-3.5 opacity-80" aria-hidden="true" />
+        <div className="my-3.5 h-px bg-primary/15" aria-hidden="true" />
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
           {isPajakAktif ? (
-            <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-white">
-              <ShieldCheck className="size-4 shrink-0 text-emerald-300" aria-hidden="true" />
+            <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-success">
+              <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
               {statusLine}
             </p>
           ) : (
-            <p className="text-sm text-white/75">{statusLine}</p>
+            <p className="text-sm text-muted-foreground">{statusLine}</p>
           )}
           {/* Hanya plat merah (tarif khusus); berbeda dari PNBP TNKB (biaya plat). */}
           {isPlatMerah && (
-            <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-xs font-medium text-white">
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-foreground">
               <PlateColorSwatch warna={result.warnaPlat} />
-              <span className="min-w-0 truncate">
+              <span className="min-w-0">
                 Tarif PKB{" "}
                 <span className="numeric font-semibold">{tarifLabel}</span> ·
                 Plat {WARNA_PLAT_LABEL[result.warnaPlat]}
@@ -166,12 +168,12 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
       </div>
 
       {/* Catatan Tax Amnesty */}
-      <div className="amnesty-badge flex items-start gap-2.5 rounded-lg border px-3 py-2.5">
+      <div className="amnesty-badge flex items-start gap-2.5 rounded-2xl border px-3.5 py-3">
         <ShieldCheck
           className="mt-0.5 size-4 shrink-0 text-success"
           aria-hidden="true"
         />
-        <div className="min-w-0 text-xs leading-relaxed text-foreground">
+        <div className="min-w-0 text-[0.8125rem] leading-relaxed text-foreground">
           <p>
             <span className="font-semibold">Tax Amnesty aktif.</span> Denda PKB
             dan Opsen dibebaskan 100%; pokok pajak dan SWDKLLJ tetap

@@ -9,26 +9,26 @@ import { cn } from "@/lib/utils";
 export type StepStatusTone = "success" | "warning" | "neutral" | "info";
 
 const STATUS_TONE_CLASS: Record<StepStatusTone, string> = {
-  success: "border-success-subtle bg-success-subtle text-success",
-  // Teks warning dicampur warna foreground agar kontras ≥ 4.5:1 pada chip kecil
-  // (terang pada tema terang, lebih terang pada tema gelap).
+  success: "bg-success-subtle text-success",
+  // Teks warning dicampur warna foreground agar kontras ≥ 4.5:1 pada chip kecil.
   warning:
-    "border-warning/30 bg-warning/10 text-[color-mix(in_oklch,var(--warning)_76%,var(--foreground))]",
-  neutral: "border-border bg-muted text-muted-foreground",
-  info: "step-badge",
+    "bg-warning/12 text-[color-mix(in_oklch,var(--warning)_76%,var(--foreground))]",
+  neutral: "bg-muted text-muted-foreground",
+  info: "bg-primary/10 text-primary",
 };
 
 function StepStatusChip({
   label,
   tone,
 }: {
-  label: string;
+  /** ReactNode agar nominal di dalam chip dapat memakai `.monetary`. */
+  label: ReactNode;
   tone: StepStatusTone;
 }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-[0.6875rem] font-semibold leading-4",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium leading-5",
         STATUS_TONE_CLASS[tone],
       )}
     >
@@ -45,14 +45,14 @@ interface FormStepHeadingProps {
   step: string;
   title: string;
   hint: string;
-  status?: string;
+  status?: ReactNode;
   statusTone?: StepStatusTone;
   className?: string;
 }
 
 /**
  * Kepala tahap form: nomor | judul + status | hint.
- * Dipakai bersama oleh tahap statis (Identitas Kendaraan) dan tahap accordion
+ * Dipakai bersama oleh tahap statis (Kendaraan) dan baris disclosure accordion
  * agar ritme visual seluruh form identik.
  */
 export function FormStepHeading({
@@ -66,27 +66,23 @@ export function FormStepHeading({
   return (
     <span className={cn("flex min-w-0 flex-1 items-start gap-3", className)}>
       <span
-        className="numeric step-badge flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-bold"
+        className="numeric flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[0.8125rem] font-semibold text-primary"
         aria-hidden="true"
       >
         {step}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 pt-px">
         {/* flex-wrap: di layar sempit chip status turun ke baris baru. */}
-        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
           <span
             data-step-title=""
-            className="min-w-0 text-[0.9375rem] font-semibold leading-snug tracking-tight text-foreground transition-colors"
+            className="min-w-0 text-[1.0625rem] font-semibold leading-snug text-foreground"
           >
             {title}
           </span>
-          {status && (
-            <span className="sm:ml-auto">
-              <StepStatusChip label={status} tone={statusTone} />
-            </span>
-          )}
+          {status && <StepStatusChip label={status} tone={statusTone} />}
         </span>
-        <span className="text-sm font-normal leading-snug text-muted-foreground">
+        <span className="text-[0.9375rem] font-normal leading-snug text-muted-foreground">
           {hint}
         </span>
       </span>
@@ -99,16 +95,15 @@ interface FormStepAccordionProps {
   step: string;
   title: string;
   hint: string;
-  status?: string;
+  status?: ReactNode;
   statusTone?: StepStatusTone;
   children: ReactNode;
 }
 
 /**
- * Tahap form yang dapat dibuka/ditutup (Radix Accordion — keyboard bawaan).
- * Tahap dipisah garis tipis; konten sejajar judul pada ≥sm dan selebar kartu
- * pada mobile. `px-1` menjaga cincin fokus input tidak terpotong oleh
- * `overflow-hidden` milik AccordionContent.
+ * Satu baris disclosure dalam grup inset (Radix Accordion — keyboard bawaan).
+ * Pemisah antarbaris berasal dari `divide-y` grup induk; konten terbuka
+ * sejajar teks judul pada ≥sm dan selebar grup pada mobile.
  */
 export function FormStepAccordion({
   value,
@@ -120,13 +115,12 @@ export function FormStepAccordion({
   children,
 }: FormStepAccordionProps) {
   return (
-    <AccordionItem value={value} className="border-b-0 border-t">
+    <AccordionItem value={value} className="border-b-0">
       <AccordionTrigger
         className={cn(
-          "group/step gap-3 rounded-md py-5 text-left hover:no-underline",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-          "hover:[&_[data-step-title]]:text-primary",
-          "items-start [&>svg]:mt-1.5 [&>svg]:text-muted-foreground",
+          "group/step min-h-11 gap-3 rounded-none px-4 py-4 text-left hover:bg-muted/50 hover:no-underline sm:px-5",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          "items-start [&>svg]:mt-1 [&>svg]:size-5 [&>svg]:text-muted-foreground",
         )}
       >
         <FormStepHeading
@@ -137,7 +131,7 @@ export function FormStepAccordion({
           statusTone={statusTone}
         />
       </AccordionTrigger>
-      <AccordionContent className="px-1 pb-6 pt-1 sm:pl-10">
+      <AccordionContent className="px-4 pb-5 pt-1 sm:pl-15 sm:pr-5">
         <div className="@container min-w-0">{children}</div>
       </AccordionContent>
     </AccordionItem>

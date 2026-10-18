@@ -124,7 +124,10 @@ function ActionButton({
       onClick={() => onSelect(action.kind)}
       aria-label={compact ? `${action.label} ${user.username}` : undefined}
       className={cn(
-        compact ? "size-8" : "h-8 justify-start px-2.5",
+        "[&_svg]:stroke-[1.75]",
+        compact
+          ? "size-11 rounded-full"
+          : "h-11 justify-start rounded-xl px-3 text-[0.9375rem] font-medium",
         action.destructive &&
           "text-destructive hover:bg-destructive/10 hover:text-destructive hover:[&_svg]:text-destructive",
       )}
@@ -143,7 +146,7 @@ function ActionButton({
           <span
             tabIndex={0}
             aria-label={`${action.label} tidak tersedia: ${action.disabledReason}`}
-            className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {button}
           </span>
@@ -173,10 +176,10 @@ function StatusBadge({ active }: { active: boolean }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium leading-5",
         active
-          ? "border-success-subtle bg-success-subtle text-success"
-          : "border-border bg-muted text-muted-foreground",
+          ? "bg-success-subtle text-success"
+          : "bg-muted text-muted-foreground",
       )}
     >
       <span
@@ -193,7 +196,10 @@ function StatusBadge({ active }: { active: boolean }) {
 
 function RoleBadge({ role }: { role: AdminUserSummary["role"] }) {
   return (
-    <Badge variant={role === "admin" ? "default" : "outline"} className="font-medium">
+    <Badge
+      variant={role === "admin" ? "default" : "outline"}
+      className="rounded-full px-2.5 font-medium"
+    >
       {ROLE_LABEL[role]}
     </Badge>
   )
@@ -211,7 +217,7 @@ function PermissionSummary({ user }: { user: AdminUserSummary }) {
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="numeric rounded text-sm text-foreground underline decoration-dotted decoration-muted-foreground/60 underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="numeric -my-2 inline-flex min-h-11 items-center rounded-md text-sm text-foreground underline decoration-dotted decoration-muted-foreground/60 underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {label}
         </button>
@@ -263,15 +269,15 @@ function SessionSummary({ user }: { user: AdminUserSummary }) {
 function UserIdentity({ user, isSelf }: { user: AdminUserSummary; isSelf: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+      <p className="flex min-w-0 items-center gap-2 text-base font-medium leading-snug text-foreground">
         <span className="truncate">{user.name}</span>
         {isSelf && (
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-px text-xs font-medium text-primary">
             Anda
           </span>
         )}
       </p>
-      <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
+      <p className="truncate text-sm text-muted-foreground">@{user.username}</p>
     </div>
   )
 }
@@ -392,13 +398,13 @@ export function UserManagementPage() {
 
   return (
     <section aria-labelledby="user-management-title" className="flex flex-col gap-4">
-      <Card className="shadow-sm">
-        <CardHeader className="gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between sm:space-y-0">
+      <Card className="gap-0 overflow-hidden rounded-[1.25rem] border-border/70 py-0 shadow-none">
+        <CardHeader className="gap-4 border-b border-border/70 px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:space-y-0 md:px-6">
           <div className="min-w-0">
-            <CardTitle id="user-management-title" className="text-xl">
+            <CardTitle id="user-management-title" className="text-[1.375rem] font-semibold">
               Kelola User
             </CardTitle>
-            <p className="mt-1.5 text-sm text-muted-foreground">
+            <p className="mt-1 text-[0.9375rem] leading-snug text-muted-foreground">
               {loadState.status === "ready" ? (
                 <>
                   <span className="numeric">{users.length}</span> akun ·{" "}
@@ -418,13 +424,18 @@ export function UserManagementPage() {
               onClick={() => void loadUsers("refresh")}
               disabled={refreshing || loadState.status === "loading"}
               aria-label="Muat ulang daftar user"
+              className="size-11 rounded-full"
             >
               <RefreshCw
-                className={cn(refreshing && "animate-spin")}
+                className={cn("stroke-[1.75]", refreshing && "animate-spin")}
                 aria-hidden="true"
               />
             </Button>
-            <Button type="button" onClick={() => setDialog({ kind: "create" })}>
+            <Button
+              type="button"
+              onClick={() => setDialog({ kind: "create" })}
+              className="h-11 rounded-full px-5 text-[0.9375rem] font-semibold [&_svg]:stroke-[1.75]"
+            >
               <UserPlus aria-hidden="true" />
               Tambah User
             </Button>
@@ -435,7 +446,7 @@ export function UserManagementPage() {
           {notice && (
             <div
               className={cn(
-                "flex items-start gap-2 border-b px-4 py-2.5 text-sm md:px-6",
+                "flex items-start gap-2 border-b px-4 py-2 text-sm md:px-6",
                 notice.tone === "success"
                   ? "border-success-subtle bg-success-subtle"
                   : "border-destructive/30 bg-destructive/5",
@@ -446,12 +457,12 @@ export function UserManagementPage() {
               ) : (
                 <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
               )}
-              <p className="flex-1 text-foreground">{notice.message}</p>
+              <p className="flex-1 py-0.5 text-foreground">{notice.message}</p>
               <button
                 type="button"
                 onClick={() => setNotice(null)}
                 aria-label="Tutup pemberitahuan"
-                className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-my-1.5 -mr-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
@@ -460,10 +471,10 @@ export function UserManagementPage() {
         </div>
 
         {loadState.status === "ready" && users.length > 0 && (
-          <div className="border-b px-4 py-3 md:px-6">
+          <div className="border-b border-border/70 px-4 py-3 md:px-6">
             <div className="relative max-w-sm">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 stroke-[1.75] text-muted-foreground"
                 aria-hidden="true"
               />
               <Input
@@ -472,7 +483,7 @@ export function UserManagementPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Cari nama atau username"
                 aria-label="Cari user"
-                className="pl-9"
+                className="h-11 rounded-xl border-transparent bg-muted pl-10 text-base md:text-base"
               />
             </div>
           </div>
@@ -553,37 +564,37 @@ export function UserManagementPage() {
           {loadState.status === "ready" && visibleUsers.length > 0 && (
             <>
               {/* Mobile & tablet: kartu bertumpuk */}
-              <ul className="flex flex-col divide-y lg:hidden">
+              <ul className="flex flex-col divide-y divide-border/70 lg:hidden">
                 {visibleUsers.map((user) => {
                   const isSelf = user.id === currentUser.id
                   return (
                     <li key={user.id} className="flex flex-col gap-3 px-4 py-4 md:px-6">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
                         <UserIdentity user={user} isSelf={isSelf} />
                         <div className="flex shrink-0 items-center gap-1.5">
                           <RoleBadge role={user.role} />
                           <StatusBadge active={user.active} />
                         </div>
                       </div>
-                      <dl className="grid grid-cols-1 gap-3 rounded-lg bg-muted/40 px-3 py-2.5 sm:grid-cols-2">
-                        <div className="min-w-0">
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                            Sesi perangkat
+                      <dl className="grid grid-cols-1 divide-y divide-border/70 overflow-hidden rounded-2xl bg-muted/50 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                        <div className="min-w-0 px-3.5 py-2.5">
+                          <dt className="text-[0.8125rem] text-muted-foreground">
+                            Sesi Perangkat
                           </dt>
                           <dd className="mt-1">
                             <SessionSummary user={user} />
                           </dd>
                         </div>
-                        <div>
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                            Izin modul
+                        <div className="min-w-0 px-3.5 py-2.5">
+                          <dt className="text-[0.8125rem] text-muted-foreground">
+                            Izin Modul
                           </dt>
                           <dd className="mt-1">
                             <PermissionSummary user={user} />
                           </dd>
                         </div>
                       </dl>
-                      <div className="-mx-1 flex flex-wrap gap-1">
+                      <div className="-mx-1 grid grid-cols-1 gap-0.5 min-[400px]:grid-cols-2">
                         {getUserActions(user, isSelf).map((action) => (
                           <ActionButton
                             key={action.kind}
@@ -604,18 +615,18 @@ export function UserManagementPage() {
                 <table className="w-full table-fixed text-left">
                   <caption className="sr-only">Daftar user aplikasi</caption>
                   <thead>
-                    <tr className="border-b text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      <th scope="col" className="w-[24%] px-6 py-3 font-semibold">User</th>
-                      <th scope="col" className="w-[10%] px-3 py-3 font-semibold">Peran</th>
-                      <th scope="col" className="w-[11%] px-3 py-3 font-semibold">Status</th>
-                      <th scope="col" className="w-[23%] px-3 py-3 font-semibold">Sesi perangkat</th>
-                      <th scope="col" className="w-[13%] px-3 py-3 font-semibold">Izin modul</th>
-                      <th scope="col" className="w-[19%] px-6 py-3 text-right font-semibold">
+                    <tr className="border-b border-border/70 bg-muted/40 text-[0.8125rem] text-muted-foreground">
+                      <th scope="col" className="w-[23%] px-6 py-2.5 font-medium">User</th>
+                      <th scope="col" className="w-[10%] px-3 py-2.5 font-medium">Peran</th>
+                      <th scope="col" className="w-[10%] px-3 py-2.5 font-medium">Status</th>
+                      <th scope="col" className="w-[21%] px-3 py-2.5 font-medium">Sesi Perangkat</th>
+                      <th scope="col" className="w-[12%] px-3 py-2.5 font-medium">Izin Modul</th>
+                      <th scope="col" className="w-[24%] px-6 py-2.5 text-right font-medium">
                         <span className="sr-only">Aksi</span>
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-border/70">
                     {visibleUsers.map((user) => {
                       const isSelf = user.id === currentUser.id
                       return (
@@ -636,7 +647,7 @@ export function UserManagementPage() {
                             <PermissionSummary user={user} />
                           </td>
                           <td className="px-6 py-2.5">
-                            <div className="flex justify-end gap-0.5">
+                            <div className="flex flex-wrap justify-end gap-0.5">
                               {getUserActions(user, isSelf).map((action) => (
                                 <ActionButton
                                   key={action.kind}

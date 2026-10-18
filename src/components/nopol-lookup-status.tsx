@@ -90,24 +90,24 @@ function StatusRow({
   return (
     <div
       className={cn(
-        "animate-fade-up flex min-w-0 items-start gap-3 rounded-lg border p-3",
+        "animate-fade-up flex min-w-0 items-start gap-3 rounded-2xl border p-3.5",
         styles.box,
       )}
     >
       <span
         className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4",
+          "flex size-8 shrink-0 items-center justify-center rounded-[0.625rem] border [&_svg]:size-[1.125rem] [&_svg]:stroke-[1.75]",
           styles.chip,
         )}
         aria-hidden="true"
       >
         {icon}
       </span>
-      <div className="min-w-0 pt-0.5">
-        <p className={cn("text-sm font-semibold leading-snug", styles.title)}>
+      <div className="min-w-0 pt-px">
+        <p className={cn("text-[0.9375rem] font-semibold leading-snug", styles.title)}>
           {title}
         </p>
-        <p className="mt-0.5 text-[0.8125rem] leading-relaxed text-muted-foreground">
+        <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
           {children}
         </p>
       </div>
@@ -140,9 +140,9 @@ function Fact({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1 bg-card px-3.5 py-3", className)}>
-      <dt className="eyebrow leading-tight">{label}</dt>
-      <dd className="min-w-0 text-sm font-medium leading-snug text-foreground">
+    <div className={cn("flex min-w-0 flex-col gap-0.5 bg-card px-3.5 py-2.5", className)}>
+      <dt className="text-[0.8125rem] leading-snug text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-[0.9375rem] font-medium leading-snug text-foreground">
         {children}
       </dd>
     </div>
@@ -175,7 +175,7 @@ export function NopolLookupMessage({
 }: NopolLookupStatusProps) {
   if (status === "idle") {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm leading-relaxed text-muted-foreground">
         Data kendaraan terisi otomatis bila Nopol terdaftar.
       </p>
     );
@@ -205,13 +205,13 @@ export function NopolLookupMessage({
 
     return (
       <div className="animate-fade-up flex min-w-0 flex-col gap-2.5">
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-success">
-          <CheckCircle2 className="size-3.5 shrink-0" aria-hidden="true" />
-          Data ditemukan
+        <p className="flex items-center gap-1.5 text-sm font-medium text-success">
+          <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+          Data Ditemukan
         </p>
-        {/* Desktop: tiga kolom dalam satu baris; mobile: nama selebar penuh. */}
-        <dl className="grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <Fact label="Nama Pemilik" className="col-span-2 lg:col-span-1">
+        {/* ≥md: tiga kolom dalam satu baris; mobile: nama selebar penuh. */}
+        <dl className="grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border/70 bg-border/70 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <Fact label="Nama Pemilik" className="col-span-2 md:col-span-1">
             {nama ? (
               <span className="block truncate" title={nama}>
                 {nama}
@@ -238,9 +238,9 @@ export function NopolLookupMessage({
           </Fact>
         </dl>
         {njkbMissing && (
-          <p className="flex min-w-0 items-start gap-1.5 text-xs leading-relaxed text-foreground">
+          <p className="flex min-w-0 items-start gap-1.5 text-[0.8125rem] leading-relaxed text-foreground">
             <CircleAlert
-              className="mt-0.5 size-3.5 shrink-0 text-warning"
+              className="mt-0.5 size-4 shrink-0 text-warning"
               aria-hidden="true"
             />
             <span className="min-w-0">

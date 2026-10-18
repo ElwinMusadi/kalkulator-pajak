@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { fetchVehicleByNopol } from "../src/lib/api.ts"
+import { API_BASE_URL, apiRequest } from "../src/lib/http.ts"
 
 function pass(name: string) {
   console.log(`  ✓  ${name}`)
@@ -10,6 +11,28 @@ console.log("Menjalankan vehicle API client source query tests...\n")
 const originalFetch = globalThis.fetch
 
 try {
+  // Regresi: API terautentikasi wajib same-origin (cookie __Host-, cek Origin,
+  // tanpa CORS). VITE_API_BASE_URL dari .env tidak boleh mengubah base URL.
+  {
+    assert.equal(API_BASE_URL, "")
+
+    let requestedUrl = ""
+    globalThis.fetch = async (input) => {
+      requestedUrl = String(input)
+      return new Response(null, { status: 204 })
+    }
+    await apiRequest("/api/auth/me", { notifyOnUnauthenticated: false })
+    assert.equal(requestedUrl, "/api/auth/me")
+
+    globalThis.fetch = async (input) => {
+      requestedUrl = String(input)
+      return new Response(null, { status: 404 })
+    }
+    assert.equal(await fetchVehicleByNopol("EB1234AB"), null)
+    assert.equal(requestedUrl.startsWith("/api/njkb/EB1234AB?"), true, requestedUrl)
+    pass("API_BASE_URL kosong; apiRequest & fetchVehicleByNopol memakai URL relatif")
+  }
+
   // Argumen source lama tetap diterima, tetapi request selalu source=api.
   for (const source of ["d1", "api", "d1_then_api", "api_then_d1", undefined, null] as const) {
     let requestedUrl = ""
