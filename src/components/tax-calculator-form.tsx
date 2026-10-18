@@ -702,7 +702,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                           title={format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
                           className="numeric"
                         >
-                          <span aria-hidden="true">{format(plateDueDate, "dd '•' MM '•' yyyy")}</span>
+                          <span aria-hidden="true">{format(plateDueDate, "dd-MM-yyyy")}</span>
                           <span className="sr-only">
                             {format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
                           </span>
@@ -718,7 +718,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                           title={format(plateStnkDate, "d MMMM yyyy", { locale: idLocale })}
                           className="numeric"
                         >
-                          <span aria-hidden="true">{format(plateStnkDate, "MM '•' yy")}</span>
+                          <span aria-hidden="true">{format(plateStnkDate, "MM-yy")}</span>
                           <span className="sr-only">
                             {format(plateStnkDate, "d MMMM yyyy", { locale: idLocale })}
                           </span>

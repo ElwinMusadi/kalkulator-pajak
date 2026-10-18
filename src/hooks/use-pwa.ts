@@ -1,58 +1,86 @@
+import { useSyncExternalStore } from "react"
 import { registerSW } from "virtual:pwa-register"
+import {
+  createPwaUpdateController,
+  type PwaUpdateController,
+  type PwaUpdateSnapshot,
+} from "@/lib/pwa-update"
 
-const RELOAD_GUARD_KEY = "kp-sw-reloaded-at"
-const RELOAD_GUARD_MS = 10_000
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000
 
-let registered = false
-let reloading = false
+const IDLE_SNAPSHOT: PwaUpdateSnapshot = { status: "idle" }
+const noopUnsubscribe = () => undefined
 
-/** Muat ulang sekali saat worker baru mengambil alih; cegah reload berulang. */
-function reloadOnce() {
-  if (reloading) return
-  try {
-    const last = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) ?? 0)
-    if (Date.now() - last < RELOAD_GUARD_MS) return
-    sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()))
-  } catch {
-    // sessionStorage tidak tersedia: tetap andalkan flag di memori.
-  }
-  reloading = true
-  window.location.reload()
-}
+let controller: PwaUpdateController | null = null
 
 /**
- * Mendaftarkan Service Worker dengan mode autoUpdate. Worker baru langsung
- * aktif (skipWaiting + clientsClaim) dan halaman dimuat ulang satu kali agar
- * seluruh tab memakai versi terbaru tanpa prompt pengguna.
+ * Mendaftarkan Service Worker (mode autoUpdate: skipWaiting + clientsClaim).
+ * Worker baru aktif otomatis, tetapi halaman tidak dimuat ulang paksa: store
+ * pembaruan ditandai "tersedia" dan pengguna memuat ulang lewat tombol
+ * "Perbarui" agar isian yang sedang dikerjakan tidak hilang tiba-tiba.
+ *
+ * Dipanggil dari main.tsx sebelum React render agar event `controllerchange`
+ * yang terjadi saat halaman login/pemeriksaan sesi masih tampil tidak terlewat.
  */
 export function registerPwa(): void {
-  if (registered || typeof window === "undefined" || !("serviceWorker" in navigator)) {
+  if (controller || typeof window === "undefined" || !("serviceWorker" in navigator)) {
     return
   }
-  registered = true
 
-  // Reload hanya bila halaman sebelumnya sudah dikendalikan worker lama
-  // (pembaruan), bukan saat instalasi pertama.
-  const hadController = Boolean(navigator.serviceWorker.controller)
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (hadController) reloadOnce()
+  const sw = navigator.serviceWorker
+  const store = createPwaUpdateController({
+    hasController: () => Boolean(sw.controller),
+    isOnline: () => navigator.onLine,
+    reload: () => window.location.reload(),
+    now: () => Date.now(),
+    setTimeout: (callback, ms) => window.setTimeout(callback, ms),
   })
+  controller = store
 
-  registerSW({
-    immediate: true,
-    onNeedReload: reloadOnce,
-    onRegisteredSW(_swUrl, registration) {
-      if (!registration) return
-      // Tab yang dibiarkan terbuka tetap memeriksa versi baru secara berkala.
-      window.setInterval(() => {
-        if (document.visibilityState === "visible" && navigator.onLine) {
-          void registration.update().catch(() => undefined)
-        }
-      }, UPDATE_CHECK_INTERVAL_MS)
-    },
-    onRegisterError() {
-      // Kegagalan pendaftaran tidak memblokir aplikasi online.
-    },
-  })
+  sw.addEventListener("controllerchange", () => store.handleControllerChange())
+
+  function checkWhenVisible() {
+    if (document.visibilityState === "visible") void store.checkForUpdate()
+  }
+
+  try {
+    registerSW({
+      immediate: true,
+      // Wajib diisi: tanpa handler, registerSW memanggil window.location.reload().
+      onNeedReload: () => store.handleNeedReload(),
+      onRegisteredSW(_swUrl, registration) {
+        if (!registration) return
+        store.setRegistration(registration)
+        // Tab yang lama terbuka tetap memeriksa versi baru: saat kembali
+        // aktif, kembali online, dan berkala (store men-throttle & cek offline).
+        window.addEventListener("focus", checkWhenVisible)
+        window.addEventListener("online", checkWhenVisible)
+        document.addEventListener("visibilitychange", checkWhenVisible)
+        window.setInterval(checkWhenVisible, UPDATE_CHECK_INTERVAL_MS)
+      },
+      onRegisterError() {
+        // Kegagalan pendaftaran tidak memblokir aplikasi online.
+      },
+    })
+  } catch {
+    // Idem: aplikasi tetap berjalan tanpa Service Worker.
+  }
+}
+
+function subscribe(listener: () => void) {
+  return controller ? controller.subscribe(listener) : noopUnsubscribe
+}
+
+function getSnapshot(): PwaUpdateSnapshot {
+  return controller ? controller.getSnapshot() : IDLE_SNAPSHOT
+}
+
+function applyUpdate() {
+  void controller?.applyUpdate()
+}
+
+/** Status "versi baru tersedia" yang sinkron di seluruh komponen. */
+export function usePwaUpdate(): PwaUpdateSnapshot & { applyUpdate: () => void } {
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return { ...snapshot, applyUpdate }
 }

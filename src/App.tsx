@@ -7,6 +7,7 @@ import { AppHeader, type AppView } from "@/components/app-header";
 import { AppGate } from "@/components/auth/app-gate";
 import { MobileResultBar } from "@/components/mobile-result-bar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { PwaUpdateNotice } from "@/components/pwa-update-notice";
 import { ResultEmpty } from "@/components/result-empty";
 import { TaxCalculatorForm } from "@/components/tax-calculator-form";
 import { TaxResultPanel } from "@/components/tax-result-panel";
@@ -37,6 +38,8 @@ export default function App() {
           <AuthenticatedAppKeyed />
         </AppGate>
       </AuthProvider>
+      {/* Di luar AppGate agar tampil juga di halaman login/pemeriksaan sesi. */}
+      <PwaUpdateNotice />
     </TooltipProvider>
   );
 }
