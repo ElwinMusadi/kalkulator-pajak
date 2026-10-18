@@ -622,10 +622,12 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       ? `${biayaLayananStats.count} biaya · ${formatRupiah(biayaLayananStats.sum)}`
       : undefined;
 
-  // Strip masa berlaku pada plat: "MM · YY" dari jatuh tempo pajak pada form
-  // (termasuk hasil edit manual). Tanpa tanggal valid → strip default "NTT".
+  // Strip memakai tanggal form terkini, termasuk hasil koreksi manual.
+  // PAJAK: tanggal lengkap; STNK: bulan + tahun pendek seperti plat fisik.
   const plateDueDate =
     jatuhTempoPajak && isValid(jatuhTempoPajak) ? jatuhTempoPajak : undefined;
+  const plateStnkDate =
+    jatuhTempoStnk && isValid(jatuhTempoStnk) ? jatuhTempoStnk : undefined;
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col">
@@ -689,27 +691,43 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   <NopolLookupIndicator status={lookupStatus} />
                 </span>
               </div>
-              <div className="tnkb-strip mx-3 flex h-7 min-w-0 items-center justify-center gap-2 text-xs font-semibold">
-                {plateDueDate ? (
+              <div className="tnkb-strip mx-3 flex min-h-7 min-w-0 flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 py-1 text-[0.625rem] font-semibold sm:gap-x-2 sm:text-xs">
+                {plateDueDate || plateStnkDate ? (
                   <>
-                    <span className="min-w-0 truncate text-[0.625rem] font-semibold uppercase tracking-normal opacity-75">
-                      Jatuh Tempo Pajak
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <span className="uppercase opacity-75">Pajak</span>
+                      {plateDueDate ? (
+                        <time
+                          dateTime={format(plateDueDate, "yyyy-MM-dd")}
+                          title={format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
+                          className="numeric"
+                        >
+                          <span aria-hidden="true">{format(plateDueDate, "dd '•' MM '•' yyyy")}</span>
+                          <span className="sr-only">
+                            {format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
+                          </span>
+                        </time>
+                      ) : <span aria-label="Jatuh tempo pajak belum diisi">—</span>}
                     </span>
-                    <time
-                      dateTime={format(plateDueDate, "yyyy-MM-dd")}
-                      title={format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
-                      className="numeric shrink-0 tracking-[0.3em]"
-                    >
-                      <span aria-hidden="true">{format(plateDueDate, "MM · yy")}</span>
-                      <span className="sr-only">
-                        {format(plateDueDate, "d MMMM yyyy", { locale: idLocale })}
-                      </span>
-                    </time>
+                    <span aria-hidden="true" className="opacity-50">|</span>
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <span className="uppercase opacity-75">STNK</span>
+                      {plateStnkDate ? (
+                        <time
+                          dateTime={format(plateStnkDate, "yyyy-MM-dd")}
+                          title={format(plateStnkDate, "d MMMM yyyy", { locale: idLocale })}
+                          className="numeric"
+                        >
+                          <span aria-hidden="true">{format(plateStnkDate, "MM '•' yy")}</span>
+                          <span className="sr-only">
+                            {format(plateStnkDate, "d MMMM yyyy", { locale: idLocale })}
+                          </span>
+                        </time>
+                      ) : <span aria-label="Jatuh tempo STNK belum diisi">—</span>}
+                    </span>
                   </>
                 ) : (
-                  <span className="numeric tracking-[0.3em]" aria-hidden="true">
-                    NTT
-                  </span>
+                  <span className="numeric tracking-[0.3em]" aria-hidden="true">NTT</span>
                 )}
               </div>
             </div>

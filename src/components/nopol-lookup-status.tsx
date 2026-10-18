@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  VEHICLE_DATA_SOURCE_DESCRIPTION,
   VEHICLE_NOT_FOUND_MESSAGE,
   VEHICLE_SOURCE_ERROR_MESSAGE,
   type VehicleLookupSource,
@@ -210,9 +209,9 @@ export function NopolLookupMessage({
           <CheckCircle2 className="size-3.5 shrink-0" aria-hidden="true" />
           Data ditemukan
         </p>
-        {/* Bento hairline: gap-px di atas bg-border; nama selebar penuh. */}
-        <dl className="grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border">
-          <Fact label="Nama Pemilik" className="col-span-2">
+        {/* Desktop: tiga kolom dalam satu baris; mobile: nama selebar penuh. */}
+        <dl className="grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <Fact label="Nama Pemilik" className="col-span-2 lg:col-span-1">
             {nama ? (
               <span className="block truncate" title={nama}>
                 {nama}
@@ -250,10 +249,6 @@ export function NopolLookupMessage({
             </span>
           </p>
         )}
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Salinan tersinkron dari {VEHICLE_DATA_SOURCE_DESCRIPTION}; periksa
-          kembali dengan dokumen kendaraan.
-        </p>
       </div>
     );
   }
