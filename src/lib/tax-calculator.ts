@@ -6,6 +6,7 @@
  * seluruh contoh penetapan (Contoh 1–14) yang terlampir.
  */
 
+import { differenceInCalendarDays } from "date-fns"
 import {
   BIAYA_LAYANAN_KEYS,
   BIAYA_LAYANAN_MAX,
@@ -62,6 +63,8 @@ interface TaxPeriod {
 /**
  * Menghasilkan daftar periode pajak dari awal jatuh tempo hingga
  * tahun bayar. Maksimal 4 tunggakan + 1 berjalan.
+ * Jika jatuh tempo berada di tahun setelah tahun bayar, tidak ada tunggakan
+ * dan periode berjalan memakai tanggal jatuh tempo asli.
  */
 function buildTaxPeriods(
   jatuhTempoPajak: Date,
@@ -90,9 +93,15 @@ function buildTaxPeriods(
       ? semuaTunggakan.slice(-4)
       : semuaTunggakan
 
-  // Periode berjalan
+  // Periode berjalan.
+  // - Jatuh tempo lampau/tahun ini: model tahun kalender yang ada tetap
+  //   dipakai (tanggal jatuh tempo digeser ke tahun bayar).
+  // - Jatuh tempo pada tahun setelah tahun bayar (mis. JT 5 Jan 2027 dibayar
+  //   19 Okt 2026): tahun aslinya dipertahankan sehingga periode tersebut
+  //   menjadi periode berjalan yang belum jatuh tempo, bukan digeser mundur
+  //   ke tahun bayar (yang keliru menimbulkan keterlambatan/denda).
   const berjalanStart = new Date(jatuhTempoPajak)
-  berjalanStart.setFullYear(tahunBayar)
+  berjalanStart.setFullYear(Math.max(tahunAwal, tahunBayar))
 
   const berjalan: TaxPeriod = {
     start: berjalanStart,
@@ -180,11 +189,10 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
 
   const basePkbBerjalan = dpBerjalan * berjalanPeriod.tarifPkb
 
-  // Diskon PKB berjalan: hanya bila tidak ada tunggakan dan bayar sebelum jatuh tempo
-  const hariMenujuJT = Math.floor(
-    (berjalanPeriod.start.getTime() - tanggalBayar.getTime()) /
-      (1000 * 60 * 60 * 24)
-  )
+  // Diskon PKB berjalan: hanya bila tidak ada tunggakan dan bayar sebelum jatuh tempo.
+  // Selisih dihitung dalam hari kalender lokal agar jam dan DST tidak
+  // memengaruhi batas hari (bayar pada hari jatuh tempo = 0 hari).
+  const hariMenujuJT = differenceInCalendarDays(berjalanPeriod.start, tanggalBayar)
 
   // Mutasi Masuk Luar Daerah: diskon PKB berjalan 50% sesuai Pergub.
   // Diskon ini menggantikan diskon pembayaran awal 10%/15%/20%.
@@ -242,12 +250,10 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   // -----------------------------------------------------------------------
   // PNBP STNK & TNKB
   // Dikenakan bila STNK jatuh tempo ≤ 90 hari dari tanggal bayar
-  // (artinya STNK sudah kadaluarsa atau hampir kadaluarsa)
+  // (artinya STNK sudah kadaluarsa atau hampir kadaluarsa).
+  // Selisih dalam hari kalender lokal; jam/DST tidak memengaruhi batas 90 hari.
   // -----------------------------------------------------------------------
-  const hariMenujuStnk = Math.floor(
-    (jatuhTempoStnk.getTime() - tanggalBayar.getTime()) /
-      (1000 * 60 * 60 * 24)
-  )
+  const hariMenujuStnk = differenceInCalendarDays(jatuhTempoStnk, tanggalBayar)
   let biayaStnk = 0
   let biayaTnkb = 0
   if (hariMenujuStnk <= 90) {
@@ -300,10 +306,9 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     warnaPlat,
     tarifPkbBerjalan: berjalanPeriod.tarifPkb,
     // Informasi tampilan: selisih ke tanggal Jatuh Tempo Pajak yang diisi user
-    // (bukan awal periode berjalan di tahun bayar). Tidak memengaruhi nominal.
-    hariMenujuJatuhTempo: Math.floor(
-      (jatuhTempoPajak.getTime() - tanggalBayar.getTime()) / (1000 * 60 * 60 * 24)
-    ),
+    // (bukan awal periode berjalan di tahun bayar), dalam hari kalender lokal.
+    // Tidak memengaruhi nominal.
+    hariMenujuJatuhTempo: differenceInCalendarDays(jatuhTempoPajak, tanggalBayar),
     tahunTunggakanPra,
     tahunTunggakanPost,
     tahunTunggakan,

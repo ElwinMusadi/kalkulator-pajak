@@ -6,6 +6,7 @@
  */
 
 import assert from "node:assert/strict"
+import { parseISO } from "date-fns"
 import { calculateTax } from "../src/lib/tax-calculator.ts"
 import type { TaxCalculatorInput } from "../src/types/tax.ts"
 
@@ -446,6 +447,10 @@ const dh3088wk: TaxCalculatorInput = {
     tanggalBayar: new Date("2026-11-30T00:00:00"),
   })
   assert.equal(lintasTahun.hariMenujuJatuhTempo, 91)
+  assert.equal(lintasTahun.pkbDiscount, 0, "lintasTahun > 90 hari: tidak ada diskon bayar awal")
+  assert.equal(lintasTahun.bulanTerlambat, 0, "lintasTahun sebelum jatuh tempo: bukan keterlambatan")
+  assert.equal(lintasTahun.dendaSwdkllj, 0, "lintasTahun sebelum jatuh tempo: denda SWDKLLJ harus Rp0")
+  assert.equal(lintasTahun.tahunTunggakan, 0, "lintasTahun: tidak ada tunggakan")
 
   // Sudah lewat jatuh tempo → negatif.
   assert.ok(hari("2026-12-20").hariMenujuJatuhTempo < 0)
@@ -516,6 +521,235 @@ const dh3088wk: TaxCalculatorInput = {
   assert.equal(gempa.total, biasa.total, "Tanpa tunggakan: toggle gempa tidak mengubah total")
   assert.equal(gempa.pkbBerjalan, biasa.pkbBerjalan)
   pass("Metadata gempa – badge tanpa tunggakan tidak mengubah PKB berjalan atau total")
+}
+
+// ---------------------------------------------------------------------------
+// Transisi lintas tahun (cross-year boundary) & pembayaran awal ≤ 90 hari
+// Kasus referensi: JT 5 Jan 2027 dibayar 19 Okt 2026 (78 hari sebelum JT).
+// ---------------------------------------------------------------------------
+{
+  // 1. Fixture Mobil (Innova Venturer): diskon 10%, tanpa tunggakan/keterlambatan/denda SWDKLLJ,
+  //    STNK ≤ 90 hari (78 hari) mempertahankan PNBP STNK 200rb & TNKB 100rb.
+  const innovaCrossYear = calculateTax({
+    ...innoBase,
+    jatuhTempoPajak: new Date("2027-01-05T00:00:00"),
+    jatuhTempoStnk: new Date("2027-01-05T00:00:00"),
+    tanggalBayar: new Date("2026-10-19T00:00:00"),
+    isDomisiliGempa: false,
+    warnaPlat: "putih",
+  })
+  assert.equal(innovaCrossYear.hariMenujuJatuhTempo, 78)
+  assert.equal(innovaCrossYear.tahunTunggakan, 0)
+  assert.equal(innovaCrossYear.tahunTunggakanPra, 0)
+  assert.equal(innovaCrossYear.tahunTunggakanPost, 0)
+  assert.equal(innovaCrossYear.bulanTerlambat, 0)
+  assert.equal(innovaCrossYear.dendaOpsen, 0)
+  assert.equal(innovaCrossYear.dendaPkb, 0)
+  assert.equal(innovaCrossYear.dendaSwdkllj, 0)
+  assert.equal(innovaCrossYear.pkbDiscount, 0.1, "Mobil 78 hari (≤ 90 hari): diskon PKB berjalan 10%")
+  // DP = 329.000.000 × 1,05 × 82,5% = 284.996.250
+  // PKB base = 284.996.250 × 1,2% = 3.419.955
+  // PKB berjalan = 3.419.955 × 90% = 3.077.959,5
+  assert.equal(innovaCrossYear.pkbBerjalan, 3_077_959.5)
+  // Opsen berjalan = 3.077.959,5 × 66% = 2.031.453,27
+  assert.equal(innovaCrossYear.opsenBerjalan, 2_031_453.27)
+  assert.equal(innovaCrossYear.swdklljBerjalan, 143_000)
+  assert.equal(innovaCrossYear.swdklljTunggakan, 0)
+  assert.equal(innovaCrossYear.biayaStnk, 200_000, "STNK 78 hari (≤ 90 hari): PNBP STNK mobil 200rb")
+  assert.equal(innovaCrossYear.biayaTnkb, 100_000, "STNK 78 hari (≤ 90 hari): PNBP TNKB mobil 100rb")
+  assert.equal(innovaCrossYear.totalBiayaLayanan, 0)
+  assert.equal(
+    innovaCrossYear.total,
+    3_077_959.5 + 2_031_453.27 + 143_000 + 200_000 + 100_000,
+    "Grand total Innova lintas tahun 78 hari tepat 5.552.412,77",
+  )
+
+  // Fixture Mobil sederhana NJKB 10.000.000 bobot 1,05
+  const simpleCarCrossYear = calculateTax({
+    njkb: 10_000_000,
+    njub: 0,
+    bobot: 1.05,
+    jenisKendaraan: "MINIBUS",
+    jatuhTempoPajak: new Date("2027-01-05T00:00:00"),
+    jatuhTempoStnk: new Date("2027-01-05T00:00:00"),
+    tanggalBayar: new Date("2026-10-19T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+    warnaPlat: "putih",
+  })
+  assert.equal(simpleCarCrossYear.pkbDiscount, 0.1)
+  assert.equal(simpleCarCrossYear.pkbBerjalan, 93_555) // 10e6 * 1.05 * 0.825 * 0.012 * 0.9
+  assert.equal(simpleCarCrossYear.opsenBerjalan, 61_746.3)
+  assert.equal(simpleCarCrossYear.dendaSwdkllj, 0)
+  assert.equal(simpleCarCrossYear.bulanTerlambat, 0)
+  assert.equal(simpleCarCrossYear.biayaStnk, 200_000)
+  assert.equal(simpleCarCrossYear.biayaTnkb, 100_000)
+  assert.equal(simpleCarCrossYear.total, 93_555 + 61_746.3 + 143_000 + 200_000 + 100_000)
+
+  // 2. Fixture Motor sintetik (NJKB 10.000.000, bobot 1,0): diskon motor 61–90 hari = 20%
+  const motorCrossYear = calculateTax({
+    njkb: 10_000_000,
+    njub: 0,
+    bobot: 1.0,
+    jenisKendaraan: "SEPEDA MOTOR",
+    jatuhTempoPajak: new Date("2027-01-05T00:00:00"),
+    jatuhTempoStnk: new Date("2027-01-05T00:00:00"),
+    tanggalBayar: new Date("2026-10-19T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+    warnaPlat: "putih",
+  })
+  assert.equal(motorCrossYear.hariMenujuJatuhTempo, 78)
+  assert.equal(motorCrossYear.pkbDiscount, 0.2, "Motor 78 hari (61–90 hari): diskon 20%")
+  // DP = 10.000.000 × 1,0 × 82,5% = 8.250.000
+  // PKB base = 8.250.000 × 1,2% = 99.000
+  // PKB berjalan = 99.000 × 80% = 79.200
+  assert.equal(motorCrossYear.pkbBerjalan, 79_200)
+  assert.equal(motorCrossYear.opsenBerjalan, 52_272)
+  assert.equal(motorCrossYear.swdklljBerjalan, 35_000)
+  assert.equal(motorCrossYear.bulanTerlambat, 0)
+  assert.equal(motorCrossYear.dendaSwdkllj, 0)
+  assert.equal(motorCrossYear.biayaStnk, 100_000, "STNK motor ≤ 90 hari: 100rb")
+  assert.equal(motorCrossYear.biayaTnkb, 60_000, "TNKB motor ≤ 90 hari: 60rb")
+  assert.equal(motorCrossYear.total, 79_200 + 52_272 + 35_000 + 100_000 + 60_000)
+
+  // 3. Objek Date hasil parsing ISO (seperti diterima dari API melalui parseISO)
+  const motorParsedDate = calculateTax({
+    njkb: 10_000_000,
+    njub: 0,
+    bobot: 1.0,
+    jenisKendaraan: "SEPEDA MOTOR",
+    jatuhTempoPajak: parseISO("2027-01-05"),
+    jatuhTempoStnk: parseISO("2027-01-05"),
+    tanggalBayar: parseISO("2026-10-19"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+  })
+  assert.deepEqual(motorParsedDate, motorCrossYear, "Date dari parseISO identik dengan Date constructor")
+
+  pass("Lintas tahun 78 hari – Mobil diskon 10%, Motor diskon 20%, tanpa denda SWDKLLJ, PNBP STNK/TNKB sesuai")
+}
+
+// ---------------------------------------------------------------------------
+// Ambang batas tanggal (90/91, 60/61, 30/31, hari jatuh tempo, jam/siang/sore, immutability)
+// Menguji perhitungan hari kalender lokal murni (bebas efek jam/DST).
+// ---------------------------------------------------------------------------
+{
+  const jtPajak = new Date("2027-01-05T00:00:00")
+  const jtStnk = new Date("2027-01-05T00:00:00")
+  const baseMotor: TaxCalculatorInput = {
+    njkb: 10_000_000,
+    njub: 0,
+    bobot: 1.0,
+    jenisKendaraan: "SEPEDA MOTOR",
+    jatuhTempoPajak: jtPajak,
+    jatuhTempoStnk: jtStnk,
+    tanggalBayar: new Date("2026-10-19T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+    warnaPlat: "putih",
+  }
+
+  // 91 hari sebelum JT (2026-10-06): > 90 hari → diskon 0%, PNBP STNK 0, tanpa denda
+  const d91 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-10-06T00:00:00") })
+  assert.equal(d91.hariMenujuJatuhTempo, 91)
+  assert.equal(d91.pkbDiscount, 0, "> 90 hari: diskon 0%")
+  assert.equal(d91.biayaStnk, 0, "> 90 hari: PNBP STNK 0")
+  assert.equal(d91.biayaTnkb, 0, "> 90 hari: PNBP TNKB 0")
+  assert.equal(d91.bulanTerlambat, 0)
+  assert.equal(d91.dendaSwdkllj, 0)
+
+  // 91 hari sebelum JT dibayar sore hari (2026-10-06T15:45:00): tetap 91 hari kalender
+  const d91Afternoon = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-10-06T15:45:00") })
+  assert.equal(d91Afternoon.hariMenujuJatuhTempo, 91)
+  assert.equal(d91Afternoon.pkbDiscount, 0)
+  assert.equal(d91Afternoon.biayaStnk, 0)
+  assert.equal(d91Afternoon.biayaTnkb, 0)
+  assert.equal(d91Afternoon.bulanTerlambat, 0)
+  assert.equal(d91Afternoon.dendaSwdkllj, 0)
+
+  // 90 hari sebelum JT (2026-10-07T00:00:00): batas awal diskon motor 20% & PNBP STNK berlaku
+  const d90 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-10-07T00:00:00") })
+  assert.equal(d90.hariMenujuJatuhTempo, 90)
+  assert.equal(d90.pkbDiscount, 0.2, "Tepat 90 hari: diskon motor 20%")
+  assert.equal(d90.biayaStnk, 100_000, "Tepat 90 hari: PNBP STNK motor 100rb")
+  assert.equal(d90.biayaTnkb, 60_000, "Tepat 90 hari: PNBP TNKB motor 60rb")
+  assert.equal(d90.bulanTerlambat, 0)
+  assert.equal(d90.dendaSwdkllj, 0)
+
+  // 90 hari sebelum JT dibayar malam hari (2026-10-07T23:59:59): tetap 90 hari kalender
+  const d90Night = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-10-07T23:59:59") })
+  assert.equal(d90Night.hariMenujuJatuhTempo, 90)
+  assert.equal(d90Night.pkbDiscount, 0.2)
+  assert.equal(d90Night.biayaStnk, 100_000)
+
+  // 61 hari sebelum JT (2026-11-05T00:00:00): diskon motor 20%
+  const d61 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-11-05T00:00:00") })
+  assert.equal(d61.hariMenujuJatuhTempo, 61)
+  assert.equal(d61.pkbDiscount, 0.2, "61 hari: diskon motor 20%")
+
+  // 60 hari sebelum JT (2026-11-06T00:00:00): transisi ke tier 31–60 hari → diskon motor 15%
+  const d60 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-11-06T00:00:00") })
+  assert.equal(d60.hariMenujuJatuhTempo, 60)
+  assert.equal(d60.pkbDiscount, 0.15, "60 hari: diskon motor 15%")
+  assert.equal(d60.pkbBerjalan, 84_150) // 99.000 * 0.85
+  assert.equal(d60.opsenBerjalan, 55_539) // 84.150 * 0.66
+  assert.equal(d60.bulanTerlambat, 0)
+  assert.equal(d60.dendaSwdkllj, 0)
+
+  // 31 hari sebelum JT (2026-12-05T00:00:00): diskon motor 15%
+  const d31 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-12-05T00:00:00") })
+  assert.equal(d31.hariMenujuJatuhTempo, 31)
+  assert.equal(d31.pkbDiscount, 0.15, "31 hari: diskon motor 15%")
+
+  // 30 hari sebelum JT (2026-12-06T00:00:00): transisi ke tier ≤ 30 hari → diskon motor 10%
+  const d30 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2026-12-06T00:00:00") })
+  assert.equal(d30.hariMenujuJatuhTempo, 30)
+  assert.equal(d30.pkbDiscount, 0.1, "30 hari: diskon motor 10%")
+  assert.equal(d30.pkbBerjalan, 89_100) // 99.000 * 0.9
+  assert.equal(d30.opsenBerjalan, 58_806) // 89.100 * 0.66
+  assert.equal(d30.bulanTerlambat, 0)
+  assert.equal(d30.dendaSwdkllj, 0)
+
+  // Hari Jatuh Tempo pagi hari (2027-01-05T00:00:00): 0 hari → diskon 10%, bukan terlambat
+  const d0Morning = calculateTax({ ...baseMotor, tanggalBayar: new Date("2027-01-05T00:00:00") })
+  assert.equal(d0Morning.hariMenujuJatuhTempo, 0)
+  assert.equal(d0Morning.pkbDiscount, 0.1, "0 hari pagi: diskon 10%")
+  assert.equal(d0Morning.bulanTerlambat, 0)
+  assert.equal(d0Morning.dendaSwdkllj, 0)
+
+  // Hari Jatuh Tempo sore hari (2027-01-05T16:30:00): tetap 0 hari kalender lokal
+  const d0Afternoon = calculateTax({ ...baseMotor, tanggalBayar: new Date("2027-01-05T16:30:00") })
+  assert.equal(d0Afternoon.hariMenujuJatuhTempo, 0)
+  assert.equal(d0Afternoon.pkbDiscount, 0.1, "0 hari sore: diskon 10%")
+  assert.equal(d0Afternoon.bulanTerlambat, 0)
+  assert.equal(d0Afternoon.dendaSwdkllj, 0)
+
+  // 1 hari lewat jatuh tempo (2027-01-06T00:00:00): diskon 0%, denda SWDKLLJ motor tier 1 (Rp8.000)
+  const dLate1 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2027-01-06T00:00:00") })
+  assert.equal(dLate1.hariMenujuJatuhTempo, -1)
+  assert.equal(dLate1.pkbDiscount, 0, "Lewat JT: diskon 0%")
+  assert.equal(dLate1.bulanTerlambat, 1)
+  assert.equal(dLate1.dendaSwdkllj, 8_000, "1 hari terlambat: denda SWDKLLJ motor 8rb")
+
+  // Immutability: input Date objects tidak boleh dimutasi oleh calculateTax
+  const p1 = new Date("2027-01-05T14:30:00")
+  const s1 = new Date("2027-01-05T14:30:00")
+  const b1 = new Date("2026-10-19T09:15:00")
+  const p1Time = p1.getTime()
+  const s1Time = s1.getTime()
+  const b1Time = b1.getTime()
+  calculateTax({
+    ...baseMotor,
+    jatuhTempoPajak: p1,
+    jatuhTempoStnk: s1,
+    tanggalBayar: b1,
+  })
+  assert.equal(p1.getTime(), p1Time, "jatuhTempoPajak tidak dimutasi")
+  assert.equal(s1.getTime(), s1Time, "jatuhTempoStnk tidak dimutasi")
+  assert.equal(b1.getTime(), b1Time, "tanggalBayar tidak dimutasi")
+
+  pass("Ambang batas tanggal – 90/91, 60/61, 30/31, due date sore, 91 sore, STNK cutoff, immutability")
 }
 
 console.log("\nSemua regression test: PASS ✓\n")
