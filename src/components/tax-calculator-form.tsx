@@ -314,6 +314,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     status: lookupStatus,
     errorMessage: lookupError,
     forbidden: lookupForbidden,
+    retryable: lookupRetryable,
+    errorReference: lookupErrorReference,
+    retry: retryLookup,
   } = useNopolLookup(nopol, sourceMode);
 
   /** Mengosongkan seluruh data kendaraan saat Nopol berubah. */
@@ -671,10 +674,14 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   aria-describedby="nopol-lookup-message"
                   value={nopol}
                   onChange={(e) => {
-                    // Setiap perubahan karakter Nopol mengosongkan data sebelumnya.
+                    // Nopol tersimpan berubah → data sebelumnya dikosongkan.
+                    // Edit huruf kecil/besar saja (nilai sama setelah uppercase)
+                    // diabaikan; React memulihkan nilai input terkontrol.
                     // Tanggal Pembayaran sengaja tidak di-reset.
+                    const nextNopol = e.target.value.toUpperCase();
+                    if (nextNopol === nopol) return;
                     resetVehicleFields();
-                    setNopol(e.target.value.toUpperCase());
+                    setNopol(nextNopol);
                   }}
                   placeholder="DH 1234 AB"
                   autoComplete="off"
@@ -745,6 +752,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   lookupSource={lookupSource}
                   errorMessage={lookupError}
                   forbidden={lookupForbidden}
+                  retryable={lookupRetryable}
+                  errorReference={lookupErrorReference}
+                  // Coba lagi tidak mengosongkan isian manual; hasil sukses
+                  // diterapkan lewat jalur autofill yang sama dengan lookup biasa.
+                  onRetry={retryLookup}
                 />
               ) : (
                 <NopolLookupDisabledMessage />

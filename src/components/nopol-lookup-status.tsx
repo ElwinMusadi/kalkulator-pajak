@@ -5,9 +5,11 @@ import {
   CheckCircle2,
   CircleAlert,
   Loader2,
+  RefreshCw,
   SearchX,
   ShieldAlert,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   VEHICLE_NOT_FOUND_MESSAGE,
@@ -24,6 +26,12 @@ interface NopolLookupStatusProps {
   errorMessage: string | null;
   /** Lookup ditolak server karena izin (HTTP 403). */
   forbidden?: boolean;
+  /** Error sementara yang layak dicoba ulang (tidak pernah untuk 403). */
+  retryable?: boolean;
+  /** Mengulang lookup; tombol hanya tampil bila `retryable` dan tersedia. */
+  onRetry?: () => void;
+  /** Referensi teknis tersanitasi untuk dilaporkan ke Admin. */
+  errorReference?: string | null;
 }
 
 /**
@@ -80,11 +88,14 @@ function StatusRow({
   icon,
   title,
   children,
+  footer,
 }: {
   tone: RowTone;
   icon: ReactNode;
   title: string;
   children: ReactNode;
+  /** Konten tambahan di bawah deskripsi (referensi, aksi). */
+  footer?: ReactNode;
 }) {
   const styles = ROW_TONE[tone];
   return (
@@ -103,13 +114,14 @@ function StatusRow({
       >
         {icon}
       </span>
-      <div className="min-w-0 pt-0.5">
+      <div className="min-w-0 flex-1 pt-0.5">
         <p className={cn("text-sm font-semibold leading-snug", styles.title)}>
           {title}
         </p>
         <p className="mt-0.5 text-[0.8125rem] leading-relaxed text-muted-foreground">
           {children}
         </p>
+        {footer}
       </div>
     </div>
   );
@@ -172,6 +184,9 @@ export function NopolLookupMessage({
   vehicleData,
   errorMessage,
   forbidden = false,
+  retryable = false,
+  onRetry,
+  errorReference = null,
 }: NopolLookupStatusProps) {
   if (status === "idle") {
     return (
@@ -271,11 +286,31 @@ export function NopolLookupMessage({
   }
 
   if (status === "error") {
+    const showRetry = retryable && onRetry !== undefined;
+    const footer =
+      errorReference || showRetry ? (
+        <div className="mt-2 flex min-w-0 flex-col items-start gap-2">
+          {errorReference && (
+            <p className="min-w-0 max-w-full text-xs leading-relaxed text-muted-foreground">
+              <span className="font-medium">Referensi:</span>{" "}
+              <span className="numeric wrap-anywhere">{errorReference}</span>
+            </p>
+          )}
+          {showRetry && (
+            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+              <RefreshCw aria-hidden="true" />
+              Coba lagi
+            </Button>
+          )}
+        </div>
+      ) : undefined;
+
     return (
       <StatusRow
         tone="destructive"
         icon={<CircleAlert />}
         title="Sumber Data Mengalami Error"
+        footer={footer}
       >
         {errorMessage ?? VEHICLE_SOURCE_ERROR_MESSAGE}
       </StatusRow>
