@@ -40,6 +40,7 @@ interface TestEnv {
   NJKB_API_TIMEOUT_MS?: string
   CF_ACCESS_CLIENT_ID?: string
   CF_ACCESS_CLIENT_SECRET?: string
+  POTENSI_API_KEY?: string
 }
 
 const API_ENV = {
@@ -600,6 +601,87 @@ try {
     assert.equal((await body(response)).code, "NJKB_UPSTREAM_HTTP_ERROR")
   }
   pass("Upstream 401/403 → HTTP 502 aman")
+
+  // Fase 4: POTENSI_API_KEY → Authorization: Bearer, header Access tetap dikirim.
+  {
+    const API_KEY = "ptn_k7Q2mX9a_" + "B".repeat(43)
+    let headers: Record<string, string> = {}
+    let apiCalls = 0
+    globalThis.fetch = async (_input, init) => {
+      apiCalls++
+      headers = init?.headers as Record<string, string>
+      return jsonUpstream(officialApiResponse("DH2506KA"))
+    }
+
+    const withKey = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: ` ${API_KEY} ` })
+    assert.equal(withKey.status, 200)
+    assert.equal(headers.Authorization, `Bearer ${API_KEY}`)
+    assert.equal(headers["CF-Access-Client-Id"], "test-client.access")
+    assert.equal(headers["CF-Access-Client-Secret"], "test-secret")
+
+    // Tanpa kunci atau kunci kosong → perilaku lama, tanpa Authorization.
+    for (const key of [undefined, "", "   "]) {
+      headers = {}
+      const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: key })
+      assert.equal(response.status, 200)
+      assert.equal("Authorization" in headers, false, `POTENSI_API_KEY=${JSON.stringify(key)}`)
+      assert.equal(headers["CF-Access-Client-Id"], "test-client.access")
+    }
+
+    // Kunci saja tanpa credential Access (setelah Fase 5) tetap memanggil API.
+    const before = apiCalls
+    const keyOnly = await callEndpoint({
+      DB: trackingDb({ calls: 0 }),
+      VEHICLE_API_BASE_URL: "https://central.example.test",
+      POTENSI_API_KEY: API_KEY,
+    })
+    assert.equal(keyOnly.status, 200)
+    assert.equal(apiCalls, before + 1)
+    assert.equal(headers.Authorization, `Bearer ${API_KEY}`)
+    assert.equal("CF-Access-Client-Id" in headers, false)
+
+    // Kunci tidak pernah bocor ke respons atau log saat gagal.
+    const logs: string[] = []
+    const originalWarn = console.warn
+    console.warn = (...args: unknown[]) => logs.push(args.map(String).join(" "))
+    globalThis.fetch = async () => new Response(null, { status: 401 })
+    try {
+      const failed = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: API_KEY })
+      assert.equal(failed.status, 502)
+      assert.equal((await failed.text()).includes(API_KEY), false)
+      assert.equal(logs.join().includes(API_KEY), false)
+    } finally {
+      console.warn = originalWarn
+    }
+    pass("POTENSI_API_KEY → Authorization: Bearer + header Access; kosong = perilaku lama; kunci saja cukup; tidak bocor")
+  }
+
+  // Upstream 403 region_not_allowed → HTTP 403 NJKB_REGION_NOT_ALLOWED dengan pesan sendiri.
+  {
+    globalThis.fetch = async () =>
+      jsonUpstream(
+        {
+          status: "forbidden",
+          error: {
+            code: "region_not_allowed",
+            message: "Kendaraan terdaftar di luar wilayah yang diizinkan untuk kunci ini",
+            request_id: "req-rahasia",
+          },
+        },
+        403,
+      )
+    const response = await silently(() =>
+      callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: "ptn_k7Q2mX9a_x" }),
+    )
+    const json = await body(response)
+    assert.equal(response.status, 403)
+    assert.equal(response.headers.get("Cache-Control"), "no-store")
+    assert.deepEqual(json, {
+      message: "Kendaraan terdaftar di luar wilayah yang diizinkan.",
+      code: "NJKB_REGION_NOT_ALLOWED",
+    })
+    pass("Upstream 403 region_not_allowed → HTTP 403 NJKB_REGION_NOT_ALLOWED, tanpa teks/request_id upstream")
+  }
 
   // Base URL invalid / tidak dikonfigurasi: tanpa fetch, 500 config error tanpa bocor.
   for (const env of [

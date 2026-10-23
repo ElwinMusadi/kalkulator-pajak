@@ -137,6 +137,8 @@ export type VehicleLookupErrorCode =
   | "NJKB_UPSTREAM_HTTP_ERROR"
   | "NJKB_NETWORK_ERROR"
   | "NJKB_INVALID_PAYLOAD"
+  /** Upstream 403 `region_not_allowed`: nopol di luar wilayah UPT kunci API. */
+  | "NJKB_REGION_NOT_ALLOWED"
 
 /** Hasil pencarian data kendaraan dari sumber data */
 export type VehicleLookupResult =
@@ -154,7 +156,7 @@ export type VehicleLookupResult =
       error: Error | string
       message?: string
       code?: VehicleLookupErrorCode
-      httpStatus?: 500 | 502 | 503 | 504
+      httpStatus?: 403 | 500 | 502 | 503 | 504
       upstreamStatus?: number
     }
 

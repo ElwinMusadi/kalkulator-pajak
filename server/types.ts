@@ -19,6 +19,11 @@ export interface Env {
   /** Fallback terakhir credential Access (mis. .dev.vars lokal); bila alias VEHICLE_* dan NJKB_* tidak tersedia. */
   CF_ACCESS_CLIENT_ID?: string
   CF_ACCESS_CLIENT_SECRET?: string
+  /**
+   * Kunci API Data Potensi (`ptn_…`), dikirim sebagai `Authorization: Bearer`.
+   * Secret Pages khusus server; jangan pernah memakai awalan VITE_.
+   */
+  POTENSI_API_KEY?: string
 }
 
 export interface AuthSession {

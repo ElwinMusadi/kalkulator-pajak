@@ -38,6 +38,13 @@ const RATE_LIMITED: LookupErrorMetadata = {
   httpStatus: 502,
   upstreamStatus: 429,
 }
+const REGION_NOT_ALLOWED: LookupErrorMetadata = {
+  code: "NJKB_REGION_NOT_ALLOWED",
+  httpStatus: 403,
+  upstreamStatus: 403,
+}
+const REGION_NOT_ALLOWED_MESSAGE =
+  "Kendaraan terdaftar di luar wilayah yang diizinkan."
 
 /**
  * Timeout harus integer finite 1..60000 ms. Nilai lain (0, negatif, NaN,
@@ -96,6 +103,29 @@ export async function discardResponseBody(response: Response): Promise<void> {
   }
 }
 
+/**
+ * True bila body 403 JSON berisi `error.code === "region_not_allowed"` (nopol ada,
+ * tetapi di luar wilayah UPT kunci API). Body lain dibatalkan tanpa dibaca.
+ * AbortError tetap dilempar agar timeout client tidak tertutupi.
+ */
+async function isRegionNotAllowed(response: Response): Promise<boolean> {
+  const contentType = response.headers.get("content-type") ?? ""
+  if (!contentType.toLowerCase().includes("application/json")) return false
+  try {
+    const body: unknown = await response.json()
+    if (typeof body !== "object" || body === null) return false
+    const error = (body as { error?: unknown }).error
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      (error as { code?: unknown }).code === "region_not_allowed"
+    )
+  } catch (error) {
+    if (isAbortError(error)) throw error
+    return false
+  }
+}
+
 function upstreamHttpError(status: number): LookupError {
   if (status === 504) {
     return errorResult(
@@ -142,6 +172,8 @@ export function parseRetryAfterSeconds(
  * - Timeout client default 8 detik (DEFAULT_TIMEOUT_MS = 8_000).
  * - Maksimum 1 retry hanya untuk transient network failure atau HTTP 502/503/504 dengan backoff & jitter.
  * - HTTP 400, 401, 403, 404, 429, 500, dan client timeout tidak diretry.
+ * - HTTP 403 `region_not_allowed` menjadi NJKB_REGION_NOT_ALLOWED (HTTP 403); 401/403 lain tetap 502.
+ * - Kunci API (`Authorization: Bearer`) dan header Access dikirim bersama selama Fase 4.
  * - HTTP 429 membaca header Retry-After, tidak melakukan retry, dan menahan pemanggilan berikutnya selama durasi tersebut.
  * - Redirect tidak diikuti (redirect: "manual"); 3xx menjadi error aman tanpa retry agar service token tidak diteruskan.
  * - Body response yang tidak dipakai dibatalkan, tidak dibaca.
@@ -193,6 +225,7 @@ export class ApiVehicleDataSource implements VehicleDataSource {
     const baseUrl = this.config.baseUrl?.trim()
     const clientId = this.config.accessClientId?.trim()
     const clientSecret = this.config.accessClientSecret?.trim()
+    const apiKey = this.config.apiKey?.trim()
 
     if (!baseUrl || !isValidNjkbBaseUrl(baseUrl)) {
       return errorResult(
@@ -200,7 +233,8 @@ export class ApiVehicleDataSource implements VehicleDataSource {
         CONFIG_ERROR,
       )
     }
-    if (!clientId || !clientSecret) {
+    // Cukup salah satu: kunci API, atau pasangan Access lengkap (perilaku lama).
+    if (!apiKey && !(clientId && clientSecret)) {
       return errorResult(
         "Cloudflare Access credential belum dikonfigurasi.",
         CONFIG_ERROR,
@@ -209,10 +243,12 @@ export class ApiVehicleDataSource implements VehicleDataSource {
 
     // Endpoint resmi tidak menerima query parameter apa pun.
     const url = `${baseUrl.replace(/\/+$/, "")}/api/v1/vehicle/${encodeURIComponent(nopol)}`
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      "CF-Access-Client-Id": clientId,
-      "CF-Access-Client-Secret": clientSecret,
+    const headers: Record<string, string> = { Accept: "application/json" }
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+    // Header Access tetap dikirim selama Access masih menjaga hostname API (sampai Fase 5).
+    if (clientId && clientSecret) {
+      headers["CF-Access-Client-Id"] = clientId
+      headers["CF-Access-Client-Secret"] = clientSecret
     }
     const timeoutMs = sanitizeTimeoutMs(this.config.timeoutMs)
     const fetchFn = this.config.customFetch ?? fetch
@@ -270,6 +306,11 @@ export class ApiVehicleDataSource implements VehicleDataSource {
             "Rate limit terlampaui. Silakan coba lagi beberapa saat lagi.",
             RATE_LIMITED,
           )
+        }
+
+        // Satu-satunya body error yang dibaca, hanya untuk kode; teks upstream tidak diteruskan.
+        if (response.status === 403 && (await isRegionNotAllowed(response))) {
+          return errorResult(REGION_NOT_ALLOWED_MESSAGE, REGION_NOT_ALLOWED)
         }
 
         if (!response.ok) {

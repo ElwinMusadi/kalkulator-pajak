@@ -51,6 +51,8 @@ export interface ApiVehicleDataSourceConfig {
   baseUrl?: string
   accessClientId?: string
   accessClientSecret?: string
+  /** Kunci API Data Potensi (`ptn_…`) untuk header `Authorization: Bearer`. */
+  apiKey?: string
   timeoutMs?: number
   /**
    * Custom fetcher untuk mocking tingkat tinggi dalam pengujian.

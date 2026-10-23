@@ -524,8 +524,113 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   const sentHeaders = init?.headers as Record<string, string>
   assert.equal(sentHeaders["CF-Access-Client-Id"], "test-client.access")
   assert.equal(sentHeaders["CF-Access-Client-Secret"], "test-secret")
+  assert.equal("Authorization" in sentHeaders, false, "tanpa kunci → tanpa Authorization")
 
   pass("Regression 504: metadata typed, client timeout ≠ gateway 504, timeout/base URL tervalidasi, redirect manual")
+}
+
+// 3b2. Kunci API Data Potensi (Fase 4): Bearer + header Access bersama.
+{
+  const API_KEY = "ptn_k7Q2mX9a_" + "A".repeat(43)
+  async function sentHeadersFor(config: Record<string, string | undefined>) {
+    let calls = 0
+    let headers: Record<string, string> = {}
+    const res = await new ApiVehicleDataSource({
+      baseUrl: API_CONFIG.baseUrl,
+      ...config,
+      customFetch: async (_input, init) => {
+        calls++
+        headers = init?.headers as Record<string, string>
+        return jsonResponse(officialMatchedResponse)
+      },
+    }).lookup("DH0001XX")
+    return { res, calls, headers }
+  }
+
+  // Kunci + pasangan Access: keduanya dikirim, kunci di-trim.
+  const both = await sentHeadersFor({ ...API_CONFIG, apiKey: `  ${API_KEY}\n` })
+  assert.equal(both.res.status, "found")
+  assert.equal(both.headers.Authorization, `Bearer ${API_KEY}`)
+  assert.equal(both.headers["CF-Access-Client-Id"], "test-client.access")
+  assert.equal(both.headers["CF-Access-Client-Secret"], "test-secret")
+
+  // Kunci saja (setelah Access dilepas): fetch tetap jalan tanpa header Access.
+  const keyOnly = await sentHeadersFor({ apiKey: API_KEY })
+  assert.equal(keyOnly.calls, 1)
+  assert.equal(keyOnly.headers.Authorization, `Bearer ${API_KEY}`)
+  assert.equal("CF-Access-Client-Id" in keyOnly.headers, false)
+  assert.equal("CF-Access-Client-Secret" in keyOnly.headers, false)
+
+  // Kunci kosong/spasi → perilaku lama: hanya header Access.
+  const blankKey = await sentHeadersFor({ ...API_CONFIG, apiKey: "   " })
+  assert.equal(blankKey.calls, 1)
+  assert.equal("Authorization" in blankKey.headers, false)
+
+  // Tanpa kunci dan tanpa pasangan Access lengkap → config error tanpa fetch.
+  for (const config of [
+    {},
+    { apiKey: " " },
+    { accessClientId: "test-client.access" },
+    { accessClientSecret: "test-secret", apiKey: "" },
+  ]) {
+    const none = await sentHeadersFor(config)
+    assert.equal(none.calls, 0, JSON.stringify(Object.keys(config)))
+    assert.ok(none.res.status === "error" && none.res.code === "NJKB_CONFIG_ERROR" && none.res.httpStatus === 500)
+  }
+
+  pass("Kunci API: Bearer + header Access, trim, kunci saja cukup, kunci kosong = perilaku lama")
+}
+
+// 3b3. HTTP 403 region_not_allowed → kode dan pesan sendiri; 403 lain tetap 502.
+{
+  const UPSTREAM_TEXT = "Kendaraan terdaftar di luar wilayah yang diizinkan untuk kunci ini"
+  let calls = 0
+  const region = await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    sleepFn: async () => undefined,
+    customFetch: async () => {
+      calls++
+      return jsonResponse(
+        { status: "forbidden", error: { code: "region_not_allowed", message: UPSTREAM_TEXT, request_id: "req-1" } },
+        403,
+      )
+    },
+  }).lookup("DH0001XX")
+  assert.equal(calls, 1, "403 tidak diretry")
+  if (region.status === "error") {
+    assert.equal(region.code, "NJKB_REGION_NOT_ALLOWED")
+    assert.equal(region.httpStatus, 403)
+    assert.equal(region.upstreamStatus, 403)
+    assert.equal(region.message, "Kendaraan terdaftar di luar wilayah yang diizinkan.")
+    assert.doesNotMatch(String(region.message), /kunci|req-1/)
+  } else assert.fail("region_not_allowed harus error")
+
+  // 403 dengan kode lain, body bukan JSON, atau JSON rusak → 502 generik.
+  for (const response of [
+    () => jsonResponse({ status: "forbidden", error: { code: "forbidden", message: "x" } }, 403),
+    () => jsonResponse({ code: "region_not_allowed" }, 403),
+    () => jsonResponse({ error: "region_not_allowed" }, 403),
+    () => jsonResponse(null, 403),
+    () => new Response(JSON.stringify({ error: { code: "region_not_allowed" } }), { status: 403 }),
+    () => new Response("{rusak", { status: 403, headers: { "Content-Type": "application/json" } }),
+  ]) {
+    const res = await new ApiVehicleDataSource({ ...API_CONFIG, customFetch: async () => response() }).lookup(
+      "DH0001XX",
+    )
+    assert.ok(
+      res.status === "error" && res.code === "NJKB_UPSTREAM_HTTP_ERROR" && res.httpStatus === 502,
+      "403 bukan region_not_allowed tetap 502",
+    )
+  }
+
+  // Kode region di status selain 403 tidak diperlakukan khusus.
+  const wrongStatus = await new ApiVehicleDataSource({
+    ...API_CONFIG,
+    customFetch: async () => jsonResponse({ error: { code: "region_not_allowed" } }, 401),
+  }).lookup("DH0001XX")
+  assert.ok(wrongStatus.status === "error" && wrongStatus.code === "NJKB_UPSTREAM_HTTP_ERROR")
+
+  pass("403 region_not_allowed → NJKB_REGION_NOT_ALLOWED (HTTP 403), tanpa retry dan tanpa teks upstream")
 }
 
 // 3c. Redirect manual 3xx dan pembatalan body yang tidak dibaca

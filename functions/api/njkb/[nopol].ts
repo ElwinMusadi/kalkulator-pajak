@@ -28,6 +28,7 @@
  * 404: { "message": "Data kendaraan tidak ditemukan." }
  * 400: { "message": "Nopol tidak valid." }
  * 401/403: { message, code: "UNAUTHENTICATED" | "FORBIDDEN" }
+ * 403: { message, code: "NJKB_REGION_NOT_ALLOWED" } — nopol di luar wilayah kunci API.
  * 5xx: { message, code? } — code NJKB_* (lihat VehicleLookupErrorCode).
  */
 
@@ -73,7 +74,7 @@ interface AccessCredentialPair {
  * Pilih pasangan credential Access dari tier pertama yang LENGKAP (ID dan
  * secret tidak kosong): VEHICLE_* → NJKB_* → CF_ACCESS_* (lokal). Nilai dari
  * tier berbeda tidak pernah dicampur; tanpa pasangan lengkap → undefined
- * (adapter mengembalikan NJKB_CONFIG_ERROR tanpa fetch).
+ * (tanpa POTENSI_API_KEY juga, adapter mengembalikan NJKB_CONFIG_ERROR tanpa fetch).
  */
 function selectAccessCredentials(env: Env): AccessCredentialPair | undefined {
   const tiers: Array<[string | undefined, string | undefined]> = [
@@ -94,6 +95,8 @@ function createVehicleApiSource(env: Env): ApiVehicleDataSource {
   return new ApiVehicleDataSource({
     baseUrl: envValue(env.VEHICLE_API_BASE_URL, env.NJKB_API_BASE_URL),
     ...selectAccessCredentials(env),
+    // Kunci API Data Potensi; header CF Access tetap dikirim sampai Access dilepas (Fase 5).
+    apiKey: envValue(env.POTENSI_API_KEY),
     // Number (bukan parseInt) agar "10abc" ditolak; adapter menyanitasi ke default 8000.
     timeoutMs: timeoutRaw === undefined ? undefined : Number(timeoutRaw),
   })
