@@ -387,8 +387,8 @@ Jika ke depan aplikasi akan diintegrasikan dengan API resmi Samsat/Bapenda NTT (
      ```
    - Selama payload API eksternal di-mapping menjadi struktur `VehicleData` di atas, komponen frontend (`tax-calculator-form.tsx`, `use-nopol-lookup.ts`, dll.) tidak memerlukan perombakan.
 3. **Pengelolaan Kredensial**:
-   - Simpan Cloudflare Access Service Token di Cloudflare Secrets / Environment Variables Pages melalui `NJKB_ACCESS_CLIENT_ID` dan `NJKB_ACCESS_CLIENT_SECRET`.
-   - Kunci API Data Potensi (`ptn_…`, dibuat di https://potensi.uptdpenda-kupang.web.id/#kunci) disimpan sebagai secret Pages `POTENSI_API_KEY` dan dikirim sebagai `Authorization: Bearer`. Selama Fase 4 header Access tetap ikut dikirim; tanpa kunci, perilaku lama (Access saja) berlaku. Upstream 403 `region_not_allowed` menjadi HTTP 403 `NJKB_REGION_NOT_ALLOWED` ("Kendaraan terdaftar di luar wilayah yang diizinkan.").
+   - Satu-satunya kredensial: kunci API Data Potensi (`ptn_…`, dibuat di https://potensi.uptdpenda-kupang.web.id/#kunci), disimpan sebagai secret Pages `POTENSI_API_KEY` dan dikirim sebagai `Authorization: Bearer`. Tanpa kunci, lookup mengembalikan `NJKB_CONFIG_ERROR` tanpa memanggil API.
+   - Sejak 2026-10-24 Cloudflare Access dilepas dari `api.uptdpenda-kupang.web.id` (Fase 5). Header `CF-Access-Client-*` dan env `VEHICLE_ACCESS_*` / `NJKB_ACCESS_*` / `CF_ACCESS_*` tidak dipakai lagi; hapus secret lamanya dari Pages.
    - Gunakan `NJKB_API_BASE_URL=https://api.uptdpenda-kupang.web.id` dan `NJKB_API_TIMEOUT_MS=8000` pada environment backend.
    - Jangan letakkan kredensial API eksternal di frontend (`src/` atau `VITE_*`).
 

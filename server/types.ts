@@ -8,20 +8,13 @@ export interface Env {
   DB: D1Database
   /** API Data Kendaraan pusat (diutamakan). Alias NJKB_* lama tetap dibaca bila kosong. */
   VEHICLE_API_BASE_URL?: string
-  VEHICLE_ACCESS_CLIENT_ID?: string
-  VEHICLE_ACCESS_CLIENT_SECRET?: string
   VEHICLE_API_TIMEOUT_MS?: string
   /** @deprecated alias kompatibilitas; gunakan VEHICLE_*. */
   NJKB_API_BASE_URL?: string
-  NJKB_ACCESS_CLIENT_ID?: string
-  NJKB_ACCESS_CLIENT_SECRET?: string
   NJKB_API_TIMEOUT_MS?: string
-  /** Fallback terakhir credential Access (mis. .dev.vars lokal); bila alias VEHICLE_* dan NJKB_* tidak tersedia. */
-  CF_ACCESS_CLIENT_ID?: string
-  CF_ACCESS_CLIENT_SECRET?: string
   /**
-   * Kunci API Data Potensi (`ptn_…`), dikirim sebagai `Authorization: Bearer`.
-   * Secret Pages khusus server; jangan pernah memakai awalan VITE_.
+   * Kunci API Data Potensi (`ptn_…`), dikirim sebagai `Authorization: Bearer`. Satu-satunya
+   * kredensial sejak Access dilepas (2026-10-24). Secret Pages khusus server; jangan pernah memakai awalan VITE_.
    */
   POTENSI_API_KEY?: string
 }

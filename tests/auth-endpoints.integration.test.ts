@@ -85,8 +85,7 @@ function methodExport(method: string): string {
 let env: {
   DB: D1Database
   VEHICLE_API_BASE_URL: string
-  VEHICLE_ACCESS_CLIENT_ID: string
-  VEHICLE_ACCESS_CLIENT_SECRET: string
+  POTENSI_API_KEY: string
 }
 let vehicleApiCalls = 0
 const originalGlobalFetch = globalThis.fetch
@@ -216,8 +215,7 @@ try {
   env = {
     DB: db,
     VEHICLE_API_BASE_URL: "https://vehicle-api.test",
-    VEHICLE_ACCESS_CLIENT_ID: "test-client.access",
-    VEHICLE_ACCESS_CLIENT_SECRET: "test-secret",
+    POTENSI_API_KEY: "ptn_k7Q2mX9a_" + "C".repeat(43),
   }
   // Mock hanya untuk API Data Kendaraan; request lain (Miniflare) diteruskan.
   const passthroughFetch = globalThis.fetch

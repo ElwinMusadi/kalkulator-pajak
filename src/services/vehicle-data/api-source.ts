@@ -223,8 +223,6 @@ export class ApiVehicleDataSource implements VehicleDataSource {
     }
 
     const baseUrl = this.config.baseUrl?.trim()
-    const clientId = this.config.accessClientId?.trim()
-    const clientSecret = this.config.accessClientSecret?.trim()
     const apiKey = this.config.apiKey?.trim()
 
     if (!baseUrl || !isValidNjkbBaseUrl(baseUrl)) {
@@ -233,22 +231,19 @@ export class ApiVehicleDataSource implements VehicleDataSource {
         CONFIG_ERROR,
       )
     }
-    // Cukup salah satu: kunci API, atau pasangan Access lengkap (perilaku lama).
-    if (!apiKey && !(clientId && clientSecret)) {
+    // Sejak Access dilepas dari API (Fase 5, 2026-10-24) kunci API satu-satunya kredensial.
+    if (!apiKey) {
       return errorResult(
-        "Cloudflare Access credential belum dikonfigurasi.",
+        "Kunci API Data Potensi belum dikonfigurasi.",
         CONFIG_ERROR,
       )
     }
 
     // Endpoint resmi tidak menerima query parameter apa pun.
     const url = `${baseUrl.replace(/\/+$/, "")}/api/v1/vehicle/${encodeURIComponent(nopol)}`
-    const headers: Record<string, string> = { Accept: "application/json" }
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
-    // Header Access tetap dikirim selama Access masih menjaga hostname API (sampai Fase 5).
-    if (clientId && clientSecret) {
-      headers["CF-Access-Client-Id"] = clientId
-      headers["CF-Access-Client-Secret"] = clientSecret
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
     }
     const timeoutMs = sanitizeTimeoutMs(this.config.timeoutMs)
     const fetchFn = this.config.customFetch ?? fetch

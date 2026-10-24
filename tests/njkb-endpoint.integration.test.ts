@@ -43,10 +43,11 @@ interface TestEnv {
   POTENSI_API_KEY?: string
 }
 
+const API_KEY = "ptn_k7Q2mX9a_" + "B".repeat(43)
+
 const API_ENV = {
   NJKB_API_BASE_URL: "https://api.uptdpenda-kupang.web.id",
-  NJKB_ACCESS_CLIENT_ID: "test-client.access",
-  NJKB_ACCESS_CLIENT_SECRET: "test-secret",
+  POTENSI_API_KEY: API_KEY,
 }
 
 const LEGACY_SOURCES = [undefined, "d1", "api", "d1_then_api", "api_then_d1", "invalid", ""] as const
@@ -248,7 +249,7 @@ try {
     pass("Petugas: 403 tanpa calculator+vehicle_lookup.api (semua ?source); 200 bila lengkap")
   }
 
-  // Kontrak endpoint + Access headers; env VEHICLE_* diutamakan atas alias NJKB_*.
+  // Kontrak endpoint: hanya Authorization: Bearer (Access dilepas 2026-10-24); base URL VEHICLE_* diutamakan atas NJKB_*.
   {
     let requestedUrl = ""
     let headers: Record<string, string> = {}
@@ -266,93 +267,68 @@ try {
     assert.equal(legacyJson.originUpt, null)
     assert.equal(legacyJson.syncedAt, null)
     assert.equal(requestedUrl, "https://api.uptdpenda-kupang.web.id/api/v1/vehicle/DH2506KA")
-    assert.equal(headers["CF-Access-Client-Id"], "test-client.access")
-    assert.equal(headers["CF-Access-Client-Secret"], "test-secret")
+    assert.deepEqual(Object.keys(headers).sort(), ["Accept", "Authorization"])
+    assert.equal(headers.Authorization, `Bearer ${API_KEY}`)
 
-    const preferred = await callEndpoint({
-      DB: trackingDb({ calls: 0 }),
-      ...API_ENV,
-      VEHICLE_API_BASE_URL: "https://central.example.test/",
-      VEHICLE_ACCESS_CLIENT_ID: "new-client.access",
-      VEHICLE_ACCESS_CLIENT_SECRET: "new-secret",
-    })
+    const preferred = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, VEHICLE_API_BASE_URL: "https://central.example.test/" })
     assert.equal(preferred.status, 200)
     assert.equal(requestedUrl, "https://central.example.test/api/v1/vehicle/DH2506KA")
-    assert.equal(headers["CF-Access-Client-Id"], "new-client.access")
-    assert.equal(headers["CF-Access-Client-Secret"], "new-secret")
 
     // Nilai VEHICLE_* kosong → alias lama.
     await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, VEHICLE_API_BASE_URL: "  " })
     assert.equal(requestedUrl, "https://api.uptdpenda-kupang.web.id/api/v1/vehicle/DH2506KA")
 
-    // CF_ACCESS_* hanya fallback terakhir untuk credential.
-    const cfOnly = await callEndpoint({
-      DB: trackingDb({ calls: 0 }),
-      VEHICLE_API_BASE_URL: "https://central.example.test",
-      CF_ACCESS_CLIENT_ID: "cf-client.access",
-      CF_ACCESS_CLIENT_SECRET: "cf-secret",
-    })
-    assert.equal(cfOnly.status, 200)
-    assert.equal(headers["CF-Access-Client-Id"], "cf-client.access")
-    assert.equal(headers["CF-Access-Client-Secret"], "cf-secret")
-    await callEndpoint({
-      DB: trackingDb({ calls: 0 }),
-      ...API_ENV,
-      CF_ACCESS_CLIENT_ID: "cf-client.access",
-      CF_ACCESS_CLIENT_SECRET: "cf-secret",
-    })
-    assert.equal(headers["CF-Access-Client-Id"], "test-client.access", "NJKB_* menang atas CF_ACCESS_*")
-
-    // Pasangan credential dipilih per tier lengkap; tier tidak pernah dicampur.
-    for (const partial of [
-      { VEHICLE_ACCESS_CLIENT_ID: "new-client.access" },
-      { VEHICLE_ACCESS_CLIENT_SECRET: "new-secret" },
-      { VEHICLE_ACCESS_CLIENT_ID: "new-client.access", VEHICLE_ACCESS_CLIENT_SECRET: "   " },
-    ]) {
-      headers = {}
-      const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, ...partial })
-      assert.equal(response.status, 200, JSON.stringify(Object.keys(partial)))
-      assert.equal(headers["CF-Access-Client-Id"], "test-client.access", "pasangan lama utuh")
-      assert.equal(headers["CF-Access-Client-Secret"], "test-secret", "pasangan lama utuh")
-    }
-
-    // Nilai di-trim sebelum dikirim.
+    // Kunci di-trim; env Access lama yang masih tersisa tidak pernah dikirim.
+    headers = {}
     await callEndpoint({
       DB: trackingDb({ calls: 0 }),
       VEHICLE_API_BASE_URL: "  https://central.example.test  ",
-      VEHICLE_ACCESS_CLIENT_ID: "  new-client.access ",
-      VEHICLE_ACCESS_CLIENT_SECRET: " new-secret  ",
-    })
+      POTENSI_API_KEY: `  ${API_KEY}\n`,
+      NJKB_ACCESS_CLIENT_ID: "test-client.access",
+      NJKB_ACCESS_CLIENT_SECRET: "test-secret",
+      CF_ACCESS_CLIENT_ID: "cf-client.access",
+      CF_ACCESS_CLIENT_SECRET: "cf-secret",
+    } as TestEnv)
     assert.equal(requestedUrl, "https://central.example.test/api/v1/vehicle/DH2506KA")
-    assert.equal(headers["CF-Access-Client-Id"], "new-client.access")
-    assert.equal(headers["CF-Access-Client-Secret"], "new-secret")
+    assert.equal(headers.Authorization, `Bearer ${API_KEY}`)
+    assert.equal("CF-Access-Client-Id" in headers, false)
+    assert.equal("CF-Access-Client-Secret" in headers, false)
 
-    // Tidak ada tier lengkap (campuran ID/secret beda tier) → config error tanpa fetch.
+    // Tanpa kunci (walau credential Access lama ada) → config error tanpa fetch dan tanpa bocor.
     let fetches = 0
     globalThis.fetch = async () => {
       fetches++
       return jsonUpstream(officialApiResponse("DH2506KA"))
     }
-    for (const mixed of [
-      { VEHICLE_ACCESS_CLIENT_ID: "new-client.access", NJKB_ACCESS_CLIENT_SECRET: "test-secret" },
-      { NJKB_ACCESS_CLIENT_ID: "test-client.access", CF_ACCESS_CLIENT_SECRET: "cf-secret" },
-      { CF_ACCESS_CLIENT_ID: "cf-client.access", VEHICLE_ACCESS_CLIENT_SECRET: "new-secret" },
+    for (const env of [
+      { NJKB_ACCESS_CLIENT_ID: "test-client.access", NJKB_ACCESS_CLIENT_SECRET: "test-secret" },
+      { POTENSI_API_KEY: "   " },
       {},
     ]) {
       const response = await silently(() =>
-        callEndpoint({
-          DB: trackingDb({ calls: 0 }),
-          VEHICLE_API_BASE_URL: "https://central.example.test",
-          ...mixed,
-        }),
+        callEndpoint({ DB: trackingDb({ calls: 0 }), VEHICLE_API_BASE_URL: "https://central.example.test", ...env } as TestEnv),
       )
       const text = await response.text()
-      assert.equal(response.status, 500, JSON.stringify(Object.keys(mixed)))
+      assert.equal(response.status, 500, JSON.stringify(Object.keys(env)))
       assert.equal(JSON.parse(text).code, "NJKB_CONFIG_ERROR")
       assert.equal(/secret|client\.access/.test(text), false)
     }
-    assert.equal(fetches, 0, "tanpa pasangan lengkap tidak ada fetch")
-    pass("Endpoint resmi + Access headers; pasangan credential per tier lengkap VEHICLE_* > NJKB_* > CF_ACCESS_*, trim, tanpa campuran")
+    assert.equal(fetches, 0, "tanpa kunci tidak ada fetch")
+
+    // Kunci tidak pernah bocor ke respons atau log saat gagal.
+    const logs: string[] = []
+    const originalWarn = console.warn
+    console.warn = (...args: unknown[]) => logs.push(args.map(String).join(" "))
+    globalThis.fetch = async () => new Response(null, { status: 401 })
+    try {
+      const failed = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV })
+      assert.equal(failed.status, 502)
+      assert.equal((await failed.text()).includes(API_KEY), false)
+      assert.equal(logs.join().includes(API_KEY), false)
+    } finally {
+      console.warn = originalWarn
+    }
+    pass("Endpoint resmi: hanya Authorization: Bearer, kunci di-trim, env Access lama diabaikan, tanpa kunci = config error tanpa fetch, kunci tidak bocor")
   }
 
   // Payload pusat: NJUB, bobot 1.085, warna plat, originUpt, syncedAt; tanpa PII.
@@ -602,59 +578,6 @@ try {
   }
   pass("Upstream 401/403 → HTTP 502 aman")
 
-  // Fase 4: POTENSI_API_KEY → Authorization: Bearer, header Access tetap dikirim.
-  {
-    const API_KEY = "ptn_k7Q2mX9a_" + "B".repeat(43)
-    let headers: Record<string, string> = {}
-    let apiCalls = 0
-    globalThis.fetch = async (_input, init) => {
-      apiCalls++
-      headers = init?.headers as Record<string, string>
-      return jsonUpstream(officialApiResponse("DH2506KA"))
-    }
-
-    const withKey = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: ` ${API_KEY} ` })
-    assert.equal(withKey.status, 200)
-    assert.equal(headers.Authorization, `Bearer ${API_KEY}`)
-    assert.equal(headers["CF-Access-Client-Id"], "test-client.access")
-    assert.equal(headers["CF-Access-Client-Secret"], "test-secret")
-
-    // Tanpa kunci atau kunci kosong → perilaku lama, tanpa Authorization.
-    for (const key of [undefined, "", "   "]) {
-      headers = {}
-      const response = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: key })
-      assert.equal(response.status, 200)
-      assert.equal("Authorization" in headers, false, `POTENSI_API_KEY=${JSON.stringify(key)}`)
-      assert.equal(headers["CF-Access-Client-Id"], "test-client.access")
-    }
-
-    // Kunci saja tanpa credential Access (setelah Fase 5) tetap memanggil API.
-    const before = apiCalls
-    const keyOnly = await callEndpoint({
-      DB: trackingDb({ calls: 0 }),
-      VEHICLE_API_BASE_URL: "https://central.example.test",
-      POTENSI_API_KEY: API_KEY,
-    })
-    assert.equal(keyOnly.status, 200)
-    assert.equal(apiCalls, before + 1)
-    assert.equal(headers.Authorization, `Bearer ${API_KEY}`)
-    assert.equal("CF-Access-Client-Id" in headers, false)
-
-    // Kunci tidak pernah bocor ke respons atau log saat gagal.
-    const logs: string[] = []
-    const originalWarn = console.warn
-    console.warn = (...args: unknown[]) => logs.push(args.map(String).join(" "))
-    globalThis.fetch = async () => new Response(null, { status: 401 })
-    try {
-      const failed = await callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: API_KEY })
-      assert.equal(failed.status, 502)
-      assert.equal((await failed.text()).includes(API_KEY), false)
-      assert.equal(logs.join().includes(API_KEY), false)
-    } finally {
-      console.warn = originalWarn
-    }
-    pass("POTENSI_API_KEY → Authorization: Bearer + header Access; kosong = perilaku lama; kunci saja cukup; tidak bocor")
-  }
 
   // Upstream 403 region_not_allowed → HTTP 403 NJKB_REGION_NOT_ALLOWED dengan pesan sendiri.
   {
@@ -671,7 +594,7 @@ try {
         403,
       )
     const response = await silently(() =>
-      callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV, POTENSI_API_KEY: "ptn_k7Q2mX9a_x" }),
+      callEndpoint({ DB: trackingDb({ calls: 0 }), ...API_ENV }),
     )
     const json = await body(response)
     assert.equal(response.status, 403)
@@ -686,7 +609,7 @@ try {
   // Base URL invalid / tidak dikonfigurasi: tanpa fetch, 500 config error tanpa bocor.
   for (const env of [
     { ...API_ENV, NJKB_API_BASE_URL: "https://user:hunter2@api.example.test" },
-    { NJKB_ACCESS_CLIENT_ID: "x", NJKB_ACCESS_CLIENT_SECRET: "test-secret" },
+    { POTENSI_API_KEY: API_KEY },
   ]) {
     let apiCalls = 0
     const logs: string[] = []
@@ -704,7 +627,7 @@ try {
       assert.equal(apiCalls, 0)
       assert.equal(d1.calls, 0)
       assert.match(text, /NJKB_CONFIG_ERROR/)
-      assert.equal(/hunter2|example\.test|test-secret/.test(text + logs.join()), false)
+      assert.equal(/hunter2|example\.test|ptn_/.test(text + logs.join()), false)
     } finally {
       console.warn = originalWarn
     }

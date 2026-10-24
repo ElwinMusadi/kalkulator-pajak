@@ -21,10 +21,11 @@ import {
 } from "../src/services/vehicle-data/index.ts"
 import { DEFAULT_WARNA_PLAT, normalizeWarnaPlat } from "../src/types/tax.ts"
 
+const API_KEY_UJI = "ptn_k7Q2mX9a_" + "A".repeat(43)
+
 const API_CONFIG = {
   baseUrl: "https://api.uptdpenda-kupang.web.id",
-  accessClientId: "test-client.access",
-  accessClientSecret: "test-secret",
+  apiKey: API_KEY_UJI,
 }
 
 const officialMatchedResponse = {
@@ -507,7 +508,7 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   assert.equal(isValidNjkbBaseUrl("http://localhost:8787"), true)
   assert.equal(isValidNjkbBaseUrl("https://api.uptdpenda-kupang.web.id/"), true)
 
-  // Headers Access, URL kontrak, dan redirect: "manual" dikirim.
+  // Header Bearer, URL kontrak, dan redirect: "manual" dikirim.
   let init: RequestInit | undefined
   let requestedUrl = ""
   await new ApiVehicleDataSource({
@@ -522,16 +523,14 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
   assert.equal(init?.redirect, "manual")
   assert.equal(init?.method, "GET")
   const sentHeaders = init?.headers as Record<string, string>
-  assert.equal(sentHeaders["CF-Access-Client-Id"], "test-client.access")
-  assert.equal(sentHeaders["CF-Access-Client-Secret"], "test-secret")
-  assert.equal("Authorization" in sentHeaders, false, "tanpa kunci → tanpa Authorization")
+  assert.deepEqual(Object.keys(sentHeaders).sort(), ["Accept", "Authorization"])
+  assert.equal(sentHeaders.Authorization, `Bearer ${API_KEY_UJI}`)
 
   pass("Regression 504: metadata typed, client timeout ≠ gateway 504, timeout/base URL tervalidasi, redirect manual")
 }
 
-// 3b2. Kunci API Data Potensi (Fase 4): Bearer + header Access bersama.
+// 3b2. Kunci API Data Potensi: satu-satunya kredensial sejak Access dilepas (Fase 5, 2026-10-24).
 {
-  const API_KEY = "ptn_k7Q2mX9a_" + "A".repeat(43)
   async function sentHeadersFor(config: Record<string, string | undefined>) {
     let calls = 0
     let headers: Record<string, string> = {}
@@ -547,38 +546,30 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
     return { res, calls, headers }
   }
 
-  // Kunci + pasangan Access: keduanya dikirim, kunci di-trim.
-  const both = await sentHeadersFor({ ...API_CONFIG, apiKey: `  ${API_KEY}\n` })
-  assert.equal(both.res.status, "found")
-  assert.equal(both.headers.Authorization, `Bearer ${API_KEY}`)
-  assert.equal(both.headers["CF-Access-Client-Id"], "test-client.access")
-  assert.equal(both.headers["CF-Access-Client-Secret"], "test-secret")
+  // Kunci di-trim dan dikirim sebagai Bearer; tidak pernah ada header CF Access.
+  const trimmed = await sentHeadersFor({ apiKey: `  ${API_KEY_UJI}\n` })
+  assert.equal(trimmed.res.status, "found")
+  assert.equal(trimmed.headers.Authorization, `Bearer ${API_KEY_UJI}`)
+  assert.equal("CF-Access-Client-Id" in trimmed.headers, false)
+  assert.equal("CF-Access-Client-Secret" in trimmed.headers, false)
 
-  // Kunci saja (setelah Access dilepas): fetch tetap jalan tanpa header Access.
-  const keyOnly = await sentHeadersFor({ apiKey: API_KEY })
-  assert.equal(keyOnly.calls, 1)
-  assert.equal(keyOnly.headers.Authorization, `Bearer ${API_KEY}`)
-  assert.equal("CF-Access-Client-Id" in keyOnly.headers, false)
-  assert.equal("CF-Access-Client-Secret" in keyOnly.headers, false)
+  // Konfigurasi Access lama yang masih ada di objek config diabaikan.
+  const legacy = await sentHeadersFor({ apiKey: API_KEY_UJI, accessClientId: "test-client.access", accessClientSecret: "test-secret" })
+  assert.equal(legacy.calls, 1)
+  assert.equal("CF-Access-Client-Id" in legacy.headers, false)
 
-  // Kunci kosong/spasi → perilaku lama: hanya header Access.
-  const blankKey = await sentHeadersFor({ ...API_CONFIG, apiKey: "   " })
-  assert.equal(blankKey.calls, 1)
-  assert.equal("Authorization" in blankKey.headers, false)
-
-  // Tanpa kunci dan tanpa pasangan Access lengkap → config error tanpa fetch.
+  // Tanpa kunci → config error tanpa fetch, walau credential Access lama ada.
   for (const config of [
     {},
     { apiKey: " " },
-    { accessClientId: "test-client.access" },
-    { accessClientSecret: "test-secret", apiKey: "" },
+    { accessClientId: "test-client.access", accessClientSecret: "test-secret" },
   ]) {
     const none = await sentHeadersFor(config)
     assert.equal(none.calls, 0, JSON.stringify(Object.keys(config)))
     assert.ok(none.res.status === "error" && none.res.code === "NJKB_CONFIG_ERROR" && none.res.httpStatus === 500)
   }
 
-  pass("Kunci API: Bearer + header Access, trim, kunci saja cukup, kunci kosong = perilaku lama")
+  pass("Kunci API: satu-satunya kredensial, di-trim, header Access tidak pernah dikirim, tanpa kunci = config error tanpa fetch")
 }
 
 // 3b3. HTTP 403 region_not_allowed → kode dan pesan sendiri; 403 lain tetap 502.

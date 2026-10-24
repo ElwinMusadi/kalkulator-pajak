@@ -65,37 +65,11 @@ function envValue(...candidates: Array<string | undefined>): string | undefined 
   return undefined
 }
 
-interface AccessCredentialPair {
-  accessClientId: string
-  accessClientSecret: string
-}
-
-/**
- * Pilih pasangan credential Access dari tier pertama yang LENGKAP (ID dan
- * secret tidak kosong): VEHICLE_* → NJKB_* → CF_ACCESS_* (lokal). Nilai dari
- * tier berbeda tidak pernah dicampur; tanpa pasangan lengkap → undefined
- * (tanpa POTENSI_API_KEY juga, adapter mengembalikan NJKB_CONFIG_ERROR tanpa fetch).
- */
-function selectAccessCredentials(env: Env): AccessCredentialPair | undefined {
-  const tiers: Array<[string | undefined, string | undefined]> = [
-    [env.VEHICLE_ACCESS_CLIENT_ID, env.VEHICLE_ACCESS_CLIENT_SECRET],
-    [env.NJKB_ACCESS_CLIENT_ID, env.NJKB_ACCESS_CLIENT_SECRET],
-    [env.CF_ACCESS_CLIENT_ID, env.CF_ACCESS_CLIENT_SECRET],
-  ]
-  for (const [id, secret] of tiers) {
-    const accessClientId = id?.trim()
-    const accessClientSecret = secret?.trim()
-    if (accessClientId && accessClientSecret) return { accessClientId, accessClientSecret }
-  }
-  return undefined
-}
-
 function createVehicleApiSource(env: Env): ApiVehicleDataSource {
   const timeoutRaw = envValue(env.VEHICLE_API_TIMEOUT_MS, env.NJKB_API_TIMEOUT_MS)
   return new ApiVehicleDataSource({
     baseUrl: envValue(env.VEHICLE_API_BASE_URL, env.NJKB_API_BASE_URL),
-    ...selectAccessCredentials(env),
-    // Kunci API Data Potensi; header CF Access tetap dikirim sampai Access dilepas (Fase 5).
+    // Kunci API Data Potensi: satu-satunya kredensial sejak Access dilepas (Fase 5, 2026-10-24).
     apiKey: envValue(env.POTENSI_API_KEY),
     // Number (bukan parseInt) agar "10abc" ditolak; adapter menyanitasi ke default 8000.
     timeoutMs: timeoutRaw === undefined ? undefined : Number(timeoutRaw),
