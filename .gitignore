@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+docs/figma
 
 # Editor directories and files
 .vscode/*
@@ -30,3 +31,5 @@ dist-ssr
 # Cloudflare local state & secrets
 .wrangler/
 .dev.vars*
+
+/docs/Pergub/
