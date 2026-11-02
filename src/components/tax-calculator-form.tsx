@@ -4,10 +4,12 @@ import { id as idLocale } from "date-fns/locale";
 import {
   ArrowLeftRight,
   Calculator,
+  CalendarX,
   CircleAlert,
   Info,
   Landmark,
   ShieldCheck,
+  Smartphone,
 } from "lucide-react";
 import { DatePickerField } from "@/components/date-picker-field";
 import { FacilityToggle } from "@/components/facility-toggle";
@@ -47,6 +49,12 @@ import {
 import { useEffectiveVehicleDataSource } from "@/hooks/use-effective-vehicle-data-source";
 import { useNopolLookup } from "@/hooks/use-nopol-lookup";
 import { resolveGempaEligibility } from "@/lib/gempa-eligibility";
+import {
+  PERGUB_RULES,
+  formatMasaBerlaku,
+  hasWilayahGempa,
+  resolvePergub,
+} from "@/lib/pergub";
 import { calculateTax } from "@/lib/tax-calculator";
 import {
   BIAYA_LAYANAN_INPUT_MAX_LENGTH,
@@ -69,6 +77,7 @@ import type {
   BiayaLayananKey,
   JenisKendaraan,
   TaxCalculationResult,
+  TaxCalculatorInput,
   VehicleData,
   WarnaPlat,
 } from "@/types/tax";
@@ -124,6 +133,16 @@ function normalizeJenis(raw: string | null): JenisKendaraan | undefined {
 /** Warna plat dari data kendaraan; nilai kosong/tak dikenal → default Putih. */
 function plateFromData(raw: unknown): WarnaPlat {
   return isWarnaPlat(raw) ? raw : DEFAULT_WARNA_PLAT;
+}
+
+/**
+ * Penetapan hanya dihitung bila tanggal bayar berada dalam masa berlaku
+ * Pergub keringanan PKB; di luar itu tidak ada hasil (peringatan di form).
+ */
+function calculateInPeriod(
+  input: TaxCalculatorInput,
+): TaxCalculationResult | null {
+  return resolvePergub(input.tanggalBayar) ? calculateTax(input) : null;
 }
 
 function isoToDate(iso: string | null | undefined): Date | undefined {
@@ -244,6 +263,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   // manual. Keduanya hanya di-reset oleh lookup baru atau perubahan Nopol.
   const [gempaAutoValue, setGempaAutoValue] = useState(false);
   const [isMutasiMasuk, setIsMutasiMasuk] = useState(false);
+  const [isBayarOnline, setIsBayarOnline] = useState(false);
   const [warnaPlat, setWarnaPlat] = useState<WarnaPlat>(DEFAULT_WARNA_PLAT);
   const { hasPermission } = useAuth();
   const { effectiveMode: sourceMode, lookupEnabled } =
@@ -330,6 +350,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setIsDomisiliGempa(false);
     setGempaAutoValue(false);
     setIsMutasiMasuk(false);
+    setIsBayarOnline(false);
     setIsTembakRu(false);
     setWarnaPlat(DEFAULT_WARNA_PLAT);
     // Biaya BBN & Mutasi bersifat per transaksi (per kendaraan), bukan
@@ -369,8 +390,10 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     const pajakDate = isoToDate(vehicleData.jatuhTempoPajak);
     const plate = plateFromData(vehicleData.warnaPlat);
     const { tanggalBayar, biayaLayanan } = lookupInputRef.current;
+    const pergubLookup = tanggalBayar ? resolvePergub(tanggalBayar) : null;
     // Gempa otomatis aktif hanya bila plat EB + UPT asal salah satu kabupaten
     // terdampak. Status unknown/not_eligible tetap nonaktif (cek manual).
+    // Nilainya hanya dipakai pada Pergub yang membedakan wilayah gempa (54).
     const autoGempa = resolveGempaEligibility({
       nopol: vehicleData.nopol,
       originUpt: vehicleData.originUpt,
@@ -384,6 +407,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setIsDomisiliGempa(autoGempa);
     setGempaAutoValue(autoGempa);
     setIsMutasiMasuk(false);
+    setIsBayarOnline(false);
     setIsTembakRu(false);
     setWarnaPlat(plate);
 
@@ -405,10 +429,13 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     ) {
       sectionsToOpen.push("assessment");
     }
-    if (!stnkDate || !pajakDate) {
+    // Tanggal bayar di luar masa berlaku Pergub juga membuka Masa Pajak.
+    if (!stnkDate || !pajakDate || !pergubLookup) {
       sectionsToOpen.push("tax-period");
     }
-    if (autoGempa) sectionsToOpen.push("facilities");
+    if (autoGempa && hasWilayahGempa(pergubLookup)) {
+      sectionsToOpen.push("facilities");
+    }
     setOpenSections(sectionsToOpen);
 
     // Data Nopol lengkap langsung menghasilkan ringkasan penetapan.
@@ -423,7 +450,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     ) {
       hasCalculated.current = true;
       onResult(
-        calculateTax({
+        calculateInPeriod({
           njkb: vehicleData.njkb,
           njub: njubValue,
           bobot: vehicleData.bobot || BOBOT_MAP[jenisNormal],
@@ -433,6 +460,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           tanggalBayar,
           isDomisiliGempa: autoGempa,
           isMutasiMasuk: false,
+          isBayarOnline: false,
           isTembakRu: false,
           warnaPlat: plate,
           biayaLayanan,
@@ -461,13 +489,14 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       tanggalBayar,
       isDomisiliGempa,
       isMutasiMasuk,
+      isBayarOnline,
       isTembakRu,
       warnaPlat,
       biayaLayanan,
     };
   }, [njkb, njub, effectiveBobot, jenisKendaraan, jatuhTempoPajak,
     jatuhTempoStnk, tanggalBayar, isDomisiliGempa, isMutasiMasuk,
-    isTembakRu, warnaPlat, biayaLayanan]);
+    isBayarOnline, isTembakRu, warnaPlat, biayaLayanan]);
 
   // Setelah hasil pertama, seluruh edit memakai state form terkini. Input inti
   // yang dikosongkan menghapus hasil lama; izin biaya dicabut membuang biayanya.
@@ -479,11 +508,21 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     }
     if (!hasCalculated.current) return;
     const input = getCalculatorInput();
-    onResult(input ? calculateTax(input) : null);
+    onResult(input ? calculateInPeriod(input) : null);
   }, [vehicleData, getCalculatorInput, onResult]);
 
+  // Aturan Pergub mengikuti tanggal bayar. Toggle gempa hanya untuk Pergub
+  // yang membedakan wilayah gempa; toggle online hanya bila ada diskonnya.
+  const pergub = tanggalBayar ? resolvePergub(tanggalBayar) : null;
+  const gempaBerlaku = hasWilayahGempa(pergub);
+  const tarifOnline = pergub?.diskonOnlinePersen ?? null;
+  const gempaActive = gempaBerlaku && isDomisiliGempa;
+  const onlineActive = tarifOnline !== null && isBayarOnline && !isMutasiMasuk;
+  const tanggalBayarDiLuarMasa = Boolean(tanggalBayar) && !pergub;
+
   // Jaga tahap fasilitas tetap terbuka ketika salah satu toggle aktif.
-  const anyFacilityActive = isDomisiliGempa || isMutasiMasuk || isTembakRu;
+  const anyFacilityActive =
+    gempaActive || isMutasiMasuk || onlineActive || isTembakRu;
   useEffect(() => {
     if (anyFacilityActive) openSection("facilities");
   }, [anyFacilityActive, openSection]);
@@ -524,18 +563,28 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     }
     const input = getCalculatorInput();
     if (!input) return;
+    // Di luar masa berlaku Pergub: tanpa hasil, peringatan tampil di atas
+    // tombol. hasCalculated tetap aktif agar hasil muncul begitu tanggal
+    // bayar dikoreksi ke dalam masa berlaku.
+    if (tanggalBayarDiLuarMasa) openSection("tax-period");
     hasCalculated.current = true;
-    onResult(calculateTax(input));
+    onResult(calculateInPeriod(input));
   }
 
   const njkbNumber = parseFloat(njkb);
   const njubNumber = parseFloat(njub);
 
   const activeFacilityCount = [
-    isDomisiliGempa,
+    gempaActive,
     isMutasiMasuk,
+    onlineActive,
     isTembakRu,
   ].filter(Boolean).length;
+  const onlineImpact = tarifOnline
+    ? jenisKendaraan
+      ? `Diskon PKB berjalan +${jenisKendaraan === "SEPEDA MOTOR" ? tarifOnline.motor : tarifOnline.mobil}%`
+      : `Diskon PKB berjalan +${tarifOnline.motor}% motor · +${tarifOnline.mobil}% roda 4+`
+    : "";
 
   const assessmentComplete =
     Boolean(njkbNumber > 0 && jenisKendaraan && effectiveBobot > 0);
@@ -964,8 +1013,23 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
               value={tanggalBayar}
               onChange={setTanggalBayar}
               required
-              invalid={invalidField === "tanggalBayar"}
+              invalid={invalidField === "tanggalBayar" || tanggalBayarDiLuarMasa}
             />
+            {pergub && (
+              <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground md:col-span-3">
+                <Info
+                  className="mt-0.5 size-3.5 shrink-0 text-primary"
+                  aria-hidden="true"
+                />
+                <span>
+                  Dihitung dengan{" "}
+                  <span className="font-semibold text-foreground">
+                    {pergub.label}
+                  </span>{" "}
+                  (berlaku {formatMasaBerlaku(pergub)}).
+                </span>
+              </p>
+            )}
           </div>
         </FormStepAccordion>
 
@@ -978,26 +1042,54 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           statusTone="info"
         >
           <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <FacilityToggle
-              id="is-gempa"
-              title="Wilayah Terdampak Gempa"
-              description="Sikka, Ende, Nagekeo, Ngada, Manggarai, Manggarai Timur, Manggarai Barat."
-              impact="Diskon tunggakan 75%"
-              checked={isDomisiliGempa}
-              onCheckedChange={setIsDomisiliGempa}
-              icon={<ShieldCheck />}
-              note={gempaNote?.text}
-              noteTone={gempaNote?.tone}
-            />
+            {/* Pembedaan wilayah gempa hanya ada pada Pergub 54/2026. */}
+            {gempaBerlaku && (
+              <FacilityToggle
+                id="is-gempa"
+                title="Wilayah Terdampak Gempa"
+                description="Sikka, Ende, Nagekeo, Ngada, Manggarai, Manggarai Timur, Manggarai Barat."
+                impact={`Diskon tunggakan ${pergub?.diskonTunggakanPersen.gempa}%`}
+                checked={isDomisiliGempa}
+                onCheckedChange={setIsDomisiliGempa}
+                icon={<ShieldCheck />}
+                note={gempaNote?.text}
+                noteTone={gempaNote?.tone}
+              />
+            )}
             <FacilityToggle
               id="is-mutasi-masuk"
               title="Mutasi Masuk Luar Daerah"
-              description="Menggantikan diskon pembayaran awal pada PKB berjalan."
+              description={
+                tarifOnline
+                  ? "Menggantikan diskon pembayaran awal; tidak dapat dibayar via payment online."
+                  : "Menggantikan diskon pembayaran awal pada PKB berjalan."
+              }
               impact="Diskon PKB berjalan 50%"
               checked={isMutasiMasuk}
-              onCheckedChange={setIsMutasiMasuk}
+              onCheckedChange={(checked) => {
+                setIsMutasiMasuk(checked);
+                // Mutasi masuk tidak dapat dibayar via payment online.
+                if (checked) setIsBayarOnline(false);
+              }}
               icon={<ArrowLeftRight />}
             />
+            {tarifOnline && (
+              <FacilityToggle
+                id="is-bayar-online"
+                title="Bayar via Payment Online"
+                description="Payment online Bank NTT, aplikasi PRO NTT, atau SIGNAL. Ditambahkan ke diskon pembayaran awal."
+                impact={onlineImpact}
+                checked={onlineActive}
+                onCheckedChange={setIsBayarOnline}
+                disabled={isMutasiMasuk}
+                note={
+                  isMutasiMasuk
+                    ? "Mutasi masuk tidak dapat dibayar via payment online."
+                    : undefined
+                }
+                icon={<Smartphone />}
+              />
+            )}
             {canUseTembakRu && (
               <FacilityToggle
                 id="is-tembak-ru"
@@ -1055,6 +1147,30 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
       {/* ── Validasi + aksi utama ── */}
       <div className="flex flex-col gap-4 border-t pt-6">
+        {tanggalBayarDiLuarMasa && tanggalBayar && (
+          <Alert variant="destructive" className="animate-fade-up">
+            <CalendarX aria-hidden="true" />
+            <AlertTitle>Di Luar Masa Berlaku</AlertTitle>
+            <AlertDescription>
+              <p>
+                Tanggal pembayaran{" "}
+                <span className="numeric font-semibold">
+                  {format(tanggalBayar, "dd/MM/yyyy")}
+                </span>{" "}
+                tidak termasuk masa berlaku Pergub keringanan PKB, sehingga
+                penetapan tidak dihitung.
+              </p>
+              <ul className="mt-1 list-disc pl-4">
+                {PERGUB_RULES.map((rule) => (
+                  <li key={rule.id}>
+                    {rule.shortLabel}: {formatMasaBerlaku(rule)}
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {validationError && (
           <Alert variant="destructive" className="animate-fade-up">
             <CircleAlert aria-hidden="true" />

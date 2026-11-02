@@ -1,6 +1,20 @@
 # AI Context Snapshot: Kalkulator Pajak Kendaraan NTT
 
-Dokumen ini berisi rangkuman teknis aplikasi. Pembaruan integrasi Oktober 2026 di bawah menjadi acuan untuk perilaku aktif; snapshot September pada bagian berikutnya bersifat historis jika bertentangan.
+Dokumen ini berisi rangkuman teknis aplikasi. Pembaruan November dan Oktober 2026 di bawah menjadi acuan untuk perilaku aktif; snapshot September pada bagian berikutnya bersifat historis jika bertentangan.
+
+## Pembaruan aturan pajak — November 2026 (Pergub 64/2026)
+
+Sumber: `docs/Pergub/Pergub 64 Tahun 2026.pdf` dan `docs/Pergub/Daftar Keringanan Pajak (Amnesty) Pergub 64 Tahun 2026.pdf`. Pergub 64/2026 ditetapkan 30 Okt 2026, berlaku **1 Nov – 31 Des 2026**, dan mencabut Pergub 54/2026 (Pasal 11).
+
+- **Aturan dipilih dari tanggal bayar** (`src/lib/pergub.ts`, `resolvePergub`): 1 Sep – 31 Okt 2026 → Pergub 54/2026 (dipertahankan untuk perhitungan mundur), 1 Nov – 31 Des 2026 → Pergub 64/2026. Di luar itu `calculateTax` melempar `RangeError`; form menampilkan peringatan "Di Luar Masa Berlaku" tanpa hasil. Input `pergub` hanya untuk override test/simulasi.
+- **Tunggakan (Pasal 8)**: pokok PKB tunggakan dihapus 100% untuk semua wilayah, sehingga PKB dan Opsen tunggakan Rp0. DP tahun berjalan 100% bila ada tunggakan (sama dengan Pergub 54).
+- **Wilayah gempa**: tidak dibedakan lagi. Toggle dan deteksi otomatis hanya tampil/dipakai untuk tanggal bayar masa Pergub 54; `result.isDomisiliGempa` selalu `false` pada Pergub 64.
+- **Payment online (Pasal 6 & 10)**: Bank NTT, PRO NTT, SIGNAL. Diskon pokok PKB tahun berjalan 5% (roda 2–3) / 2% (roda 4+), berlaku juga saat terlambat atau menunggak, dan **dijumlahkan** dengan diskon bayar awal (mis. 20% + 5% = 25%). Persen dihitung sebagai bilangan bulat lalu dibagi 100 agar tidak ada galat float. Toggle `isBayarOnline` hanya tampil pada Pergub 64.
+- **Mutasi Masuk (Pasal 7)**: 50% saja; tidak dapat dibayar via payment online (toggle online dinonaktifkan, engine mengabaikan).
+- **DP 17,5%, diskon bayar awal 10/15/20% / 10%, denda PKB & Opsen dihapus**: sama dengan Pergub 54.
+- **SWDKLLJ** (kebijakan BPAD, bukan isi Pergub): pokok berjalan dan pokok tunggakan dipungut; denda SWDKLLJ masa berjalan dipungut; denda SWDKLLJ masa tunggakan dihapus (`dendaSwdklljTunggakanDihapus`). Engine sejak awal menghitung denda dari jatuh tempo di tahun bayar, sehingga nominalnya tidak berubah.
+- **Catatan Pergub 54 (tidak diubah)**: Contoh 6–9 SE Pergub 54 memakai denda SWDKLLJ motor Rp32.000 "> 1 tahun terlambat" (diukur dari jatuh tempo pertama), sedangkan engine memberi denda berdasarkan keterlambatan masa berjalan (mis. Rp24.000 untuk 7 bulan). Selisih hanya untuk perhitungan mundur September–Oktober.
+- Field hasil baru: `pergub`, `diskonTunggakan`, `isBayarOnline`, `diskonPaymentOnline`, `dendaSwdklljTunggakanDihapus`. Label aplikasi (header, login, meta, manifest PWA) memakai `PERGUB_TERBARU`.
 
 ## Pembaruan integrasi — Oktober 2026
 
@@ -21,7 +35,7 @@ Dokumen ini berisi rangkuman teknis aplikasi. Pembaruan integrasi Oktober 2026 d
 ## 1. Project Overview
 
 - **Nama Project**: `kalkulator-pajak`
-- **Tujuan**: Aplikasi web kalkulator Pajak Kendaraan Bermotor (PKB), Opsen PKB, SWDKLLJ, dan PNBP berdasarkan **Peraturan Gubernur Nusa Tenggara Timur Nomor 54 Tahun 2026** serta Surat Edaran Pedoman Pelaksanaan Nomor `900.1.13.1/2741/BPAD2.1`.
+- **Tujuan**: Aplikasi web kalkulator Pajak Kendaraan Bermotor (PKB), Opsen PKB, SWDKLLJ, dan PNBP berdasarkan **Peraturan Gubernur Nusa Tenggara Timur Nomor 64 Tahun 2026** (1 Nov – 31 Des 2026). Pergub Nomor 54 Tahun 2026 beserta Surat Edaran Pedoman Pelaksanaan Nomor `900.1.13.1/2741/BPAD2.1` dipertahankan untuk tanggal bayar 1 Sep – 31 Okt 2026.
 - **Pengguna Sasaran**: Wajib pajak dan petugas UPTD Pendapatan Daerah Wilayah Kota Kupang, Badan Pendapatan dan Aset Daerah (BPAD) Provinsi NTT.
 - **Production Domain**: `https://kalkulator.uptdpenda-kupang.web.id`
 - **Target Deployment**: Cloudflare Pages + Cloudflare Pages Functions + Cloudflare D1.
@@ -111,7 +125,7 @@ kalkulator-pajak/
 │   ├── main.tsx                        # Entry point React DOM
 │   └── vite-env.d.ts                   # Types untuk client Vite & PWA register
 ├── tests/
-│   └── tax-calculator.regression.ts    # Test suite regresi validasi Pergub 54/2026
+│   └── tax-calculator.regression.ts    # Test suite regresi validasi Pergub 54/2026 & 64/2026
 ├── data-kendaraan/                     # (Gitignored) File dataset Excel & dokumen pedoman pergub
 ├── seed/                               # (Gitignored) Output batch SQL hasil generate seed-d1.ts
 ├── schema.sql                          # Skema tabel SQLite D1 untuk vehicle_njkb
@@ -188,7 +202,9 @@ kalkulator-pajak/
 
 ## 6. Tax Calculation Flow (Pergub NTT No. 54 Tahun 2026)
 
-Implementasi berada di `src/lib/tax-calculator.ts` melalui fungsi murni `calculateTax(input: TaxCalculatorInput): TaxCalculationResult`.
+> Bagian ini menjelaskan aturan Pergub 54/2026. Untuk tanggal bayar 1 Nov – 31 Des 2026 berlaku Pergub 64/2026 dengan perbedaan yang dirangkum di "Pembaruan aturan pajak — November 2026" di atas (tunggakan dihapus 100%, tanpa wilayah gempa, diskon payment online).
+
+Implementasi berada di `src/lib/tax-calculator.ts` melalui fungsi murni `calculateTax(input: TaxCalculatorInput): TaxCalculationResult`; parameter per Pergub ada di `src/lib/pergub.ts`.
 
 ### A. Komponen Input & Dasar Pengenaan (DP)
 - `dasarPenuh = (njkb + njub) * bobot`
@@ -329,7 +345,8 @@ CREATE INDEX IF NOT EXISTS idx_vehicle_njkb_nopol ON vehicle_njkb(nopol);
 | `src/components/mobile-result-bar.tsx` | Sticky bar mobile bawah dan modal Drawer rincian penetapan. |
 | `src/components/date-picker-field.tsx` | Komponen input tanggal dengan integrasi calendar popup. |
 | `src/components/facility-toggle.tsx` | Komponen toggle fasilitas (Gempa, Mutasi Masuk, Tembak RU). |
-| `tests/tax-calculator.regression.ts` | Unit test suite memvalidasi rumus terhadap contoh penetapan resmi SE Pergub 54/2026. |
+| `src/lib/pergub.ts` | Parameter dan masa berlaku per Pergub (54/2026, 64/2026); `resolvePergub` memilih aturan dari tanggal bayar. |
+| `tests/tax-calculator.regression.ts` | Unit test suite memvalidasi rumus terhadap contoh penetapan resmi SE Pergub 54/2026 dan ketentuan Pergub 64/2026. |
 | `schema.sql` | Definisi tabel D1 `vehicle_njkb`. |
 | `wrangler.toml` | Konfigurasi Cloudflare Pages dan database ID D1. |
 | `vite.config.ts` | Konfigurasi bundler Vite, Tailwind CSS v4, PWA manifest, dan caching strategy. |
@@ -396,12 +413,12 @@ Jika ke depan aplikasi akan diintegrasikan dengan API resmi Samsat/Bapenda NTT (
 
 ## 12. Important Constraints / Do-Not-Break Rules
 
-1. **JANGAN mengubah rumus matematika pajak di `src/lib/tax-calculator.ts`**:
-   - Rumus mengikuti hierarki Pergub NTT 54/2026.
+1. **JANGAN mengubah rumus matematika pajak di `src/lib/tax-calculator.ts` / `src/lib/pergub.ts` tanpa dasar Pergub**:
+   - Rumus mengikuti Pergub NTT 64/2026 (1 Nov – 31 Des 2026) dan Pergub NTT 54/2026 (1 Sep – 31 Okt 2026), dipilih dari tanggal bayar. Pergub baru ditambahkan sebagai entri `PERGUB_RULES`, bukan dengan menimpa aturan lama.
    - Tanggal cutoff **5 Januari 2025** wajib dipertahankan untuk membedakan tarif 1.5% (tanpa opsen) dan 1.2% (dengan opsen 66%).
    - Seluruh test di `tests/tax-calculator.regression.ts` wajib `PASS`.
-2. **JANGAN menghapus denda SWDKLLJ**:
-   - Tax amnesty membebaskan denda PKB dan denda Opsen, tetapi **TIDAK membebaskan denda SWDKLLJ** (sesuai contoh penetapan resmi).
+2. **JANGAN menghapus denda SWDKLLJ masa berjalan**:
+   - Tax amnesty membebaskan denda PKB dan denda Opsen, tetapi **TIDAK membebaskan denda SWDKLLJ masa berjalan** (sesuai contoh penetapan resmi). Pada Pergub 64 hanya denda SWDKLLJ masa tunggakan yang dihapus; pokok SWDKLLJ tunggakan tetap dipungut.
 3. **JANGAN merusak perilaku reset Nopol**:
    - Pengubahan satu karakter pada input Nopol wajib mereset seluruh data kendaraan dan hasil perhitungan, namun **Tanggal Pembayaran harus tetap dipertahankan**.
 4. **JANGAN membocorkan rahasia ke bundle client**:

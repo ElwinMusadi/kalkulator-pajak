@@ -15,6 +15,8 @@ interface FacilityToggleProps {
   note?: ReactNode;
   /** "auto" = terisi otomatis, "warning" = perlu diperiksa manual. */
   noteTone?: "auto" | "warning" | "neutral";
+  /** Fasilitas tidak dapat dipilih pada kondisi ini (alasan diberikan via note). */
+  disabled?: boolean;
   className?: string;
 }
 
@@ -39,6 +41,7 @@ export function FacilityToggle({
   icon,
   note,
   noteTone = "neutral",
+  disabled = false,
   className,
 }: FacilityToggleProps) {
   const descriptionId = `${id}-description`;
@@ -51,7 +54,9 @@ export function FacilityToggle({
         "has-[:focus-visible]:border-ring",
         checked
           ? "facility-active"
-          : "border-border bg-card hover:border-navy-600/30 hover:bg-navy-50/50 dark:hover:bg-muted/40",
+          : disabled
+            ? "border-border bg-muted/30"
+            : "border-border bg-card hover:border-navy-600/30 hover:bg-navy-50/50 dark:hover:bg-muted/40",
         className,
       )}
     >
@@ -71,6 +76,7 @@ export function FacilityToggle({
           id={id}
           checked={checked}
           onCheckedChange={onCheckedChange}
+          disabled={disabled}
           aria-describedby={note ? `${descriptionId} ${noteId}` : descriptionId}
           className="relative z-10 mt-0.5"
         />
@@ -78,7 +84,12 @@ export function FacilityToggle({
       <div className="flex min-w-0 flex-col gap-1">
         <label
           htmlFor={id}
-          className="cursor-pointer text-sm font-semibold leading-snug text-foreground after:absolute after:inset-0 after:rounded-xl after:content-['']"
+          className={cn(
+            "text-sm font-semibold leading-snug after:absolute after:inset-0 after:rounded-xl after:content-['']",
+            disabled
+              ? "cursor-not-allowed text-muted-foreground"
+              : "cursor-pointer text-foreground",
+          )}
         >
           {title}
         </label>

@@ -21,8 +21,22 @@ interface ComponentTile {
   rows: DetailRowData[];
 }
 
+/** Label PKB berjalan; persen dibulatkan agar galat float tidak tampil. */
+function pkbBerjalanLabel(result: TaxCalculationResult): string {
+  const total = Math.round(result.pkbDiscount * 100);
+  const online = Math.round(result.diskonPaymentOnline * 100);
+  if (total === 0) return "PKB berjalan";
+  if (online === 0) return `PKB berjalan · diskon ${total}%`;
+  const bayarAwal = total - online;
+  return bayarAwal > 0
+    ? `PKB berjalan · diskon ${bayarAwal}% + online ${online}%`
+    : `PKB berjalan · diskon online ${online}%`;
+}
+
 /** Menyusun tile komponen dari hasil kalkulasi — angka identik dengan rumus. */
 function buildTiles(result: TaxCalculationResult): ComponentTile[] {
+  // Pergub 64: pokok PKB tunggakan dihapus 100% → tampil sebagai baris Rp0.
+  const tunggakanDihapus = result.diskonTunggakan >= 1;
   const tiles: ComponentTile[] = [
     {
       key: "pkb",
@@ -34,12 +48,18 @@ function buildTiles(result: TaxCalculationResult): ComponentTile[] {
         result.pkbTunggakanPost2025,
       rows: [
         {
-          label:
-            result.pkbDiscount > 0
-              ? `PKB berjalan · diskon ${result.pkbDiscount * 100}%`
-              : "PKB berjalan",
+          label: pkbBerjalanLabel(result),
           value: result.pkbBerjalan,
         },
+        ...(tunggakanDihapus && result.tahunTunggakan > 0
+          ? [
+              {
+                label: `Tunggakan PKB · ${result.tahunTunggakan} tahun · dihapus 100%`,
+                value: 0,
+                waived: true,
+              },
+            ]
+          : []),
         ...(result.pkbTunggakanPost2025 > 0
           ? [
               {
@@ -78,6 +98,15 @@ function buildTiles(result: TaxCalculationResult): ComponentTile[] {
               },
             ]
           : []),
+        ...(tunggakanDihapus && result.tahunTunggakanPost > 0
+          ? [
+              {
+                label: `Opsen tunggakan · ${result.tahunTunggakanPost} tahun · dihapus 100%`,
+                value: 0,
+                waived: true,
+              },
+            ]
+          : []),
         {
           label: "Denda Opsen · dibebaskan 100%",
           value: result.dendaOpsen,
@@ -106,8 +135,19 @@ function buildTiles(result: TaxCalculationResult): ComponentTile[] {
         ...(result.dendaSwdkllj > 0
           ? [
               {
-                label: `Denda SWDKLLJ · ${result.bulanTerlambat} bulan`,
+                label: result.dendaSwdklljTunggakanDihapus
+                  ? `Denda SWDKLLJ berjalan · ${result.bulanTerlambat} bulan`
+                  : `Denda SWDKLLJ · ${result.bulanTerlambat} bulan`,
                 value: result.dendaSwdkllj,
+              },
+            ]
+          : []),
+        ...(result.dendaSwdklljTunggakanDihapus
+          ? [
+              {
+                label: "Denda SWDKLLJ tunggakan · dihapus",
+                value: 0,
+                waived: true,
               },
             ]
           : []),

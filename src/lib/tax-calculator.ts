@@ -1,12 +1,17 @@
 /**
  * src/lib/tax-calculator.ts
  *
- * Kalkulasi PKB & Opsen berdasarkan Pergub NTT No. 54 Tahun 2026.
- * Mengacu pada Surat Edaran Nomor 900.1.13.1/2741/BPAD2.1 beserta
- * seluruh contoh penetapan (Contoh 1–14) yang terlampir.
+ * Kalkulasi PKB & Opsen berdasarkan Pergub NTT keringanan PKB yang berlaku
+ * pada tanggal bayar (lihat src/lib/pergub.ts):
+ * - Pergub 54/2026: Surat Edaran Nomor 900.1.13.1/2741/BPAD2.1 beserta
+ *   contoh penetapan yang terlampir.
+ * - Pergub 64/2026: pokok PKB tunggakan dihapus 100% (Pasal 8) dan diskon
+ *   payment online (Pasal 6) yang diakumulasikan dengan diskon bayar awal
+ *   (Pasal 10). Rumus lain sama dengan Pergub 54/2026.
  */
 
 import { differenceInCalendarDays } from "date-fns"
+import { getPergub, resolvePergub } from "./pergub"
 import {
   BIAYA_LAYANAN_KEYS,
   BIAYA_LAYANAN_MAX,
@@ -133,6 +138,13 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   // Pengaman runtime: null/nilai tak valid diperlakukan sebagai default.
   const warnaPlat: WarnaPlat = isWarnaPlat(input.warnaPlat) ? input.warnaPlat : DEFAULT_WARNA_PLAT
 
+  // Di luar masa berlaku Pergub tidak ada dasar perhitungan; pemanggil (form)
+  // wajib memeriksa resolvePergub lebih dulu dan tidak menampilkan hasil.
+  const pergub = input.pergub ? getPergub(input.pergub) : resolvePergub(tanggalBayar)
+  if (!pergub) {
+    throw new RangeError("Tanggal pembayaran di luar masa berlaku Pergub keringanan PKB.")
+  }
+
   const isMotor = jenisKendaraan === "SEPEDA MOTOR"
   const swdklljBase = isMotor ? 35_000 : 143_000
 
@@ -148,8 +160,13 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
 
   // -----------------------------------------------------------------------
   // PKB & Opsen Tunggakan
+  // Pergub 54: diskon 75% (wilayah gempa) / 50%. Pergub 64: dihapus 100%
+  // untuk semua wilayah sehingga PKB dan Opsen tunggakan bernilai 0.
   // -----------------------------------------------------------------------
-  const diskonTunggakan = isDomisiliGempa ? 0.75 : 0.5
+  const { umum: diskonUmumPersen, gempa: diskonGempaPersen } = pergub.diskonTunggakanPersen
+  const isGempaBerlaku = diskonGempaPersen !== null && isDomisiliGempa
+  const diskonTunggakan =
+    (diskonGempaPersen !== null && isDomisiliGempa ? diskonGempaPersen : diskonUmumPersen) / 100
 
   let pkbTunggakanPra2025 = 0
   let pkbTunggakanPost2025 = 0
@@ -194,18 +211,32 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   // memengaruhi batas hari (bayar pada hari jatuh tempo = 0 hari).
   const hariMenujuJT = differenceInCalendarDays(berjalanPeriod.start, tanggalBayar)
 
-  // Mutasi Masuk Luar Daerah: diskon PKB berjalan 50% sesuai Pergub.
-  // Diskon ini menggantikan diskon pembayaran awal 10%/15%/20%.
-  let pkbDiscount = isMutasiMasuk ? 0.5 : 0
+  // Diskon dihitung dalam persen bulat lalu dibagi 100 agar akumulasi
+  // (mis. 10% + 5%) tidak menghasilkan galat float seperti 0,15000000000000002.
+  let diskonBayarAwalPersen = 0
   if (!isMutasiMasuk && !adaTunggakan && hariMenujuJT >= 0) {
     if (isMotor) {
-      if (hariMenujuJT <= 30) pkbDiscount = 0.1
-      else if (hariMenujuJT <= 60) pkbDiscount = 0.15
-      else if (hariMenujuJT <= 90) pkbDiscount = 0.2
+      if (hariMenujuJT <= 30) diskonBayarAwalPersen = 10
+      else if (hariMenujuJT <= 60) diskonBayarAwalPersen = 15
+      else if (hariMenujuJT <= 90) diskonBayarAwalPersen = 20
     } else {
-      if (hariMenujuJT <= 90) pkbDiscount = 0.1
+      if (hariMenujuJT <= 90) diskonBayarAwalPersen = 10
     }
   }
+
+  // Payment online (Pergub 64 Pasal 6): berlaku juga saat terlambat atau
+  // menunggak, dan diakumulasikan dengan diskon bayar awal (Pasal 10).
+  // Mutasi Masuk tidak dapat dibayar via payment online.
+  const tarifOnline = pergub.diskonOnlinePersen
+  const diskonOnlinePersen =
+    tarifOnline && input.isBayarOnline === true && !isMutasiMasuk
+      ? isMotor ? tarifOnline.motor : tarifOnline.mobil
+      : 0
+
+  // Mutasi Masuk Luar Daerah: diskon PKB berjalan 50% sesuai Pergub.
+  // Diskon ini menggantikan diskon pembayaran awal 10%/15%/20%.
+  const pkbDiscount =
+    (isMutasiMasuk ? 50 : diskonBayarAwalPersen + diskonOnlinePersen) / 100
 
   const pkbBerjalan = basePkbBerjalan * (1 - pkbDiscount)
 
@@ -233,6 +264,9 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
 
   // Denda SWDKLLJ tetap dipungut (bukan bagian Tax Amnesty).
   // Referensi: semua contoh 1–14 dalam pedoman tetap mencantumkan denda ini.
+  // Keterlambatan diukur dari jatuh tempo pada tahun bayar, sehingga denda
+  // yang dihitung adalah denda masa berjalan. Pergub 64: denda SWDKLLJ masa
+  // tunggakan dihapus, denda masa berjalan tetap dipungut.
   let dendaSwdkllj = 0
   if (bulanTerlambat > 0) {
     if (isMotor) {
@@ -297,10 +331,14 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     totalBiayaLayanan
 
   return {
+    pergub: pergub.id,
     pkbBerjalan,
     pkbDiscount,
+    diskonPaymentOnline: diskonOnlinePersen / 100,
+    isBayarOnline: diskonOnlinePersen > 0,
     isMutasiMasuk,
-    isDomisiliGempa,
+    isDomisiliGempa: isGempaBerlaku,
+    diskonTunggakan,
     pkbTunggakanPra2025,
     pkbTunggakanPost2025,
     warnaPlat,
@@ -320,6 +358,7 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     swdklljBerjalan,
     swdklljTunggakan,
     dendaSwdkllj,
+    dendaSwdklljTunggakanDihapus: pergub.hapusDendaSwdklljTunggakan && tahunTunggakan > 0,
     biayaStnk,
     biayaTnkb,
     biayaTembakRu,

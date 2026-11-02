@@ -1,6 +1,10 @@
 // ============================================================
-// Tipe data untuk Kalkulator Pajak Kendaraan (Pergub NTT 54/2026)
+// Tipe data untuk Kalkulator Pajak Kendaraan
+// (Pergub NTT 54/2026 dan 64/2026)
 // ============================================================
+
+/** Identitas Pergub keringanan PKB; aturannya ada di src/lib/pergub.ts. */
+export type PergubId = "54-2026" | "64-2026"
 
 /** Jenis kendaraan yang didukung oleh kalkulator */
 export type JenisKendaraan =
@@ -199,7 +203,17 @@ export interface TaxCalculatorInput {
   tanggalBayar: Date
   isDomisiliGempa: boolean
   isMutasiMasuk?: boolean // Pengurangan PKB berjalan 50% untuk Mutasi Masuk Luar Daerah
+  /**
+   * Bayar via payment online (Bank NTT, PRO NTT, SIGNAL). Hanya berlaku pada
+   * Pergub yang memberi diskon online; diabaikan untuk Mutasi Masuk.
+   */
+  isBayarOnline?: boolean
   isTembakRu: boolean
+  /**
+   * Paksa aturan Pergub tertentu (simulasi/test). Default: ditentukan dari
+   * tanggalBayar; di luar masa berlaku calculateTax melempar RangeError.
+   */
+  pergub?: PergubId
   /** Warna plat (TNKB); default "putih". Plat merah → tarif PKB 0,5% semua periode. */
   warnaPlat?: WarnaPlat
   /** Biaya BBN & Mutasi (bagian 5); nilai kosong/≤0/tidak valid diabaikan. */
@@ -208,12 +222,21 @@ export interface TaxCalculatorInput {
 
 /** Rincian komponen pajak hasil kalkulasi */
 export interface TaxCalculationResult {
+  /** Pergub yang dipakai untuk perhitungan ini. */
+  pergub: PergubId
+
   // PKB
   pkbBerjalan: number
-  pkbDiscount: number              // Persentase diskon PKB berjalan (0–0.5)
+  pkbDiscount: number              // Total diskon PKB berjalan (0–0.5), termasuk diskon online
+  /** Porsi diskon payment online di dalam pkbDiscount (0, 0.02, 0.05). */
+  diskonPaymentOnline: number
+  /** Pembayaran online yang benar-benar dipakai (false bila Mutasi Masuk / tidak berlaku). */
+  isBayarOnline: boolean
   isMutasiMasuk: boolean
   /** Pilihan wilayah gempa yang benar-benar digunakan pada hasil perhitungan. */
   isDomisiliGempa: boolean
+  /** Pengurangan pokok PKB tunggakan (0.5 / 0.75 / 1 = dihapus). */
+  diskonTunggakan: number
   pkbTunggakanPra2025: number      // PKB tunggakan periode sebelum 5 Jan 2025 (tanpa Opsen)
   pkbTunggakanPost2025: number     // PKB tunggakan periode mulai 5 Jan 2025 (kena Opsen)
   warnaPlat: WarnaPlat             // Warna plat yang dipakai dalam perhitungan
@@ -242,7 +265,9 @@ export interface TaxCalculationResult {
   // SWDKLLJ
   swdklljBerjalan: number
   swdklljTunggakan: number
-  dendaSwdkllj: number
+  dendaSwdkllj: number             // Denda masa berjalan saja
+  /** Ada tunggakan dan denda SWDKLLJ masa tunggakan dihapus (Pergub 64). */
+  dendaSwdklljTunggakanDihapus: boolean
 
   // PNBP (hanya jika STNK jatuh tempo ≤ 90 hari)
   biayaStnk: number

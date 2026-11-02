@@ -5,6 +5,10 @@
  * UPT Asal dipakai sebagai petunjuk kabupaten sesuai permintaan operator,
  * bukan bukti domisili terkini. Petugas tetap dapat mengoreksi toggle manual.
  * Alamat lengkap, kecamatan, dan kelurahan sengaja tidak dibaca/ditebak.
+ *
+ * Hanya relevan untuk tanggal bayar dalam masa Pergub 54/2026. Pergub
+ * 64/2026 menghapus pokok tunggakan 100% tanpa membedakan wilayah gempa,
+ * sehingga toggle disembunyikan dan nilainya diabaikan perhitungan.
  */
 export const KABUPATEN_GEMPA = [
   "Sikka", "Ende", "Nagekeo", "Ngada", "Manggarai", "Manggarai Timur", "Manggarai Barat",

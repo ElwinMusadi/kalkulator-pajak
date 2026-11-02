@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useLockDocumentScroll } from "@/hooks/use-lock-document-scroll"
 import { isApiError } from "@/lib/http"
+import { PERGUB_TERBARU } from "@/lib/pergub"
 import { cn } from "@/lib/utils"
 
 type FieldKey = "username" | "password"
@@ -254,7 +255,7 @@ export function LoginPage() {
           tombol instal tetap tersedia di header setelah login. */}
       <footer className="relative flex shrink-0 flex-col items-center gap-2 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground short:hidden">
         <PwaInstallLink className="text-sm" />
-        <span>Pergub NTT No. 54 Tahun 2026</span>
+        <span>{PERGUB_TERBARU.label}</span>
       </footer>
     </div>
   )

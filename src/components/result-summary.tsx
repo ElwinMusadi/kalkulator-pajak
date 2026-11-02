@@ -9,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatPersen, formatRupiah } from "@/lib/format";
+import { getPergub } from "@/lib/pergub";
 import { cn } from "@/lib/utils";
 import {
   BIAYA_LAYANAN_KEYS,
@@ -48,15 +49,26 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         : "Tidak ada tunggakan · bayar tahun berjalan";
   // Mengikuti pilihan gempa yang benar-benar dipakai perhitungan (termasuk
   // override manual). Diskon 75% hanya berlaku pada pokok tunggakan.
+  const gempaPersen = Math.round(result.diskonTunggakan * 100);
   const gempaLine = result.isDomisiliGempa
     ? result.tahunTunggakan > 0
-      ? "Wilayah Terdampak Gempa — Diskon Tunggakan 75%."
-      : "Wilayah Terdampak Gempa — Diskon Tunggakan 75% berlaku bila ada tunggakan."
+      ? `Wilayah Terdampak Gempa — Diskon Tunggakan ${gempaPersen}%.`
+      : `Wilayah Terdampak Gempa — Diskon Tunggakan ${gempaPersen}% berlaku bila ada tunggakan.`
+    : null;
+  const pergub = getPergub(result.pergub);
+  // Pergub 64: pokok PKB (dan Opsen) tunggakan dihapus 100%.
+  const tunggakanDihapus = result.diskonTunggakan >= 1;
+  const amnestyLine = tunggakanDihapus
+    ? "Denda PKB dan Opsen dibebaskan 100%; pokok PKB tunggakan dihapus 100%. SWDKLLJ berjalan dan pokok SWDKLLJ tunggakan tetap diperhitungkan."
+    : "Denda PKB dan Opsen dibebaskan 100%; pokok pajak dan SWDKLLJ tetap diperhitungkan.";
+  const onlineLine = result.isBayarOnline
+    ? `Bayar via Payment Online — diskon PKB berjalan ${Math.round(result.diskonPaymentOnline * 100)}%.`
     : null;
 
   async function copySummary() {
     const text = [
       "RINGKASAN PENETAPAN PAJAK KENDARAAN",
+      `Dasar: ${pergub.label}`,
       isPlatMerah
         ? `Plat ${WARNA_PLAT_LABEL[result.warnaPlat]} · Tarif PKB ${tarifLabel}`
         : null,
@@ -79,6 +91,13 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         : []),
       `Total bayar: ${formatRupiah(result.total)}`,
       "Denda PKB dan Opsen: dibebaskan 100%",
+      tunggakanDihapus && result.tahunTunggakan > 0
+        ? `PKB tunggakan ${result.tahunTunggakan} tahun: dihapus 100%`
+        : null,
+      result.dendaSwdklljTunggakanDihapus
+        ? "Denda SWDKLLJ tunggakan: dihapus"
+        : null,
+      onlineLine,
       gempaLine,
     ]
       .filter(Boolean)
@@ -173,10 +192,12 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         />
         <div className="min-w-0 text-xs leading-relaxed text-foreground">
           <p>
-            <span className="font-semibold">Tax Amnesty aktif.</span> Denda PKB
-            dan Opsen dibebaskan 100%; pokok pajak dan SWDKLLJ tetap
-            diperhitungkan.
+            <span className="font-semibold">
+              Tax Amnesty aktif · {pergub.shortLabel}.
+            </span>{" "}
+            {amnestyLine}
           </p>
+          {onlineLine && <p className="mt-1 font-semibold">{onlineLine}</p>}
           {gempaLine && (
             <p className="mt-1 font-semibold">{gempaLine}</p>
           )}

@@ -22,7 +22,7 @@ export default defineConfig({
         name: "Kalkulator Pajak Kendaraan NTT",
         short_name: "Kalkulator Pajak",
         description:
-          "Kalkulator PKB dan Opsen berdasarkan Pergub NTT No. 54 Tahun 2026.",
+          "Kalkulator PKB dan Opsen berdasarkan Pergub NTT No. 64 Tahun 2026.",
         lang: "id-ID",
         start_url: "/",
         scope: "/",

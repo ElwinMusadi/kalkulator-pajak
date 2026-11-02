@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import { VehicleDataSourceSettings } from "@/components/vehicle-data-source-settings";
 import { isApiError } from "@/lib/http";
+import { PERGUB_TERBARU } from "@/lib/pergub";
 import { cn } from "@/lib/utils";
 
 export type AppView = "calculator" | "admin";
@@ -68,8 +69,8 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
                 Kalkulator Pajak Kendaraan
               </h1>
               <p className="mt-1 hidden text-sm leading-snug text-white/70 sm:block">
-                Penetapan PKB, Opsen, SWDKLLJ, dan PNBP sesuai Pergub NTT No. 54
-                Tahun 2026
+                Penetapan PKB, Opsen, SWDKLLJ, dan PNBP sesuai{" "}
+                {PERGUB_TERBARU.label}
               </p>
             </div>
           </div>
@@ -95,8 +96,7 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
 
         {/* Subjudul mobile (satu baris, kecil) */}
         <p className="-mt-1 text-xs leading-snug text-white/70 sm:hidden">
-          Penetapan PKB, Opsen, SWDKLLJ, dan PNBP sesuai Pergub NTT No. 54 Tahun
-          2026
+          Penetapan PKB, Opsen, SWDKLLJ, dan PNBP sesuai {PERGUB_TERBARU.label}
         </p>
 
         {/* Baris 2 mobile: akun + aksi ikon */}

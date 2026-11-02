@@ -2,11 +2,14 @@
  * tests/tax-calculator.regression.ts
  *
  * Memvalidasi perhitungan terhadap contoh penetapan resmi dalam
- * Surat Edaran No. 900.1.13.1/2741/BPAD2.1 (Pedoman Pergub 54/2026).
+ * Surat Edaran No. 900.1.13.1/2741/BPAD2.1 (Pedoman Pergub 54/2026;
+ * tanggal bayar 1 Sep – 31 Okt 2026) serta ketentuan Pergub 64/2026
+ * (tanggal bayar 1 Nov – 31 Des 2026) di bagian akhir berkas.
  */
 
 import assert from "node:assert/strict"
 import { parseISO } from "date-fns"
+import { resolvePergub } from "../src/lib/pergub.ts"
 import { calculateTax } from "../src/lib/tax-calculator.ts"
 import type { TaxCalculatorInput } from "../src/types/tax.ts"
 
@@ -351,13 +354,13 @@ const dh3088wk: TaxCalculatorInput = {
 }
 
 // Plat merah dengan tunggakan pra & pasca 5 Jan 2025: 0,5% untuk semua periode,
-// diskon tunggakan Pergub 54 tetap berlaku.
+// diskon tunggakan Pergub 54 tetap berlaku (bayar dalam masa Pergub 54).
 {
   const r = calculateTax({
     ...dh3088wk,
     jatuhTempoPajak: new Date("2023-11-29T00:00:00"),
     jatuhTempoStnk: new Date("2023-11-29T00:00:00"),
-    tanggalBayar: new Date("2026-12-15T00:00:00"),
+    tanggalBayar: new Date("2026-10-15T00:00:00"),
     warnaPlat: "merah",
   })
   const pkbPenuh = 12_100_000 * 0.005 // 60.500 per tahun
@@ -375,12 +378,14 @@ const dh3088wk: TaxCalculatorInput = {
 
 // Periode berjalan sebelum 5 Jan 2025 (bayar 2024): putih 1,5% tanpa Opsen,
 // merah tetap 0,5% tanpa Opsen; tidak ada pengurang DP 17,5%.
+// Tanggal 2024 di luar masa berlaku Pergub → aturan dipaksa lewat override.
 {
   const base: TaxCalculatorInput = {
     ...dh3088wk,
     jatuhTempoPajak: new Date("2024-06-01T00:00:00"),
     jatuhTempoStnk: new Date("2024-06-01T00:00:00"),
     tanggalBayar: new Date("2024-05-20T00:00:00"),
+    pergub: "54-2026",
   }
   const putih = calculateTax({ ...base, warnaPlat: "putih" })
   const merah = calculateTax({ ...base, warnaPlat: "merah" })
@@ -398,7 +403,7 @@ const dh3088wk: TaxCalculatorInput = {
     ...dh3088wk,
     jatuhTempoPajak: new Date("2025-11-29T00:00:00"),
     jatuhTempoStnk: new Date("2025-11-29T00:00:00"),
-    tanggalBayar: new Date("2026-12-15T00:00:00"),
+    tanggalBayar: new Date("2026-10-15T00:00:00"),
     warnaPlat: "merah",
   }
   const gempa = calculateTax({ ...tunggak, isDomisiliGempa: true })
@@ -711,22 +716,24 @@ const dh3088wk: TaxCalculatorInput = {
   assert.equal(d30.bulanTerlambat, 0)
   assert.equal(d30.dendaSwdkllj, 0)
 
+  // Tanggal Januari 2027 di luar masa berlaku Pergub → aturan dipaksa lewat
+  // override (tier diskon dan denda SWDKLLJ sama pada kedua Pergub).
   // Hari Jatuh Tempo pagi hari (2027-01-05T00:00:00): 0 hari → diskon 10%, bukan terlambat
-  const d0Morning = calculateTax({ ...baseMotor, tanggalBayar: new Date("2027-01-05T00:00:00") })
+  const d0Morning = calculateTax({ ...baseMotor, pergub: "64-2026", tanggalBayar: new Date("2027-01-05T00:00:00") })
   assert.equal(d0Morning.hariMenujuJatuhTempo, 0)
   assert.equal(d0Morning.pkbDiscount, 0.1, "0 hari pagi: diskon 10%")
   assert.equal(d0Morning.bulanTerlambat, 0)
   assert.equal(d0Morning.dendaSwdkllj, 0)
 
   // Hari Jatuh Tempo sore hari (2027-01-05T16:30:00): tetap 0 hari kalender lokal
-  const d0Afternoon = calculateTax({ ...baseMotor, tanggalBayar: new Date("2027-01-05T16:30:00") })
+  const d0Afternoon = calculateTax({ ...baseMotor, pergub: "64-2026", tanggalBayar: new Date("2027-01-05T16:30:00") })
   assert.equal(d0Afternoon.hariMenujuJatuhTempo, 0)
   assert.equal(d0Afternoon.pkbDiscount, 0.1, "0 hari sore: diskon 10%")
   assert.equal(d0Afternoon.bulanTerlambat, 0)
   assert.equal(d0Afternoon.dendaSwdkllj, 0)
 
   // 1 hari lewat jatuh tempo (2027-01-06T00:00:00): diskon 0%, denda SWDKLLJ motor tier 1 (Rp8.000)
-  const dLate1 = calculateTax({ ...baseMotor, tanggalBayar: new Date("2027-01-06T00:00:00") })
+  const dLate1 = calculateTax({ ...baseMotor, pergub: "64-2026", tanggalBayar: new Date("2027-01-06T00:00:00") })
   assert.equal(dLate1.hariMenujuJatuhTempo, -1)
   assert.equal(dLate1.pkbDiscount, 0, "Lewat JT: diskon 0%")
   assert.equal(dLate1.bulanTerlambat, 1)
@@ -750,6 +757,232 @@ const dh3088wk: TaxCalculatorInput = {
   assert.equal(b1.getTime(), b1Time, "tanggalBayar tidak dimutasi")
 
   pass("Ambang batas tanggal – 90/91, 60/61, 30/31, due date sore, 91 sore, STNK cutoff, immutability")
+}
+
+// ===========================================================================
+// Pergub 64/2026 (berlaku 1 Nov – 31 Des 2026)
+// - Pasal 3: pengurangan DP 17,5% untuk masa yang kena Opsen.
+// - Pasal 5: diskon bayar awal 10/15/20% (roda 2–3), 10% (roda 4+).
+// - Pasal 6 & 10: payment online 5% (roda 2–3) / 2% (roda 4+), diakumulasikan.
+// - Pasal 7: Mutasi Masuk 50% (tidak dapat dibayar via payment online).
+// - Pasal 8: pokok PKB tunggakan dihapus 100%; DP tahun berjalan 100%.
+// - SWDKLLJ: pokok berjalan & tunggakan dipungut; denda hanya masa berjalan.
+// ===========================================================================
+const near = (actual: number, expected: number, message: string) =>
+  assert.ok(Math.abs(actual - expected) < 1e-6, `${message}: ${actual} ≠ ${expected}`)
+
+// Masa berlaku: batas hari kalender lokal, di luar masa → tanpa aturan.
+{
+  assert.equal(resolvePergub(new Date("2026-08-31T23:59:59")), null, "31 Agt: belum berlaku")
+  assert.equal(resolvePergub(new Date("2026-09-01T00:00:00"))?.id, "54-2026")
+  assert.equal(resolvePergub(new Date("2026-10-31T23:59:59"))?.id, "54-2026")
+  assert.equal(resolvePergub(new Date("2026-11-01T00:00:00"))?.id, "64-2026")
+  assert.equal(resolvePergub(new Date("2026-12-31T23:59:59"))?.id, "64-2026")
+  assert.equal(resolvePergub(new Date("2027-01-01T00:00:00")), null, "1 Jan 2027: berakhir")
+  assert.equal(resolvePergub(new Date("bukan tanggal")), null, "Tanggal tidak valid")
+  assert.throws(
+    () => calculateTax({ ...dh3088wk, tanggalBayar: new Date("2027-01-01T00:00:00") }),
+    RangeError,
+    "Di luar masa berlaku tanpa override harus ditolak",
+  )
+  assert.equal(calculateTax(dh3088wk).pergub, "54-2026", "Bayar 14 Okt → Pergub 54")
+  pass("Pergub – masa berlaku 54 (1 Sep–31 Okt) & 64 (1 Nov–31 Des), di luar masa ditolak")
+}
+
+// Minibus menunggak 4 tahun (padanan Contoh 1), bayar loket 2 Nov 2026.
+// Tunggakan dihapus 100% tanpa membedakan wilayah gempa.
+{
+  const input: TaxCalculatorInput = {
+    ...innoBase,
+    jatuhTempoPajak: new Date("2022-03-01T00:00:00"),
+    jatuhTempoStnk: new Date("2022-03-01T00:00:00"),
+    tanggalBayar: new Date("2026-11-02T00:00:00"),
+  }
+  const r = calculateTax(input)
+  assert.equal(r.pergub, "64-2026")
+  assert.equal(r.diskonTunggakan, 1, "Tunggakan dihapus 100%")
+  // DP tahun berjalan 100% (Pasal 8 ayat 3): (329e6 × 1,05) × 1,2% = 4.145.400
+  assert.equal(r.pkbBerjalan, 4_145_400, "PKB berjalan DP 100%")
+  assert.equal(r.pkbDiscount, 0)
+  assert.equal(r.pkbTunggakanPra2025, 0)
+  assert.equal(r.pkbTunggakanPost2025, 0)
+  assert.equal(r.opsenTunggakan, 0, "Opsen tunggakan ikut 0")
+  assert.equal(r.opsenBerjalan, 2_735_964)
+  assert.equal(r.tahunTunggakan, 4)
+  assert.equal(r.tahunTunggakanPra, 3)
+  assert.equal(r.tahunTunggakanPost, 1)
+  assert.equal(r.dendaPkb, 0)
+  assert.equal(r.dendaOpsen, 0)
+  // SWDKLLJ: pokok tunggakan tetap; denda hanya masa berjalan
+  // (1 Mar 2026 → 2 Nov 2026 = 9 bulan → mobil Rp100.000).
+  assert.equal(r.swdklljTunggakan, 572_000, "Pokok SWDKLLJ tunggakan tetap dipungut")
+  assert.equal(r.bulanTerlambat, 9)
+  assert.equal(r.dendaSwdkllj, 100_000, "Denda SWDKLLJ berjalan tetap dipungut")
+  assert.equal(r.dendaSwdklljTunggakanDihapus, true)
+  assert.equal(r.biayaStnk, 200_000)
+  assert.equal(r.biayaTnkb, 100_000)
+  assert.equal(r.total, 4_145_400 + 2_735_964 + 143_000 + 572_000 + 100_000 + 200_000 + 100_000)
+  // Toggle gempa tidak berpengaruh dan tidak tercatat sebagai dipakai.
+  assert.equal(r.isDomisiliGempa, false, "Gempa tidak berlaku pada Pergub 64")
+  assert.deepEqual(calculateTax({ ...input, isDomisiliGempa: false }), r, "Gempa = non-gempa")
+
+  // Bayar online: diskon 2% pada pokok PKB berjalan, Opsen mengikuti.
+  const online = calculateTax({ ...input, isBayarOnline: true })
+  assert.equal(online.pkbDiscount, 0.02)
+  assert.equal(online.diskonPaymentOnline, 0.02)
+  assert.equal(online.isBayarOnline, true)
+  near(online.pkbBerjalan, 4_062_492, "Minibus tunggak online - PKB berjalan")
+  near(online.opsenBerjalan, 4_062_492 * 0.66, "Minibus tunggak online - Opsen")
+  assert.equal(online.pkbTunggakanPost2025 + online.pkbTunggakanPra2025, 0)
+  pass("Pergub 64 – Minibus 4 thn tunggak: tunggakan dihapus 100%, DP 100%, online 2%")
+}
+
+// Sepeda motor menunggak 4 tahun (padanan Contoh 6), bayar online.
+{
+  const r = calculateTax({
+    njkb: 10_900_000,
+    njub: 0,
+    bobot: 1,
+    jenisKendaraan: "SEPEDA MOTOR",
+    jatuhTempoPajak: new Date("2022-03-01T00:00:00"),
+    jatuhTempoStnk: new Date("2022-03-01T00:00:00"),
+    tanggalBayar: new Date("2026-11-02T00:00:00"),
+    isDomisiliGempa: false,
+    isBayarOnline: true,
+    isTembakRu: false,
+  })
+  // 10.900.000 × 1,2% = 130.800 × 95% = 124.260
+  assert.equal(r.pkbDiscount, 0.05)
+  near(r.pkbBerjalan, 124_260, "Motor tunggak online - PKB berjalan")
+  near(r.opsenBerjalan, 124_260 * 0.66, "Motor tunggak online - Opsen")
+  assert.equal(r.opsenTunggakan, 0)
+  assert.equal(r.swdklljTunggakan, 140_000, "4 thn × 35.000")
+  // Denda berjalan 9 bulan → motor 7–9 bulan Rp24.000.
+  assert.equal(r.dendaSwdkllj, 24_000)
+  assert.equal(r.biayaStnk + r.biayaTnkb, 160_000)
+  pass("Pergub 64 – Motor 4 thn tunggak online: diskon 5%, tunggakan dihapus, denda SWDKLLJ berjalan")
+}
+
+// Sepeda motor terlambat tanpa tunggakan (padanan Contoh 10): DP 17,5%,
+// tanpa diskon bayar awal; online tetap mendapat 5%.
+{
+  const input: TaxCalculatorInput = {
+    njkb: 10_900_000,
+    njub: 0,
+    bobot: 1,
+    jenisKendaraan: "SEPEDA MOTOR",
+    jatuhTempoPajak: new Date("2026-03-01T00:00:00"),
+    jatuhTempoStnk: new Date("2026-03-01T00:00:00"),
+    tanggalBayar: new Date("2026-11-02T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+  }
+  const loket = calculateTax(input)
+  assert.equal(loket.pkbDiscount, 0)
+  near(loket.pkbBerjalan, 107_910, "Motor terlambat loket - PKB (DP 82,5%)")
+  assert.equal(loket.dendaSwdkllj, 24_000)
+  assert.equal(loket.dendaSwdklljTunggakanDihapus, false, "Tanpa tunggakan: tidak ada baris dihapus")
+
+  const online = calculateTax({ ...input, isBayarOnline: true })
+  assert.equal(online.pkbDiscount, 0.05)
+  near(online.pkbBerjalan, 107_910 * 0.95, "Motor terlambat online - PKB")
+  near(online.opsenBerjalan, 107_910 * 0.95 * 0.66, "Motor terlambat online - Opsen")
+  pass("Pergub 64 – Motor terlambat: DP 17,5%, loket tanpa diskon, online 5%")
+}
+
+// Taat pajak bayar awal + online: persen dijumlahkan (Pasal 10).
+// JT 15 Jan 2027, bayar 2 Nov 2026 → 74 hari sebelum JT.
+{
+  const motor: TaxCalculatorInput = {
+    njkb: 10_000_000,
+    njub: 0,
+    bobot: 1,
+    jenisKendaraan: "SEPEDA MOTOR",
+    jatuhTempoPajak: new Date("2027-01-15T00:00:00"),
+    jatuhTempoStnk: new Date("2027-01-15T00:00:00"),
+    tanggalBayar: new Date("2026-11-02T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+  }
+  const loket = calculateTax(motor)
+  assert.equal(loket.hariMenujuJatuhTempo, 74)
+  assert.equal(loket.pkbDiscount, 0.2, "Motor 61–90 hari: 20%")
+  near(loket.pkbBerjalan, 79_200, "Motor loket - PKB")
+
+  const online = calculateTax({ ...motor, isBayarOnline: true })
+  assert.equal(online.pkbDiscount, 0.25, "Motor 20% + online 5% = 25%")
+  assert.equal(online.diskonPaymentOnline, 0.05)
+  near(online.pkbBerjalan, 74_250, "Motor online - PKB 99.000 × 75%")
+  near(online.opsenBerjalan, 49_005, "Motor online - Opsen")
+
+  // 0–30 hari: 10% + 5% = tepat 0,15 (tanpa galat float).
+  const dekat = calculateTax({ ...motor, isBayarOnline: true, tanggalBayar: new Date("2026-12-20T00:00:00") })
+  assert.equal(dekat.pkbDiscount, 0.15, "Motor 10% + online 5% = 0,15")
+
+  // Roda 4+: 10% + online 2% = 12%.
+  const mobil = calculateTax({
+    ...motor,
+    bobot: 1.05,
+    jenisKendaraan: "MINIBUS",
+    isBayarOnline: true,
+  })
+  assert.equal(mobil.pkbDiscount, 0.12, "Mobil 10% + online 2% = 12%")
+  assert.equal(mobil.diskonPaymentOnline, 0.02)
+  near(mobil.pkbBerjalan, 103_950 * 0.88, "Mobil online - PKB")
+  pass("Pergub 64 – Bayar awal + online diakumulasikan: motor 25%/15%, mobil 12%")
+}
+
+// Mutasi Masuk: 50% saja, payment online diabaikan.
+{
+  const r = calculateTax({
+    njkb: 100_000_000,
+    njub: 0,
+    bobot: 1.05,
+    jenisKendaraan: "MINIBUS",
+    jatuhTempoPajak: new Date("2026-12-01T00:00:00"),
+    jatuhTempoStnk: new Date("2027-12-01T00:00:00"),
+    tanggalBayar: new Date("2026-11-02T00:00:00"),
+    isDomisiliGempa: false,
+    isMutasiMasuk: true,
+    isBayarOnline: true,
+    isTembakRu: false,
+  })
+  assert.equal(r.pkbDiscount, 0.5, "Mutasi tetap 50%")
+  assert.equal(r.isBayarOnline, false, "Mutasi tidak dapat dibayar online")
+  assert.equal(r.diskonPaymentOnline, 0)
+  assert.equal(r.pkbBerjalan, 519_750)
+  pass("Pergub 64 – Mutasi Masuk 50%, payment online diabaikan")
+}
+
+// Plat merah menunggak pada masa Pergub 64: tunggakan pra & pasca dihapus,
+// PKB berjalan 0,5% × DP 100%; denda SWDKLLJ berjalan 1 bulan (Rp8.000).
+{
+  const r = calculateTax({
+    ...dh3088wk,
+    jatuhTempoPajak: new Date("2023-11-29T00:00:00"),
+    jatuhTempoStnk: new Date("2023-11-29T00:00:00"),
+    tanggalBayar: new Date("2026-12-15T00:00:00"),
+    warnaPlat: "merah",
+  })
+  assert.equal(r.pergub, "64-2026")
+  assert.equal(r.tahunTunggakanPra, 2)
+  assert.equal(r.tahunTunggakanPost, 1)
+  assert.equal(r.pkbTunggakanPra2025 + r.pkbTunggakanPost2025 + r.opsenTunggakan, 0)
+  near(r.pkbBerjalan, 12_100_000 * 0.005, "Plat merah - PKB berjalan")
+  assert.equal(r.swdklljTunggakan, 105_000)
+  assert.equal(r.dendaSwdkllj, 8_000)
+  assert.equal(r.dendaSwdklljTunggakanDihapus, true)
+  pass("Pergub 64 – Plat merah menunggak: tunggakan dihapus, tarif 0,5%")
+}
+
+// Payment online tidak berlaku pada masa Pergub 54.
+{
+  const tanpa = calculateTax(dh3088wk)
+  const online = calculateTax({ ...dh3088wk, isBayarOnline: true })
+  assert.equal(online.pergub, "54-2026")
+  assert.equal(online.isBayarOnline, false)
+  assert.deepEqual(online, tanpa, "Online diabaikan pada Pergub 54")
+  pass("Pergub 54 – payment online diabaikan")
 }
 
 console.log("\nSemua regression test: PASS ✓\n")
