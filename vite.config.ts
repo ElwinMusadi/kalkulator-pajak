@@ -56,8 +56,9 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-        // Menghapus cache lookup kendaraan versi lama saat worker aktif.
-        importScripts: ["/sw-cleanup.js"],
+        // sw-cleanup.js: menghapus cache lookup kendaraan versi lama saat worker aktif.
+        // sw-push.js: menampilkan pengumuman Web Push dan klik notifikasi.
+        importScripts: ["/sw-cleanup.js", "/sw-push.js"],
         // sw-cleanup.js harus selalu diambil dari jaringan, bukan precache.
         globIgnores: ["**/node_modules/**/*", "sw-cleanup.js"],
         navigateFallback: "/index.html",

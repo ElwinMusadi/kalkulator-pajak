@@ -13,6 +13,7 @@ export type AuditAction =
   | "user.permissions"
   | "session.delete"
   | "session.delete_all"
+  | "announcement.create"
 
 export interface AuditInput {
   actorUserId: string

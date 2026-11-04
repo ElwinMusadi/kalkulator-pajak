@@ -20,7 +20,9 @@
     "db:migrate:local": "wrangler d1 migrations apply kalkulator-pajak-db --local",
     "admin:create": "tsx scripts/create-admin.ts",
     "test:auth": "tsx tests/auth.test.ts && tsx tests/create-admin.test.ts && tsx tests/auth-endpoints.integration.test.ts",
-    "test:pwa": "tsx tests/pwa-install.test.ts && tsx tests/pwa-update.test.ts"
+    "test:pwa": "tsx tests/pwa-install.test.ts && tsx tests/pwa-update.test.ts",
+    "test:push": "tsx tests/web-push.test.ts && tsx tests/push-client.test.ts && tsx tests/push-endpoints.integration.test.ts",
+    "vapid:generate": "tsx scripts/generate-vapid-keys.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.20",

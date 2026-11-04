@@ -129,6 +129,7 @@ export type ApiErrorCode =
   | "SELF_MODIFICATION"
   | "CSRF_REJECTED"
   | "SERVER_ERROR"
+  | "PUSH_NOT_CONFIGURED"
 
 export interface ApiErrorBody {
   message: string

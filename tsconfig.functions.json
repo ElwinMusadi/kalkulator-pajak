@@ -25,6 +25,8 @@
     "tests/njkb-*.ts",
     "tests/vehicle-data-source.test.ts",
     "tests/auth*.ts",
+    "tests/push-endpoints.integration.test.ts",
+    "tests/web-push.test.ts",
     "tests/create-admin.test.ts",
     "scripts",
     "src/services",

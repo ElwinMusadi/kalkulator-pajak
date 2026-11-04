@@ -2,6 +2,10 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Calculator, Loader2, LogOut, Users } from "lucide-react";
 import { useAuthenticatedUser, useAuth } from "@/auth/auth-context";
+import {
+  NotificationBellButton,
+  NotificationCenterProvider,
+} from "@/components/notification-center";
 import { PwaInstallButton } from "@/components/pwa-install-prompt";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +16,7 @@ import {
 import { VehicleDataSourceSettings } from "@/components/vehicle-data-source-settings";
 import { isApiError } from "@/lib/http";
 import { PERGUB_TERBARU } from "@/lib/pergub";
+import { disablePush } from "@/lib/push";
 import { cn } from "@/lib/utils";
 
 export type AppView = "calculator" | "admin";
@@ -37,6 +42,12 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
   async function handleLogout() {
     setLoggingOut(true);
     try {
+      // Perangkat yang ditinggalkan tidak menerima pengumuman atas nama akun
+      // ini lagi. Gagal mematikan notifikasi tidak menghalangi keluar.
+      await Promise.race([
+        disablePush().catch(() => undefined),
+        new Promise((resolve) => window.setTimeout(resolve, 3000)),
+      ]);
       await logout();
     } catch (error) {
       onError(
@@ -49,6 +60,7 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
   const initial = user.name.trim().charAt(0) || user.username.charAt(0);
 
   return (
+    <NotificationCenterProvider>
     <header className="brand-band relative">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 pb-14 pt-5 sm:px-6 sm:pt-6 md:pb-16 lg:px-8">
         {/* Baris 1: identitas + (desktop) aksi */}
@@ -78,6 +90,7 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
           {/* Aksi desktop */}
           <div className="hidden shrink-0 items-center gap-2 md:flex">
             <PwaInstallButton />
+            <NotificationBellButton />
             {view === "calculator" && <VehicleDataSourceSettings />}
             <span
               aria-hidden="true"
@@ -109,6 +122,7 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
           />
           <div className="flex shrink-0 items-center gap-1.5">
             <PwaInstallButton />
+            <NotificationBellButton />
             {view === "calculator" && <VehicleDataSourceSettings compact />}
             {isAdmin && (
               <LogoutButton
@@ -144,6 +158,7 @@ export function AppHeader({ view, onViewChange, onError }: AppHeaderProps) {
       </div>
       <div className="gold-rule absolute inset-x-0 bottom-0" aria-hidden="true" />
     </header>
+    </NotificationCenterProvider>
   );
 }
 

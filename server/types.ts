@@ -17,6 +17,14 @@ export interface Env {
    * kredensial sejak Access dilepas (2026-10-24). Secret Pages khusus server; jangan pernah memakai awalan VITE_.
    */
   POTENSI_API_KEY?: string
+  /**
+   * Kunci VAPID Web Push (scripts/generate-vapid-keys.ts): publik base64url,
+   * privat base64url (secret Pages), dan subject `mailto:`/`https:`. Tanpa
+   * ketiganya notifikasi dinonaktifkan; pengumuman tetap tersimpan.
+   */
+  VAPID_PUBLIC_KEY?: string
+  VAPID_PRIVATE_KEY?: string
+  VAPID_SUBJECT?: string
 }
 
 export interface AuthSession {
