@@ -1,6 +1,6 @@
 /**
  * Logika notifikasi di peramban: dukungan Web Push per perangkat, decode
- * kunci VAPID, dan penanda pengumuman belum dibaca.
+ * kunci VAPID, penanda pengumuman belum dibaca, dan modal pembuka.
  */
 
 import assert from "node:assert/strict"
@@ -8,6 +8,11 @@ import {
   base64UrlToBytes,
   detectPushAvailability,
   hasUnread,
+  NOTIFICATION_PROMPT_SNOOZE_MS,
+  notificationPromptKind,
+  readPromptSnoozedUntil,
+  shouldShowOpeningModal,
+  snoozeNotificationPrompt,
   type PushEnvironment,
 } from "../src/lib/push.ts"
 
@@ -98,6 +103,77 @@ function full(overrides: Partial<PushEnvironment>): PushEnvironment {
   assert.equal(hasUnread("2026-11-04T09:00:00.000Z", "2026-11-04T08:00:00.000Z"), true, "ada yang lebih baru")
   assert.equal(hasUnread("2026-11-03T09:00:00.000Z", "2026-11-04T08:00:00.000Z"), false, "lebih lama")
   pass("Belum dibaca: hanya bila pengumuman terbaru lebih baru dari yang terakhir dibuka")
+}
+
+// 4. Ajakan notifikasi pada modal pembuka
+{
+  const base = {
+    serverEnabled: true,
+    availability: "supported" as const,
+    permission: "default" as NotificationPermission,
+    deviceActive: false,
+    snoozedUntil: 0,
+    nowMs: 1_000_000,
+  }
+  assert.equal(notificationPromptKind(base), "enable", "izin belum pernah diminta")
+  assert.equal(notificationPromptKind({ ...base, serverEnabled: false }), null, "server belum siap push")
+  assert.equal(notificationPromptKind({ ...base, deviceActive: true }), null, "sudah aktif")
+  assert.equal(notificationPromptKind({ ...base, permission: "denied" }), null, "diblokir: tidak bisa diminta ulang")
+  assert.equal(notificationPromptKind({ ...base, permission: "granted" }), null, "izin ada, langganan disinkronkan diam-diam")
+  assert.equal(notificationPromptKind({ ...base, snoozedUntil: base.nowMs + 1 }), null, "masih ditunda")
+  assert.equal(notificationPromptKind({ ...base, snoozedUntil: base.nowMs }), "enable", "masa tunda habis")
+  assert.equal(
+    notificationPromptKind({ ...base, availability: "ios-needs-install", permission: null }),
+    "ios-install",
+    "iPhone di Safari: petunjuk Layar Utama",
+  )
+  assert.equal(notificationPromptKind({ ...base, availability: "ios-other-browser" }), null, "iPhone di Chrome")
+  assert.equal(notificationPromptKind({ ...base, availability: "unsupported" }), null, "tidak didukung")
+  pass("Ajakan notifikasi: hanya bila server siap, perangkat belum aktif, izin belum diminta, dan tidak ditunda")
+}
+
+// 5. Modal pembuka muncul bila ada yang perlu dilihat
+{
+  const none = { unreadCount: 0, updateAvailable: false, prompt: null }
+  assert.equal(shouldShowOpeningModal(none), false, "tidak ada apa-apa")
+  assert.equal(shouldShowOpeningModal({ ...none, unreadCount: 2 }), true, "pengumuman belum dibaca")
+  assert.equal(shouldShowOpeningModal({ ...none, updateAvailable: true }), true, "versi baru")
+  assert.equal(shouldShowOpeningModal({ ...none, prompt: "enable" }), true, "ajakan notifikasi")
+  assert.equal(shouldShowOpeningModal({ ...none, prompt: "ios-install" }), true, "petunjuk iPhone")
+  pass("Modal pembuka: muncul bila ada versi baru, pengumuman belum dibaca, atau ajakan notifikasi")
+}
+
+// 6. Penundaan ajakan tersimpan di localStorage; tanpa penyimpanan tidak error
+{
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage")
+  const store = new Map<string, string>()
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+    },
+  })
+  assert.equal(readPromptSnoozedUntil(), 0, "belum pernah ditunda")
+  const until = snoozeNotificationPrompt(5_000)
+  assert.equal(until, 5_000 + NOTIFICATION_PROMPT_SNOOZE_MS)
+  assert.equal(readPromptSnoozedUntil(), until, "tersimpan")
+  assert.equal(NOTIFICATION_PROMPT_SNOOZE_MS, 3 * 24 * 60 * 60 * 1000, "tiga hari")
+  store.set("kp:ajakan-notifikasi-sampai", "bukan-angka")
+  assert.equal(readPromptSnoozedUntil(), 0, "nilai rusak dianggap tidak ditunda")
+
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get() {
+      throw new Error("SecurityError")
+    },
+  })
+  assert.equal(readPromptSnoozedUntil(), 0, "penyimpanan diblokir")
+  assert.equal(snoozeNotificationPrompt(0), NOTIFICATION_PROMPT_SNOOZE_MS, "tetap mengembalikan batas")
+
+  if (original) Object.defineProperty(globalThis, "localStorage", original)
+  else Reflect.deleteProperty(globalThis, "localStorage")
+  pass("Penundaan ajakan: tiga hari, tersimpan lokal, aman tanpa penyimpanan")
 }
 
 console.log("\nSemua push client tests: PASS ✓\n")

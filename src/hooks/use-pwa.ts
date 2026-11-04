@@ -67,13 +67,17 @@ export function registerPwa(): void {
   }
 }
 
-function subscribe(listener: () => void) {
+/** Berlangganan perubahan status pembaruan di luar render (mis. modal pembuka). */
+export function subscribePwaUpdate(listener: () => void) {
   return controller ? controller.subscribe(listener) : noopUnsubscribe
 }
 
-function getSnapshot(): PwaUpdateSnapshot {
+export function getPwaUpdateSnapshot(): PwaUpdateSnapshot {
   return controller ? controller.getSnapshot() : IDLE_SNAPSHOT
 }
+
+const subscribe = subscribePwaUpdate
+const getSnapshot = getPwaUpdateSnapshot
 
 function applyUpdate() {
   void controller?.applyUpdate()

@@ -15,8 +15,10 @@ import {
   CircleCheck,
   Loader2,
   Megaphone,
+  RefreshCw,
   Send,
   Share,
+  Sparkles,
 } from "lucide-react";
 import { useAuthenticatedUser } from "@/auth/auth-context";
 import { Button } from "@/components/ui/button";
@@ -24,9 +26,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { getPwaUpdateSnapshot, subscribePwaUpdate, usePwaUpdate } from "@/hooks/use-pwa";
 import { Input } from "@/components/ui/input";
 import {
   Tooltip,
@@ -34,6 +39,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatDateTime } from "@/lib/format";
+import type { PwaUpdateSnapshot } from "@/lib/pwa-update";
 import { isApiError } from "@/lib/http";
 import {
   currentPushEnvironment,
@@ -42,12 +48,18 @@ import {
   enablePush,
   getDeviceSubscription,
   hasUnread,
+  notificationPromptKind,
   pushApi,
   readLastSeen,
+  readPromptSnoozedUntil,
+  shouldShowOpeningModal,
+  snoozeNotificationPrompt,
   syncPushSubscription,
   writeLastSeen,
+  type NotificationPromptKind,
   type PushAvailability,
 } from "@/lib/push";
+import { setUpdateNoticeCoordination } from "@/lib/update-notice-coordination";
 import { cn } from "@/lib/utils";
 import {
   ANNOUNCEMENT_BODY_MAX,
@@ -60,6 +72,28 @@ import {
 const MAX_SEND_ROUNDS = 50;
 /** Muat ulang pengumuman saat aplikasi kembali dibuka, paling sering tiap menit. */
 const REFRESH_INTERVAL_MS = 60_000;
+/** PWA yang kembali dari latar setelah selama ini dianggap "dibuka lagi". */
+const RESUME_AS_OPENING_MS = 30 * 60_000;
+/**
+ * Versi baru biasanya terdeteksi beberapa detik setelah aplikasi dibuka
+ * (service worker baru mengambil alih). Dalam jendela ini pembaruan ikut
+ * memunculkan modal pembuka; setelahnya cukup kartu/pil pembaruan.
+ */
+const OPENING_UPDATE_WINDOW_MS = 2 * 60_000;
+/** Pengumuman yang ditampilkan langsung di modal pembuka. */
+const OPENING_ANNOUNCEMENT_LIMIT = 3;
+/**
+ * Modal pembuka menunggu sebentar setelah aplikasi dibuka agar versi baru yang
+ * cepat terdeteksi ikut tampil sekaligus, bukan menyusul ke modal yang terbuka.
+ */
+const OPENING_SETTLE_MS = 3_000;
+
+interface OpeningContent {
+  key: number;
+  /** Pengumuman yang belum dibaca saat aplikasi dibuka, terbaru dulu. */
+  announcements: Announcement[];
+  prompt: NotificationPromptKind | null;
+}
 
 interface NotificationCenterValue {
   open: boolean;
@@ -102,6 +136,69 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
   const lastLoadRef = useRef(0);
   const openRef = useRef(open);
 
+  // Modal pembuka: muncul sekali setiap aplikasi dibuka (atau kembali dari
+  // latar setelah lama) bila ada versi baru, pengumuman belum dibaca, atau
+  // ajakan notifikasi. Keputusan diambil di callback asinkron dari ref.
+  const { status: updateStatus, applyUpdate } = usePwaUpdate();
+  const [opening, setOpening] = useState<OpeningContent | null>(null);
+  const openingRef = useRef<OpeningContent | null>(null);
+  // Satu "pembukaan" aplikasi: hanya satu modal per kunci, dan versi baru hanya
+  // ikut bila terdeteksi tak lama setelah startedAt.
+  const [mountedAt] = useState(() => Date.now());
+  const sessionRef = useRef({ key: 0, startedAt: mountedAt });
+  const dismissedKeyRef = useRef(-1);
+  const announcementsRef = useRef<{ list: Announcement[]; loadedAt: number } | null>(null);
+  const configRef = useRef<PushConfigResponse | null>(null);
+  const deviceRef = useRef({ checked: false, active: false });
+  const permissionRef = useRef(permission);
+  const lastSeenRef = useRef(lastSeen);
+  const hiddenAtRef = useRef<number | null>(null);
+  const settleTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    permissionRef.current = permission;
+    lastSeenRef.current = lastSeen;
+  }, [permission, lastSeen]);
+
+  const evaluateOpening = useCallback(function evaluate() {
+    const session = sessionRef.current;
+    if (openingRef.current || dismissedKeyRef.current === session.key || openRef.current) return;
+    const loaded = announcementsRef.current;
+    const loadedConfig = configRef.current;
+    if (!loaded || loaded.loadedAt < session.startedAt || !loadedConfig || !deviceRef.current.checked) return;
+
+    const now = Date.now();
+    const settleIn = session.startedAt + OPENING_SETTLE_MS - now;
+    if (settleIn > 0) {
+      if (settleTimerRef.current === null) {
+        settleTimerRef.current = window.setTimeout(() => {
+          settleTimerRef.current = null;
+          evaluate();
+        }, settleIn);
+      }
+      return;
+    }
+
+    // Termasuk yang sudah dibaca lewat lonceng sejak aplikasi dibuka.
+    const unreadList = loaded.list.filter((item) => hasUnread(item.createdAt, lastSeenRef.current));
+    const prompt = notificationPromptKind({
+      serverEnabled: loadedConfig.enabled,
+      availability,
+      permission: permissionRef.current,
+      deviceActive: deviceRef.current.active,
+      snoozedUntil: readPromptSnoozedUntil(),
+      nowMs: now,
+    });
+    const updateAvailable =
+      getPwaUpdateSnapshot().status === "available" && now - session.startedAt <= OPENING_UPDATE_WINDOW_MS;
+    if (!shouldShowOpeningModal({ unreadCount: unreadList.length, updateAvailable, prompt })) return;
+
+    const content: OpeningContent = { key: session.key, announcements: unreadList, prompt };
+    openingRef.current = content;
+    setOpening(content);
+    setUpdateNoticeCoordination({ modalOpen: true });
+  }, [availability]);
+
   /** Pengumuman yang tampil saat dialog terbuka dianggap sudah dibaca. */
   const markSeen = useCallback(
     (list: Announcement[] | null) => {
@@ -128,7 +225,9 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
         if (cancelled) return;
         setAnnouncements(list);
         setListError(null);
+        announcementsRef.current = { list, loadedAt: Date.now() };
         if (openRef.current) markSeen(list);
+        evaluateOpening();
       },
       (error: unknown) => {
         if (!cancelled) setListError(errorMessage(error, "Pengumuman gagal dimuat."));
@@ -137,30 +236,64 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
     return () => {
       cancelled = true;
     };
-  }, [reloadToken, markSeen]);
+  }, [reloadToken, markSeen, evaluateOpening]);
 
   // Muat awal: konfigurasi push dan status notifikasi perangkat ini.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      let loaded: PushConfigResponse = { enabled: false, publicKey: null };
+      let active = false;
       try {
-        const loaded = await pushApi.config();
-        if (cancelled) return;
-        setConfig(loaded);
-        if (!loaded.enabled || !loaded.publicKey || availability !== "supported") return;
-        const synced = await syncPushSubscription(loaded.publicKey).catch(() => false);
-        if (!cancelled) setDeviceActive(synced);
+        loaded = await pushApi.config();
+        if (loaded.enabled && loaded.publicKey && availability === "supported") {
+          active = await syncPushSubscription(loaded.publicKey).catch(() => false);
+        }
       } catch {
-        if (!cancelled) setConfig({ enabled: false, publicKey: null });
+        // Konfigurasi gagal dimuat: notifikasi dianggap belum aktif di server.
       }
+      if (cancelled) return;
+      setConfig(loaded);
+      setDeviceActive(active);
+      configRef.current = loaded;
+      deviceRef.current = { checked: true, active };
+      evaluateOpening();
     })();
     return () => {
       cancelled = true;
     };
-  }, [availability]);
+  }, [availability, evaluateOpening]);
+
+  // Versi baru yang terdeteksi tak lama setelah aplikasi dibuka ikut ke modal.
+  useEffect(() => subscribePwaUpdate(() => evaluateOpening()), [evaluateOpening]);
+
+  /** Menutup modal pembuka; pengumuman di dalamnya dianggap sudah dibaca. */
+  const closeOpening = useCallback(
+    (action: "dismiss" | "update") => {
+      const current = openingRef.current;
+      if (!current) return;
+      markSeen(announcementsRef.current?.list ?? null);
+      if (action === "update") {
+        // Modal tetap tampil (tombol berputar) sampai halaman dimuat ulang.
+        applyUpdate();
+        return;
+      }
+      if (current.prompt && !deviceRef.current.active) snoozeNotificationPrompt(Date.now());
+      openingRef.current = null;
+      dismissedKeyRef.current = current.key;
+      setOpening(null);
+      setUpdateNoticeCoordination({
+        modalOpen: false,
+        deferred: getPwaUpdateSnapshot().status !== "idle",
+      });
+    },
+    [markSeen, applyUpdate],
+  );
 
   const setOpen = useCallback(
     (next: boolean) => {
+      // Klik notifikasi saat modal pembuka tampil: tutup dulu, jangan bertumpuk.
+      if (next) closeOpening("dismiss");
       openRef.current = next;
       setOpenState(next);
       if (next) {
@@ -168,7 +301,7 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
         reloadAnnouncements();
       }
     },
-    [announcements, markSeen, reloadAnnouncements],
+    [announcements, markSeen, reloadAnnouncements, closeOpening],
   );
 
   // Parameter ?pengumuman=1 sudah dipakai untuk membuka dialog: hapus dari URL.
@@ -191,16 +324,39 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, [setOpen, reloadAnnouncements]);
 
-  // Aplikasi kembali ke depan (mis. PWA dibuka lagi dari latar): segarkan riwayat.
+  // Aplikasi kembali ke depan (mis. PWA dibuka lagi dari latar): segarkan
+  // riwayat. Setelah lama di latar, dianggap pembukaan baru untuk modal pembuka.
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - lastLoadRef.current > REFRESH_INTERVAL_MS) {
+    const onVisibilityChange = () => {
+      const now = Date.now();
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = now;
+        return;
+      }
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+      if (hiddenAt !== null && now - hiddenAt >= RESUME_AS_OPENING_MS && !openingRef.current) {
+        sessionRef.current = { key: sessionRef.current.key + 1, startedAt: now };
+        const current = typeof Notification === "undefined" ? null : Notification.permission;
+        permissionRef.current = current;
+        setPermission(current);
+        reloadAnnouncements();
+      } else if (now - lastLoadRef.current > REFRESH_INTERVAL_MS) {
         reloadAnnouncements();
       }
     };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [reloadAnnouncements]);
+
+  // Keluar (logout) saat modal tampil: kartu pembaruan jangan tetap tersembunyi.
+  useEffect(
+    () => () => {
+      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
+      setUpdateNoticeCoordination({ modalOpen: false });
+    },
+    [],
+  );
 
   const unread = hasUnread(announcements?.[0]?.createdAt, lastSeen);
 
@@ -210,13 +366,20 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
     setDeviceMessage(null);
     try {
       const result = await enablePush(config.publicKey);
-      setPermission(typeof Notification === "undefined" ? null : Notification.permission);
-      if (result === "enabled") setDeviceActive(true);
+      const current = typeof Notification === "undefined" ? null : Notification.permission;
+      permissionRef.current = current;
+      setPermission(current);
+      if (result === "enabled") {
+        deviceRef.current = { checked: true, active: true };
+        setDeviceActive(true);
+      }
       else if (result === "no-service-worker")
         setDeviceMessage("Aplikasi belum siap menerima notifikasi. Muat ulang halaman, lalu coba lagi.");
     } catch (error) {
       setDeviceMessage(errorMessage(error, "Notifikasi gagal diaktifkan. Coba lagi."));
-      setDeviceActive(Boolean(await getDeviceSubscription().catch(() => null)));
+      const active = Boolean(await getDeviceSubscription().catch(() => null));
+      deviceRef.current = { checked: true, active };
+      setDeviceActive(active);
     } finally {
       setDeviceBusy(false);
     }
@@ -227,6 +390,7 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
     setDeviceMessage(null);
     try {
       await disablePush();
+      deviceRef.current = { checked: true, active: false };
       setDeviceActive(false);
     } catch (error) {
       setDeviceMessage(errorMessage(error, "Notifikasi gagal dimatikan. Coba lagi."));
@@ -270,6 +434,21 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
           <AnnouncementList announcements={announcements} error={listError} />
         </DialogContent>
       </Dialog>
+
+      {opening && (
+        <OpeningModal
+          content={opening}
+          updateStatus={updateStatus}
+          permission={permission}
+          deviceActive={deviceActive}
+          deviceBusy={deviceBusy}
+          deviceMessage={deviceMessage}
+          onEnable={() => void handleEnable()}
+          onUpdate={() => closeOpening("update")}
+          onDismiss={() => closeOpening("dismiss")}
+          onShowAll={() => setOpen(true)}
+        />
+      )}
     </NotificationCenterContext.Provider>
   );
 }
@@ -302,6 +481,295 @@ export function NotificationBellButton() {
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+interface OpeningModalProps {
+  content: OpeningContent;
+  updateStatus: PwaUpdateSnapshot["status"];
+  permission: NotificationPermission | null;
+  deviceActive: boolean;
+  deviceBusy: boolean;
+  deviceMessage: string | null;
+  onEnable: () => void;
+  onUpdate: () => void;
+  onDismiss: () => void;
+  onShowAll: () => void;
+}
+
+/** "a", "a dan b", "a, b dan c". */
+function joinIndonesian(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} dan ${items[items.length - 1]}`;
+}
+
+/**
+ * Modal besar di tengah saat aplikasi dibuka: versi baru, pengumuman yang
+ * belum dibaca, dan ajakan mengaktifkan notifikasi dalam satu layar. Versi
+ * baru dibaca langsung dari store pembaruan, sehingga yang terdeteksi saat
+ * modal sudah terbuka tetap muncul di sini (kartu pembaruan disembunyikan).
+ */
+function OpeningModal({
+  content,
+  updateStatus,
+  permission,
+  deviceActive,
+  deviceBusy,
+  deviceMessage,
+  onEnable,
+  onUpdate,
+  onDismiss,
+  onShowAll,
+}: OpeningModalProps) {
+  const online = useOnlineStatus();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const showUpdate = updateStatus !== "idle";
+  const applying = updateStatus === "applying";
+  const shown = content.announcements.slice(0, OPENING_ANNOUNCEMENT_LIMIT);
+  const more = content.announcements.length - shown.length;
+  const promptPending = content.prompt !== null && !deviceActive;
+
+  const topics = [
+    showUpdate ? "versi baru aplikasi" : null,
+    content.announcements.length > 0 ? "pengumuman baru" : null,
+  ].filter((topic): topic is string => topic !== null);
+  const summary =
+    topics.length > 0
+      ? `Ada ${joinIndonesian(topics)} untuk Anda.`
+      : promptPending
+        ? "Aktifkan notifikasi agar tidak ketinggalan pengumuman."
+        : "Semua sudah beres. Selamat bekerja.";
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next && !applying) onDismiss();
+      }}
+    >
+      <DialogContent
+        ref={contentRef}
+        data-opening-modal=""
+        aria-busy={applying || undefined}
+        onOpenAutoFocus={(event) => {
+          // Fokus ke modal (bukan tombol paling bawah) agar layar ponsel tidak
+          // langsung menggulir melewati isi bagian atas.
+          event.preventDefault();
+          contentRef.current?.focus({ preventScroll: true });
+        }}
+        className="max-h-[calc(100dvh-2rem)] max-w-xl gap-0 overflow-y-auto p-0 focus:outline-none [&>button:last-child]:text-white/80 [&>button:last-child]:hover:bg-white/10 [&>button:last-child]:hover:text-white"
+      >
+        <DialogHeader className="flex-row items-center gap-3.5 rounded-t-2xl bg-navy-900 px-5 py-5 pr-14 text-white sm:px-7 sm:py-6">
+          <span
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gold-500/15 text-gold-400"
+            aria-hidden="true"
+          >
+            <Sparkles className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <DialogTitle className="text-xl text-white">Info Terbaru</DialogTitle>
+            <DialogDescription className="mt-0.5 text-[13px] text-white/75">
+              {summary}
+            </DialogDescription>
+          </div>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-5 px-5 py-5 sm:px-7 sm:py-6">
+          {showUpdate && (
+            <section
+              aria-labelledby="pembuka-versi"
+              className="flex items-start gap-3 rounded-xl border border-navy-600/30 bg-navy-50/70 p-4"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-card text-navy-800">
+                <RefreshCw className="size-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h3 id="pembuka-versi" className="text-sm font-semibold text-foreground">
+                  Versi baru aplikasi tersedia
+                </h3>
+                <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+                  Perbarui sekarang agar perhitungan memakai aturan dan fitur terbaru. Isian yang
+                  belum disimpan akan direset.
+                </p>
+                {!online && !applying && (
+                  <p className="mt-1.5 text-xs font-medium text-muted-foreground">
+                    Sambungkan internet untuk memperbarui.
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {shown.length > 0 && (
+            <section aria-labelledby="pembuka-pengumuman" className="flex flex-col gap-3">
+              <h3
+                id="pembuka-pengumuman"
+                className="flex items-center gap-2 text-sm font-semibold text-foreground"
+              >
+                <Megaphone className="size-4 text-navy-700" aria-hidden="true" />
+                Pengumuman baru
+                <span className="numeric rounded-full bg-gold-500/20 px-2 py-0.5 text-xs font-semibold text-navy-900">
+                  {content.announcements.length}
+                </span>
+              </h3>
+              <ol className="flex flex-col gap-2.5">
+                {shown.map((item) => (
+                  <li key={item.id} className="rounded-xl border bg-card p-4">
+                    <p className="text-[15px] font-semibold leading-snug text-foreground">
+                      {item.title}
+                    </p>
+                    <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+                      {item.body}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground/80">
+                      <time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time> ·{" "}
+                      {item.createdByName}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+              {more > 0 && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto self-start px-0"
+                  onClick={onShowAll}
+                >
+                  Lihat {more} pengumuman lainnya
+                </Button>
+              )}
+            </section>
+          )}
+
+          {content.prompt && (
+            <OpeningNotificationPrompt
+              kind={content.prompt}
+              permission={permission}
+              active={deviceActive}
+              busy={deviceBusy}
+              message={deviceMessage}
+              onEnable={onEnable}
+            />
+          )}
+        </div>
+
+        <DialogFooter className="sticky bottom-0 rounded-b-2xl border-t bg-card px-5 py-4 sm:px-7">
+          {showUpdate ? (
+            <>
+              <Button type="button" variant="ghost" onClick={onDismiss} disabled={applying}>
+                Nanti
+              </Button>
+              <Button
+                type="button"
+                onClick={onUpdate}
+                disabled={applying || !online}
+                aria-busy={applying || undefined}
+              >
+                {applying ? (
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <RefreshCw aria-hidden="true" />
+                )}
+                {applying ? "Memperbarui…" : "Perbarui sekarang"}
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant={promptPending ? "outline" : "default"}
+              onClick={onDismiss}
+            >
+              {promptPending ? "Nanti saja" : "Mengerti"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function OpeningNotificationPrompt({
+  kind,
+  permission,
+  active,
+  busy,
+  message,
+  onEnable,
+}: {
+  kind: NotificationPromptKind;
+  permission: NotificationPermission | null;
+  active: boolean;
+  busy: boolean;
+  message: string | null;
+  onEnable: () => void;
+}) {
+  if (kind === "ios-install") {
+    return (
+      <section aria-labelledby="pembuka-notifikasi" className="rounded-xl border bg-muted/30 p-4">
+        <h3
+          id="pembuka-notifikasi"
+          className="flex items-center gap-2 text-sm font-semibold text-foreground"
+        >
+          <Bell className="size-4 text-navy-700" aria-hidden="true" />
+          Terima pengumuman di iPhone/iPad
+        </h3>
+        <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5 text-[13px] leading-relaxed text-muted-foreground">
+          <li>
+            Di Safari, ketuk{" "}
+            <Share className="inline size-3.5 align-[-2px]" aria-label="Bagikan" /> (Bagikan).
+          </li>
+          <li>
+            Pilih <strong className="text-foreground">Tambah ke Layar Utama</strong>.
+          </li>
+          <li>Buka aplikasi dari ikon tersebut, lalu aktifkan notifikasi lewat tombol lonceng.</li>
+        </ol>
+        <p className="mt-2 text-xs text-muted-foreground/80">Memerlukan iOS 16.4 atau lebih baru.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-labelledby="pembuka-notifikasi"
+      className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="min-w-0">
+        <h3
+          id="pembuka-notifikasi"
+          className="flex items-center gap-2 text-sm font-semibold text-foreground"
+        >
+          <Bell className="size-4 text-navy-700" aria-hidden="true" />
+          Aktifkan notifikasi
+        </h3>
+        <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground" role="status">
+          {active ? (
+            <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+              <CircleCheck className="size-4 text-success" aria-hidden="true" />
+              Notifikasi aktif di perangkat ini.
+            </span>
+          ) : permission === "denied" ? (
+            "Notifikasi diblokir. Izinkan di pengaturan peramban atau perangkat; petunjuknya ada di tombol lonceng."
+          ) : (
+            "Pengumuman perubahan perhitungan langsung muncul di perangkat ini, walau aplikasi sedang tertutup."
+          )}
+        </p>
+        {message && (
+          <p role="alert" className="mt-1.5 text-[13px] font-medium text-destructive">
+            {message}
+          </p>
+        )}
+      </div>
+      {!active && permission !== "denied" && (
+        <Button type="button" className="shrink-0" onClick={onEnable} disabled={busy}>
+          {busy ? (
+            <Loader2 className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Bell aria-hidden="true" />
+          )}
+          Aktifkan notifikasi
+        </Button>
+      )}
+    </section>
   );
 }
 

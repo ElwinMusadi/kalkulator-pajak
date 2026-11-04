@@ -3,6 +3,10 @@ import { LoaderCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePwaUpdate } from "@/hooks/use-pwa"
 import { useOnlineStatus } from "@/hooks/use-online-status"
+import {
+  getUpdateNoticeCoordination,
+  subscribeUpdateNoticeCoordination,
+} from "@/lib/update-notice-coordination"
 
 /** Layar pendek (ponsel landscape): kartu langsung diringkas menjadi pil. */
 const SHORT_VIEWPORT_QUERY = "(max-height: 500px)"
@@ -43,10 +47,18 @@ export function PwaUpdateNotice() {
   const focusTarget = useRef<"pill" | "apply" | null>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const applyRef = useRef<HTMLButtonElement>(null)
+  // Modal pembuka menampilkan pembaruan sendiri; setelah ditunda di sana,
+  // pembaruan tetap terjangkau lewat pil.
+  const { modalOpen, deferred } = useSyncExternalStore(
+    subscribeUpdateNoticeCoordination,
+    getUpdateNoticeCoordination,
+    getUpdateNoticeCoordination,
+  )
 
   const applying = status === "applying"
   const collapsed =
-    !applying && (mode === "collapsed" || (mode === "auto" && shortViewport))
+    !applying &&
+    (mode === "collapsed" || (mode === "auto" && (shortViewport || deferred)))
 
   // Pindahkan fokus hanya setelah aksi pengguna (bukan saat pertama tampil),
   // agar fokus keyboard tidak hilang ke <body> ketika kartu/pil bertukar.
@@ -72,6 +84,7 @@ export function PwaUpdateNotice() {
       </div>
 
       {status !== "idle" &&
+        !(modalOpen && !applying) &&
         (collapsed ? (
           <button
             ref={pillRef}

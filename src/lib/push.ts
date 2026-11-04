@@ -205,3 +205,65 @@ export function writeLastSeen(userId: string, createdAt: string): void {
 export function hasUnread(latestCreatedAt: string | undefined, lastSeen: string | null): boolean {
   return Boolean(latestCreatedAt) && (lastSeen === null || latestCreatedAt! > lastSeen)
 }
+
+// ---------------------------------------------------------------------------
+// Modal saat aplikasi dibuka: versi baru, pengumuman, ajakan notifikasi
+
+/** "Nanti saja" pada ajakan notifikasi menunda ajakan berikutnya selama ini. */
+export const NOTIFICATION_PROMPT_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000
+
+const PROMPT_SNOOZE_KEY = "kp:ajakan-notifikasi-sampai"
+
+export function readPromptSnoozedUntil(): number {
+  try {
+    const value = Number(localStorage.getItem(PROMPT_SNOOZE_KEY))
+    return Number.isFinite(value) ? value : 0
+  } catch {
+    return 0
+  }
+}
+
+export function snoozeNotificationPrompt(nowMs: number): number {
+  const until = nowMs + NOTIFICATION_PROMPT_SNOOZE_MS
+  try {
+    localStorage.setItem(PROMPT_SNOOZE_KEY, String(until))
+  } catch {
+    // Tanpa penyimpanan, ajakan bisa muncul lagi pada pembukaan berikutnya.
+  }
+  return until
+}
+
+export type NotificationPromptKind =
+  /** Tombol "Aktifkan notifikasi" (izin belum pernah diminta). */
+  | "enable"
+  /** iPhone/iPad di Safari: petunjuk pasang ke Layar Utama. */
+  | "ios-install"
+
+/**
+ * Ajakan notifikasi pada modal pembuka: hanya bila server mendukung push,
+ * perangkat ini belum aktif, izin belum diblokir, dan ajakan tidak sedang
+ * ditunda. Izin yang ditolak tidak bisa diminta ulang dari aplikasi, jadi
+ * petunjuknya hanya ada di dialog lonceng.
+ */
+export function notificationPromptKind(input: {
+  serverEnabled: boolean
+  availability: PushAvailability
+  permission: NotificationPermission | null
+  deviceActive: boolean
+  snoozedUntil: number
+  nowMs: number
+}): NotificationPromptKind | null {
+  if (!input.serverEnabled || input.deviceActive || input.nowMs < input.snoozedUntil) return null
+  if (input.availability === "ios-needs-install") return "ios-install"
+  if (input.availability === "supported" && input.permission === "default") return "enable"
+  return null
+}
+
+/** Modal pembuka muncul bila ada setidaknya satu hal yang perlu dilihat. */
+export function shouldShowOpeningModal(input: {
+  unreadCount: number
+  updateAvailable: boolean
+  prompt: NotificationPromptKind | null
+}): boolean {
+  return input.unreadCount > 0 || input.updateAvailable || input.prompt !== null
+}
