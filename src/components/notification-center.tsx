@@ -19,6 +19,7 @@ import {
   Send,
   Share,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { useAuthenticatedUser } from "@/auth/auth-context";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,12 @@ import {
 const MAX_SEND_ROUNDS = 50;
 /** Muat ulang pengumuman saat aplikasi kembali dibuka, paling sering tiap menit. */
 const REFRESH_INTERVAL_MS = 60_000;
+/**
+ * Selama aplikasi tampil di layar, pengumuman diperiksa ulang tiap 5 menit agar
+ * modal juga sampai ke perangkat yang tidak mengaktifkan notifikasi push.
+ */
+const ANNOUNCEMENT_POLL_MS = 5 * 60_000;
+const ANNOUNCEMENT_POLL_CHECK_MS = 30_000;
 /** Pengumuman yang ditampilkan langsung di modal Info Terbaru. */
 const OPENING_ANNOUNCEMENT_LIMIT = 3;
 /**
@@ -211,10 +218,17 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
         }
       }
       revealRef.current = false;
-      // Modal sudah tampil: daftar pengumuman di dalamnya ikut diperbarui.
-      if (infoRef.current) return;
-
       const unreadCount = list.filter((item) => hasUnread(item.createdAt, lastSeenRef.current)).length;
+      // Modal sudah tampil: daftarnya ikut diperbarui. Bila pengumuman yang
+      // membukanya dihapus Admin dan tidak ada lagi yang perlu dilihat, tutup.
+      if (infoRef.current) {
+        if (unreadCount === 0 && !infoRef.current.prompt) {
+          infoRef.current = null;
+          setInfo(null);
+        }
+        return;
+      }
+
       const prompt = promptDismissedRef.current
         ? null
         : notificationPromptKind({
@@ -296,6 +310,16 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
     [setOpen],
   );
 
+  /** Admin menghapus pengumuman: hilangkan langsung dari daftar, lalu muat ulang. */
+  const handleDeleted = useCallback(
+    (id: string) => {
+      announcementsRef.current = announcementsRef.current?.filter((item) => item.id !== id) ?? null;
+      setAnnouncements((current) => current?.filter((item) => item.id !== id) ?? current);
+      reloadAnnouncements();
+    },
+    [reloadAnnouncements],
+  );
+
   /** Menutup modal (tanpa pembaruan); pengumuman di dalamnya dianggap sudah dibaca. */
   const closeInfo = useCallback(() => {
     if (getPwaUpdateSnapshot().status !== "idle") return;
@@ -347,6 +371,20 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [reloadAnnouncements]);
+
+  // Perangkat tanpa notifikasi push tidak menerima pesan service worker:
+  // periksa pengumuman baru berkala selama aplikasi tampil di layar.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastLoadRef.current >= ANNOUNCEMENT_POLL_MS
+      ) {
+        reloadAnnouncements();
+      }
+    }, ANNOUNCEMENT_POLL_CHECK_MS);
+    return () => window.clearInterval(timer);
   }, [reloadAnnouncements]);
 
   // Selama aplikasi (setelah login) terpasang, versi baru tampil di modal ini,
@@ -437,7 +475,12 @@ export function NotificationCenterProvider({ children }: { children: ReactNode }
             />
           )}
 
-          <AnnouncementList announcements={announcements} error={listError} />
+          <AnnouncementList
+            announcements={announcements}
+            error={listError}
+            canDelete={isAdmin}
+            onDeleted={handleDeleted}
+          />
         </DialogContent>
       </Dialog>
 
@@ -1032,9 +1075,14 @@ function AnnouncementComposer({
 function AnnouncementList({
   announcements,
   error,
+  canDelete,
+  onDeleted,
 }: {
   announcements: Announcement[] | null;
   error: string | null;
+  /** Admin: setiap pengumuman punya tombol hapus. */
+  canDelete: boolean;
+  onDeleted: (id: string) => void;
 }) {
   if (error && !announcements) {
     return (
@@ -1052,16 +1100,130 @@ function AnnouncementList({
   return (
     <ol aria-label="Riwayat pengumuman" className="flex flex-col divide-y divide-border/70">
       {announcements.map((item) => (
-        <li key={item.id} className="py-3 first:pt-0 last:pb-0">
-          <p className="text-sm font-semibold leading-snug text-foreground">{item.title}</p>
-          <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-muted-foreground">
-            {item.body}
-          </p>
-          <p className="mt-1.5 text-xs text-muted-foreground/80">
-            <time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time> · {item.createdByName}
-          </p>
-        </li>
+        <AnnouncementItem key={item.id} item={item} canDelete={canDelete} onDeleted={onDeleted} />
       ))}
     </ol>
+  );
+}
+
+function AnnouncementItem({
+  item,
+  canDelete,
+  onDeleted,
+}: {
+  item: Announcement;
+  canDelete: boolean;
+  onDeleted: (id: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const deleteRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const focusAfterToggle = useRef(false);
+
+  // Fokus keyboard mengikuti tombol yang muncul setelah konfirmasi dibuka/ditutup.
+  useEffect(() => {
+    if (!focusAfterToggle.current) return;
+    focusAfterToggle.current = false;
+    (confirming ? cancelRef : deleteRef).current?.focus();
+  }, [confirming]);
+
+  function toggleConfirm(next: boolean) {
+    focusAfterToggle.current = true;
+    setError(null);
+    setConfirming(next);
+  }
+
+  async function remove() {
+    setDeleting(true);
+    setError(null);
+    try {
+      await pushApi.deleteAnnouncement(item.id);
+      onDeleted(item.id);
+    } catch (deleteError) {
+      // Sudah dihapus dari perangkat lain: hasil akhirnya sama.
+      if (isApiError(deleteError) && deleteError.status === 404) {
+        onDeleted(item.id);
+        return;
+      }
+      setError(errorMessage(deleteError, "Pengumuman gagal dihapus. Coba lagi."));
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <li className="py-3 first:pt-0 last:pb-0" aria-busy={deleting || undefined}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-sm font-semibold leading-snug text-foreground">{item.title}</p>
+        {canDelete && !confirming && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                ref={deleteRef}
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Hapus pengumuman: ${item.title}`}
+                onClick={() => toggleConfirm(true)}
+                className="-my-2 -mr-2 size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Hapus pengumuman</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+      <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-muted-foreground">
+        {item.body}
+      </p>
+      <p className="mt-1.5 text-xs text-muted-foreground/80">
+        <time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time> · {item.createdByName}
+      </p>
+      {confirming && (
+        <div
+          role="group"
+          aria-label="Konfirmasi hapus pengumuman"
+          className="mt-2.5 flex flex-col gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 p-3"
+        >
+          <p className="text-[13px] leading-relaxed text-foreground">
+            Hapus pengumuman ini dari lonceng dan modal Info Terbaru semua user? Notifikasi yang
+            sudah tampil di perangkat tidak ikut terhapus.
+          </p>
+          {error && (
+            <p role="alert" className="text-[13px] font-medium text-destructive">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              ref={cancelRef}
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => toggleConfirm(false)}
+              disabled={deleting}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              onClick={() => void remove()}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <Loader2 className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 aria-hidden="true" />
+              )}
+              {deleting ? "Menghapus…" : "Hapus"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </li>
   );
 }

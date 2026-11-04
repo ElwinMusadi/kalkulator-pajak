@@ -41,6 +41,9 @@ export const pushApi = {
       { method: "POST", body: { after } },
     )
   },
+  deleteAnnouncement(id: string): Promise<void> {
+    return apiRequest<void>(`/api/admin/announcements/${encodeURIComponent(id)}`, { method: "DELETE" })
+  },
 }
 
 // ---------------------------------------------------------------------------

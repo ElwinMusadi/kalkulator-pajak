@@ -246,6 +246,36 @@ export async function createAnnouncement(
   return announcement
 }
 
+/**
+ * Menghapus pengumuman dari riwayat (hilang dari lonceng dan modal di semua
+ * perangkat saat daftar dimuat ulang). Notifikasi yang sudah tampil di
+ * perangkat tidak bisa ditarik kembali. Audit hanya tercatat bila ada yang
+ * terhapus; `false` bila id tidak dikenal.
+ */
+export async function deleteAnnouncement(
+  db: D1Database,
+  admin: AuthContext,
+  id: string,
+  nowIso: string,
+): Promise<boolean> {
+  if (!isValidId(id)) return false
+  const [, deleted] = await db.batch([
+    auditStatement(
+      db,
+      {
+        actorUserId: admin.user.id,
+        action: "announcement.delete",
+        targetUserId: null,
+        createdAt: nowIso,
+        metadata: { announcementId: id },
+      },
+      { sql: "EXISTS (SELECT 1 FROM announcements WHERE id = ?)", params: [id] },
+    ),
+    db.prepare("DELETE FROM announcements WHERE id = ?").bind(id),
+  ])
+  return (deleted?.meta.changes ?? 0) > 0
+}
+
 export function announcementPayload(announcement: Announcement): Uint8Array {
   const payload: PushPayload = {
     title: announcement.title,

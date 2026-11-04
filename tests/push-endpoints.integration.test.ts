@@ -9,6 +9,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { Miniflare, convertV4MiniflareOptions } from "miniflare"
 import { onRequest as apiMiddleware } from "../functions/api/_middleware.ts"
+import * as adminAnnouncementRoute from "../functions/api/admin/announcements/[id]/index.ts"
 import * as continueRoute from "../functions/api/admin/announcements/[id]/send.ts"
 import * as adminAnnouncementsRoute from "../functions/api/admin/announcements/index.ts"
 import * as announcementsRoute from "../functions/api/announcements/index.ts"
@@ -40,6 +41,7 @@ const ROUTES: Array<{ pattern: RegExp; keys: string[]; module: RouteModule }> = 
   { pattern: /^\/api\/announcements$/, keys: [], module: announcementsRoute as RouteModule },
   { pattern: /^\/api\/admin\/announcements$/, keys: [], module: adminAnnouncementsRoute as RouteModule },
   { pattern: /^\/api\/admin\/announcements\/([^/]+)\/send$/, keys: ["id"], module: continueRoute as RouteModule },
+  { pattern: /^\/api\/admin\/announcements\/([^/]+)$/, keys: ["id"], module: adminAnnouncementRoute as RouteModule },
 ]
 
 const methodExport = (method: string) => `onRequest${method[0]}${method.slice(1).toLowerCase()}`
@@ -434,6 +436,61 @@ try {
       403,
     )
     pass(`Gelombang: ${total} perangkat dikirim ${PUSH_BATCH_SIZE} + 5, kursor sah, id tak dikenal 404, petugas 403`)
+  }
+
+  // 7. Hapus pengumuman: hanya Admin, CSRF, hilang dari riwayat semua user, audit
+  {
+    const countDeleteAudits = async () =>
+      (await db
+        .prepare("SELECT COUNT(*) AS n FROM audit_events WHERE action = 'announcement.delete'")
+        .first<{ n: number }>())?.n ?? 0
+    const listIds = async () =>
+      (await json<AnnouncementsResponse>(await api("GET", "/api/announcements", { token: petugas }))).announcements.map(
+        (a) => a.id,
+      )
+
+    const target = (await listIds())[0]
+    assert.ok(target, "ada pengumuman untuk dihapus")
+    const auditsBefore = await countDeleteAudits()
+
+    assert.equal((await api("DELETE", `/api/admin/announcements/${target}`, { token: petugas })).status, 403, "petugas")
+    assert.equal(
+      (await api("DELETE", `/api/admin/announcements/${target}`, { token: admin, origin: null })).status,
+      403,
+      "tanpa Origin (CSRF)",
+    )
+    assert.equal(
+      (await api("DELETE", `/api/admin/announcements/${target}`, { token: admin, origin: "https://jahat.test" })).status,
+      403,
+      "Origin asing (CSRF)",
+    )
+    assert.equal((await api("DELETE", "/api/admin/announcements/bukan-id", { token: admin })).status, 404, "id tidak sah")
+    assert.equal(
+      (await api("DELETE", `/api/admin/announcements/${crypto.randomUUID()}`, { token: admin })).status,
+      404,
+      "id tidak dikenal",
+    )
+    assert.ok((await listIds()).includes(target), "belum terhapus")
+    assert.equal(await countDeleteAudits(), auditsBefore, "tanpa audit bila tidak ada yang terhapus")
+
+    const removed = await api("DELETE", `/api/admin/announcements/${target}`, { token: admin })
+    assert.equal(removed.status, 204)
+    assert.ok(!(await listIds()).includes(target), "hilang dari riwayat petugas")
+    const audit = await db
+      .prepare("SELECT actor_user_id, metadata FROM audit_events WHERE action = 'announcement.delete' ORDER BY id DESC LIMIT 1")
+      .first<{ actor_user_id: string; metadata: string }>()
+    assert.equal(audit?.actor_user_id, users[0].id)
+    assert.deepEqual(JSON.parse(audit?.metadata ?? "{}"), { announcementId: target })
+    assert.equal(await countDeleteAudits(), auditsBefore + 1)
+
+    assert.equal((await api("DELETE", `/api/admin/announcements/${target}`, { token: admin })).status, 404, "hapus ulang")
+    assert.equal(
+      (await api("POST", `/api/admin/announcements/${target}/send`, { token: admin, body: { after: users[0].id } }))
+        .status,
+      404,
+      "gelombang lanjutan untuk pengumuman terhapus",
+    )
+    pass("Hapus pengumuman: hanya Admin, CSRF, hilang dari riwayat semua user, audit, hapus ulang 404")
   }
 } finally {
   console.info = silenced.info
