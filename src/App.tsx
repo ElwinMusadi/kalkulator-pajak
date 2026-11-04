@@ -165,6 +165,7 @@ function AuthenticatedApp() {
             <p>© 2026 &nbsp;·&nbsp; Elwin Musadi Bessiesura &nbsp;</p>
             <p>·&nbsp; UPT Pendapatan Daerah Wilayah Kota Kupang</p>
           </div>
+          <p className="mt-1 text-xs text-muted-foreground/80">Versi {__APP_VERSION__}</p>
         </footer>
       </div>
 

@@ -3,7 +3,25 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { VitePWA } from "vite-plugin-pwa"
 
+/**
+ * Label versi di footer: tanggal build (WITA) dan commit pendek dari Cloudflare
+ * Pages, agar mudah memastikan perangkat sudah memakai versi terbaru.
+ */
+function appVersionLabel(): string {
+  const date = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Makassar",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date())
+  const commit = process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7)
+  return commit ? `${date} · ${commit}` : date
+}
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersionLabel()),
+  },
   plugins: [
     react(),
     tailwindcss(),
