@@ -20,7 +20,7 @@ interface OfficialNjkbApiResponse {
   vehicle_status?: unknown
   njkb_status?: unknown
   nopol?: unknown
-  vehicle?: unknown // { category?, category_raw?, type?, plate_color? }
+  vehicle?: unknown // { category?, category_raw?, type?, plate_color?, engine_capacity_cc? }
   registration?: unknown // { stnk_valid_until?, plate_color? }
   tax?: unknown // { notice_valid_until? }
   owner?: unknown // { name? }
@@ -168,6 +168,20 @@ export function sanitizeOriginUpt(raw: unknown): string | null {
   return /^[\p{L}\p{N} .,'()/&-]+$/u.test(value) ? value : null
 }
 
+/** Batas atas isi silinder yang masuk akal (cc); di atasnya dianggap data rusak. */
+export const ISI_SILINDER_MAX = 50_000
+
+/**
+ * Isi silinder (vehicle.engine_capacity_cc): bilangan bulat cc 1–50.000,
+ * sebagai number atau string angka. Nilai lain → null (tidak pernah
+ * menggagalkan lookup; petugas mengisi CC secara manual).
+ */
+export function parseIsiSilinder(raw: unknown): number | null {
+  const value =
+    typeof raw === "number" ? raw : typeof raw === "string" && /^\s*\d+\s*$/.test(raw) ? Number(raw) : NaN
+  return Number.isSafeInteger(value) && value > 0 && value <= ISI_SILINDER_MAX ? value : null
+}
+
 function nullableString(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== ""
     ? value.trim()
@@ -264,6 +278,7 @@ export function mapApiResponseToVehicleData(
     normalizeWarnaPlat(vehicle?.plate_color)
   const originUpt = sanitizeOriginUpt(administrative?.origin_upt)
   const syncedAt = parseSyncedAt(potensi?.synced_at)
+  const isiSilinder = parseIsiSilinder(vehicle?.engine_capacity_cc)
 
   // 2. Evaluasi njkb_status secara terpisah
   const njkbStatus = payload.njkb_status
@@ -299,6 +314,7 @@ export function mapApiResponseToVehicleData(
     jatuhTempoStnk,
     jatuhTempoPajak,
     njub,
+    isiSilinder,
     warnaPlat,
     originUpt,
     syncedAt,

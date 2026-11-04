@@ -73,6 +73,7 @@ function centralApiResponse(nopol: string) {
     vehicle: {
       category: "MOBIL BARANG",
       category_raw: "PICK UP",
+      engine_capacity_cc: 2_477,
       plate_color: "HITAM",
       chassis_number: "MHKA1234567890XYZ",
       engine_number: "ENG-998877",
@@ -345,6 +346,7 @@ try {
       jatuhTempoStnk: "2031-12-31",
       jatuhTempoPajak: "2030-12-31",
       njub: 35_000_000,
+      isiSilinder: 2_477,
       warnaPlat: "merah",
       originUpt: "UPT Pendapatan Daerah Wilayah Kota Kupang",
       syncedAt: "2026-10-16T19:15:00.000Z",

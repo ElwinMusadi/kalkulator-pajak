@@ -117,13 +117,16 @@ function buildTiles(result: TaxCalculationResult): ComponentTile[] {
     {
       key: "swdkllj",
       label: "SWDKLLJ",
-      hint: "Sumbangan Wajib Jasa Raharja",
+      hint: `Jasa Raharja · Golongan ${result.golonganSwdkllj}`,
       amount:
         result.swdklljBerjalan +
         result.swdklljTunggakan +
         result.dendaSwdkllj,
       rows: [
-        { label: "SWDKLLJ berjalan", value: result.swdklljBerjalan },
+        {
+          label: `SWDKLLJ berjalan · Gol. ${result.golonganSwdkllj}`,
+          value: result.swdklljBerjalan,
+        },
         ...(result.swdklljTunggakan > 0
           ? [
               {

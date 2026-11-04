@@ -55,6 +55,11 @@ import {
   hasWilayahGempa,
   resolvePergub,
 } from "@/lib/pergub";
+import {
+  bergantungCc,
+  golonganSwdkllj,
+  TARIF_SWDKLLJ,
+} from "@/lib/swdkllj";
 import { calculateTax } from "@/lib/tax-calculator";
 import {
   BIAYA_LAYANAN_INPUT_MAX_LENGTH,
@@ -96,6 +101,7 @@ const JENIS_OPTIONS: { value: JenisKendaraan; label: string }[] = [
 type FieldKey =
   | "njkb"
   | "jenis"
+  | "isiSilinder"
   | "jatuhTempoPajak"
   | "jatuhTempoStnk"
   | "tanggalBayar"
@@ -143,6 +149,17 @@ function calculateInPeriod(
   input: TaxCalculatorInput,
 ): TaxCalculationResult | null {
   return resolvePergub(input.tanggalBayar) ? calculateTax(input) : null;
+}
+
+/** CC bilangan bulat positif dari isian atau data kendaraan; selain itu null. */
+function parseCc(raw: unknown): number | null {
+  const value = typeof raw === "string" ? Number(raw.trim() || NaN) : raw;
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value > 0 &&
+    value <= 50_000
+    ? value
+    : null;
 }
 
 function isoToDate(iso: string | null | undefined): Date | undefined {
@@ -245,6 +262,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   const [nopol, setNopol] = useState("");
   const [njkb, setNjkb] = useState("");
   const [njub, setNjub] = useState("0");
+  /** Isi silinder (CC); kosong bila tidak tersedia dari data kendaraan */
+  const [isiSilinder, setIsiSilinder] = useState("");
   const [bobot, setBobot] = useState<number | undefined>(undefined);
   const [jenisKendaraan, setJenisKendaraan] = useState<
     JenisKendaraan | undefined
@@ -343,6 +362,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
   function resetVehicleFields() {
     setNjkb("");
     setNjub("0");
+    setIsiSilinder("");
     setBobot(undefined);
     setJenisKendaraan(undefined);
     setJatuhTempoPajak(undefined);
@@ -402,6 +422,9 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       Number.isFinite(vehicleData.njub) && vehicleData.njub > 0
         ? vehicleData.njub
         : 0;
+    // CC menentukan golongan SWDKLLJ motor dan mobil barang; kosong → isi manual.
+    const ccValue = parseCc(vehicleData.isiSilinder);
+    const ccKurang = Boolean(jenisNormal && bergantungCc(jenisNormal) && ccValue === null);
 
     // Reset fasilitas hanya untuk hasil lookup baru, tidak saat tanggal berubah.
     setIsDomisiliGempa(autoGempa);
@@ -413,6 +436,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
 
     if (vehicleData.njkb > 0) setNjkb(String(vehicleData.njkb));
     setNjub(String(njubValue));
+    setIsiSilinder(ccValue !== null ? String(ccValue) : "");
     if (vehicleData.bobot) setBobot(vehicleData.bobot);
     if (jenisNormal) setJenisKendaraan(jenisNormal);
     if (stnkDate) setJatuhTempoStnk(stnkDate);
@@ -425,7 +449,8 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       vehicleData.njkb <= 0 ||
       !jenisNormal ||
       !vehicleData.bobot ||
-      njubValue > 0
+      njubValue > 0 ||
+      ccKurang
     ) {
       sectionsToOpen.push("assessment");
     }
@@ -444,6 +469,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     if (
       vehicleData.njkb > 0 &&
       jenisNormal &&
+      !ccKurang &&
       stnkDate &&
       pajakDate &&
       tanggalBayar
@@ -455,6 +481,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
           njub: njubValue,
           bobot: vehicleData.bobot || BOBOT_MAP[jenisNormal],
           jenisKendaraan: jenisNormal,
+          isiSilinder: ccValue,
           jatuhTempoPajak: pajakDate,
           jatuhTempoStnk: stnkDate,
           tanggalBayar,
@@ -479,11 +506,15 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     if (!njkb || !Number.isFinite(njkbNum) || njkbNum <= 0) return null;
     if (!jenisKendaraan || !jatuhTempoPajak || !jatuhTempoStnk || !tanggalBayar)
       return null;
+    // Golongan SWDKLLJ motor dan mobil barang tidak ditebak tanpa CC.
+    const ccNum = parseCc(isiSilinder);
+    if (bergantungCc(jenisKendaraan) && ccNum === null) return null;
     return {
       njkb: njkbNum,
       njub: parseFloat(njub) || 0,
       bobot: effectiveBobot,
       jenisKendaraan,
+      isiSilinder: ccNum,
       jatuhTempoPajak,
       jatuhTempoStnk,
       tanggalBayar,
@@ -494,7 +525,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       warnaPlat,
       biayaLayanan,
     };
-  }, [njkb, njub, effectiveBobot, jenisKendaraan, jatuhTempoPajak,
+  }, [njkb, njub, effectiveBobot, jenisKendaraan, isiSilinder, jatuhTempoPajak,
     jatuhTempoStnk, tanggalBayar, isDomisiliGempa, isMutasiMasuk,
     isBayarOnline, isTembakRu, warnaPlat, biayaLayanan]);
 
@@ -531,7 +562,7 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     setInvalidField(field);
     setValidationError(message);
 
-    if (field === "njkb" || field === "jenis") {
+    if (field === "njkb" || field === "jenis" || field === "isiSilinder") {
       openSection("assessment");
     } else if (field.startsWith("biayaLayanan.")) {
       openSection("fees");
@@ -548,6 +579,11 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
     if (!njkb || isNaN(njkbNum) || njkbNum <= 0)
       return fail("njkb", "NJKB harus diisi dengan nilai lebih dari 0.");
     if (!jenisKendaraan) return fail("jenis", "Pilih jenis kendaraan.");
+    if (bergantungCc(jenisKendaraan) && parseCc(isiSilinder) === null)
+      return fail(
+        "isiSilinder",
+        "Isi CC (isi silinder) kendaraan untuk menentukan golongan SWDKLLJ.",
+      );
     if (!jatuhTempoPajak)
       return fail("jatuhTempoPajak", "Isi tanggal jatuh tempo pajak.");
     if (!jatuhTempoStnk)
@@ -586,8 +622,17 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
       : `Diskon PKB berjalan +${tarifOnline.motor}% motor · +${tarifOnline.mobil}% roda 4+`
     : "";
 
-  const assessmentComplete =
-    Boolean(njkbNumber > 0 && jenisKendaraan && effectiveBobot > 0);
+  const ccNumber = parseCc(isiSilinder);
+  const ccWajib = Boolean(jenisKendaraan && bergantungCc(jenisKendaraan));
+  const golongan = jenisKendaraan
+    ? TARIF_SWDKLLJ[golonganSwdkllj(jenisKendaraan, ccNumber)]
+    : null;
+  const assessmentComplete = Boolean(
+    njkbNumber > 0 &&
+      jenisKendaraan &&
+      effectiveBobot > 0 &&
+      (!ccWajib || ccNumber !== null),
+  );
   const taxPeriodComplete = Boolean(
     jatuhTempoPajak && jatuhTempoStnk && tanggalBayar,
   );
@@ -937,6 +982,58 @@ export function TaxCalculatorForm({ onResult }: TaxCalculatorFormProps) {
                   </span>
                 ) : (
                   <span>Bobot mengikuti jenis kendaraan.</span>
+                )}
+              </FieldDescription>
+            </Field>
+
+            <Field
+              data-invalid={invalidField === "isiSilinder" || undefined}
+              className="min-w-0 gap-2"
+            >
+              <FieldLabel htmlFor="isi-silinder">
+                Isi Silinder (CC) {ccWajib && <RequiredMark />}
+              </FieldLabel>
+              <Input
+                id="isi-silinder"
+                type="number"
+                inputMode="numeric"
+                value={isiSilinder}
+                onChange={(e) => {
+                  setIsiSilinder(e.target.value);
+                  if (invalidField === "isiSilinder") {
+                    setInvalidField(null);
+                    setValidationError(null);
+                  }
+                }}
+                placeholder={ccWajib ? "Wajib diisi" : "Opsional"}
+                min={1}
+                step={1}
+                aria-invalid={invalidField === "isiSilinder" || undefined}
+                aria-describedby="isi-silinder-ket"
+                className="numeric h-10 bg-card aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/25"
+              />
+              <FieldDescription id="isi-silinder-ket" className="text-xs">
+                {golongan && (!ccWajib || ccNumber !== null) ? (
+                  <>
+                    SWDKLLJ golongan{" "}
+                    <span className="font-semibold text-foreground">
+                      {golongan.golongan}
+                    </span>{" "}
+                    ·{" "}
+                    <span className="monetary font-medium text-foreground">
+                      {formatRupiah(golongan.pokok)}
+                    </span>
+                    {lookupStatus === "found" &&
+                    vehicleData &&
+                    parseCc(vehicleData.isiSilinder) !== null &&
+                    parseCc(vehicleData.isiSilinder) === ccNumber
+                      ? " · dari data kendaraan."
+                      : "."}
+                  </>
+                ) : ccWajib ? (
+                  "Menentukan golongan SWDKLLJ sepeda motor dan mobil barang. Lihat STNK."
+                ) : (
+                  "Menentukan golongan SWDKLLJ (Jasa Raharja)."
                 )}
               </FieldDescription>
             </Field>

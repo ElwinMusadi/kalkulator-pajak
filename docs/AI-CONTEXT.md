@@ -16,6 +16,12 @@ Sumber: `docs/Pergub/Pergub 64 Tahun 2026.pdf` dan `docs/Pergub/Daftar Keringana
 - **Catatan Pergub 54 (tidak diubah)**: Contoh 6–9 SE Pergub 54 memakai denda SWDKLLJ motor Rp32.000 "> 1 tahun terlambat" (diukur dari jatuh tempo pertama), sedangkan engine memberi denda berdasarkan keterlambatan masa berjalan (mis. Rp24.000 untuk 7 bulan). Selisih hanya untuk perhitungan mundur September–Oktober.
 - Field hasil baru: `pergub`, `diskonTunggakan`, `isBayarOnline`, `diskonPaymentOnline`, `dendaSwdklljTunggakanDihapus`. Label aplikasi (header, login, meta, manifest PWA) memakai `PERGUB_TERBARU`.
 
+## Pembaruan SWDKLLJ per golongan — November 2026
+
+- Pokok dan denda SWDKLLJ mengikuti golongan Jasa Raharja (A, C1, C2, DP, EP, F), bukan lagi hanya motor/mobil. Golongan ditentukan jenis kendaraan dan, untuk sepeda motor serta mobil barang, isi silinder (CC). Rincian di §6.F.
+- Form punya isian **Isi Silinder (CC)** di tahap Dasar Pengenaan, terisi otomatis dari `vehicle.engine_capacity_cc` dan wajib untuk sepeda motor, pick up, light truck, dan truck. Mapper menerima bilangan bulat 1–50.000 (number atau string angka); nilai lain menjadi `null` tanpa menggagalkan lookup.
+- PINTU (`D:\Herd\portal-uptdkotakupang`) memakai salinan mesin ini (D-041/D-088). Perubahan ini menambah `src/lib/swdkllj.ts` dan input `isiSilinder`, jadi salinan PINTU perlu disalin ulang dan form PINTU perlu isian CC.
+
 ## Pembaruan integrasi — Oktober 2026
 
 - Lookup kendaraan memakai satu sumber: API Data Potensi NTT, `GET /api/v1/vehicle/:nopol` pada server API pusat. Browser tetap memanggil Pages Function `/api/njkb/:nopol` dengan sesi pengguna; kredensial Cloudflare Access tidak dikirim ke browser.
@@ -254,13 +260,21 @@ Implementasi berada di `src/lib/tax-calculator.ts` melalui fungsi murni `calcula
 - **Denda Opsen PKB**: Dihapus `100%` (`dendaOpsen = 0`).
 
 ### F. SWDKLLJ (Sumbangan Wajib Dana Kecelakaan Lalu Lintas Jalan)
-- Pokok berjalan: Motor `Rp35.000`, Mobil/Truk `Rp143.000`.
-- Pokok tunggakan: `jumlah_tahun_tunggakan * tarif_pokok`.
-- **Denda SWDKLLJ**: **TETAP DIPUNGUT** (tidak dihapus oleh Tax Amnesty, merujuk contoh resmi Lampiran SE).
-  - Keterlambatan $\le$ 3 bulan: Motor `Rp8.000` / Mobil `Rp35.000`
-  - Keterlambatan 4 – 6 bulan: Motor `Rp16.000` / Mobil `Rp70.000`
-  - Keterlambatan 7 – 9 bulan: Motor `Rp24.000` / Mobil `Rp100.000`
-  - Keterlambatan > 9 bulan: Motor `Rp32.000` / Mobil `Rp100.000`
+- **Per golongan Jasa Raharja** (Tarip Denda SWDKLLJ per 1 Juni 2017, `src/lib/swdkllj.ts`). Pokok = SW + KD/sertifikat `Rp3.000`; denda per keterlambatan masa berjalan ≤ 3 / 4–6 / 7–9 / > 9 bulan:
+
+  | Golongan | Kendaraan di kalkulator | Pokok | Denda |
+  |---|---|---|---|
+  | A | Sepeda motor ≤ 50 cc (SW bebas) | `Rp3.000` | – |
+  | C1 | Sepeda motor 51–250 cc | `Rp35.000` | 8.000 / 16.000 / 24.000 / 32.000 |
+  | C2 | Sepeda motor > 250 cc | `Rp83.000` | 20.000 / 40.000 / 60.000 / 80.000 |
+  | DP | Minibus, sedan, jeep; pick up, light truck, truck ≤ 2.400 cc | `Rp143.000` | 35.000 / 70.000 / 100.000 / 100.000 |
+  | EP | Microbus (bukan angkutan umum) | `Rp153.000` | 37.500 / 75.000 / 100.000 / 100.000 |
+  | F | Pick up, light truck, truck > 2.400 cc | `Rp163.000` | 40.000 / 80.000 / 100.000 / 100.000 |
+
+  Angkutan umum (DU, EU; plat kuning) dan alat berat (B) tidak dihitung kalkulator.
+- **Isi silinder (CC)** menentukan golongan sepeda motor dan mobil barang (pick up, light truck, truck). CC diambil dari `vehicle.engine_capacity_cc` API (`VehicleData.isiSilinder`) dan **wajib diisi manual** di form bila API tidak memberikannya; tanpa CC form tidak menghitung. `calculateTax` tanpa CC (pemanggil lain) memakai golongan bawaan: motor C1, pick up dan light truck DP, truck F.
+- Pokok tunggakan: `jumlah_tahun_tunggakan * pokok_golongan`. Hasil memuat `golonganSwdkllj`.
+- **Denda SWDKLLJ masa berjalan**: **TETAP DIPUNGUT** (tidak dihapus oleh Tax Amnesty, merujuk contoh resmi Lampiran SE). Pada Pergub 64 denda SWDKLLJ masa tunggakan dihapus.
 
 ### G. PNBP (Penerimaan Negara Bukan Pajak) & Biaya Tambahan
 - Berlaku jika sisa masa berlaku STNK $\le$ 90 hari dari tanggal bayar:

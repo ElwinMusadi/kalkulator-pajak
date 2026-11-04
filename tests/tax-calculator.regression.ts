@@ -10,6 +10,7 @@
 import assert from "node:assert/strict"
 import { parseISO } from "date-fns"
 import { resolvePergub } from "../src/lib/pergub.ts"
+import { dendaSwdklljFor, golonganSwdkllj } from "../src/lib/swdkllj.ts"
 import { calculateTax } from "../src/lib/tax-calculator.ts"
 import type { TaxCalculatorInput } from "../src/types/tax.ts"
 
@@ -973,6 +974,111 @@ const near = (actual: number, expected: number, message: string) =>
   assert.equal(r.dendaSwdkllj, 8_000)
   assert.equal(r.dendaSwdklljTunggakanDihapus, true)
   pass("Pergub 64 – Plat merah menunggak: tunggakan dihapus, tarif 0,5%")
+}
+
+// ===========================================================================
+// SWDKLLJ per golongan Jasa Raharja (tarif per 1 Juni 2017)
+// Pokok = SW + KD Rp3.000; denda ≤ 3 / 4–6 / 7–9 / > 9 bulan.
+// ===========================================================================
+{
+  const g = (jenis: TaxCalculatorInput["jenisKendaraan"], cc?: number) => golonganSwdkllj(jenis, cc)
+  // Sepeda motor: A ≤ 50 cc, C1 s.d. 250 cc, C2 di atasnya; tanpa CC → C1.
+  assert.equal(g("SEPEDA MOTOR", 50), "A")
+  assert.equal(g("SEPEDA MOTOR", 51), "C1")
+  assert.equal(g("SEPEDA MOTOR", 250), "C1")
+  assert.equal(g("SEPEDA MOTOR", 251), "C2")
+  assert.equal(g("SEPEDA MOTOR"), "C1")
+  // Mobil barang: DP s.d. 2.400 cc, F di atasnya; tanpa CC → pick up/light truck DP, truck F.
+  for (const jenis of ["PICK UP", "LIGHT TRUCK", "TRUCK"] as const) {
+    assert.equal(g(jenis, 2_400), "DP", `${jenis} 2.400 cc`)
+    assert.equal(g(jenis, 2_401), "F", `${jenis} 2.401 cc`)
+  }
+  assert.equal(g("PICK UP"), "DP")
+  assert.equal(g("LIGHT TRUCK"), "DP")
+  assert.equal(g("TRUCK"), "F")
+  // Penumpang bukan angkutan umum: DP berapa pun CC-nya; microbus EP.
+  for (const jenis of ["MINIBUS", "SEDAN", "JEEP"] as const) {
+    assert.equal(g(jenis, 3_000), "DP", `${jenis} 3.000 cc`)
+  }
+  assert.equal(g("MICROBUS", 2_000), "EP")
+  // CC tidak valid diperlakukan kosong.
+  assert.equal(g("SEPEDA MOTOR", 0), "C1")
+  assert.equal(g("TRUCK", Number.NaN), "F")
+
+  // Denda per golongan untuk 1, 4, 7, dan 10 bulan terlambat.
+  const denda = (gol: Parameters<typeof dendaSwdklljFor>[0]) => [1, 4, 7, 10].map((b) => dendaSwdklljFor(gol, b))
+  assert.deepEqual(denda("A"), [0, 0, 0, 0])
+  assert.deepEqual(denda("C1"), [8_000, 16_000, 24_000, 32_000])
+  assert.deepEqual(denda("C2"), [20_000, 40_000, 60_000, 80_000])
+  assert.deepEqual(denda("DP"), [35_000, 70_000, 100_000, 100_000])
+  assert.deepEqual(denda("EP"), [37_500, 75_000, 100_000, 100_000])
+  assert.deepEqual(denda("F"), [40_000, 80_000, 100_000, 100_000])
+  assert.equal(dendaSwdklljFor("F", 0), 0, "Tidak terlambat → tanpa denda")
+  pass("SWDKLLJ – golongan dari jenis dan CC, denda per golongan")
+}
+
+// Truck 4 tahun menunggak (bayar 2 Nov 2026, JT 1 Mar 2022, Pergub 64): golongan F.
+{
+  const truck: TaxCalculatorInput = {
+    njkb: 400_000_000,
+    njub: 0,
+    bobot: 1.4,
+    jenisKendaraan: "TRUCK",
+    isiSilinder: 7_684,
+    jatuhTempoPajak: new Date("2022-03-01T00:00:00"),
+    jatuhTempoStnk: new Date("2022-03-01T00:00:00"),
+    tanggalBayar: new Date("2026-11-02T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+  }
+  const r = calculateTax(truck)
+  assert.equal(r.golonganSwdkllj, "F")
+  assert.equal(r.swdklljBerjalan, 163_000, "Truck: SW 160.000 + KD 3.000")
+  assert.equal(r.swdklljTunggakan, 4 * 163_000)
+  assert.equal(r.dendaSwdkllj, 100_000, "9 bulan terlambat → F Rp100.000")
+  // Tanpa CC truck tetap F; komponen lain tidak bergantung golongan.
+  const tanpaCc = calculateTax({ ...truck, isiSilinder: undefined })
+  assert.equal(tanpaCc.golonganSwdkllj, "F")
+  assert.equal(tanpaCc.total, r.total)
+  pass("SWDKLLJ – truck golongan F Rp163.000, tunggakan 4 × Rp163.000")
+}
+
+// Pick up 2.477 cc (F) vs 2.393 cc (DP), motor 300 cc (C2), motor 50 cc (A), microbus (EP).
+{
+  const pickUp: TaxCalculatorInput = {
+    njkb: 200_000_000,
+    njub: 0,
+    bobot: 1.085,
+    jenisKendaraan: "PICK UP",
+    jatuhTempoPajak: new Date("2026-09-01T00:00:00"),
+    jatuhTempoStnk: new Date("2030-09-01T00:00:00"),
+    tanggalBayar: new Date("2026-11-02T00:00:00"),
+    isDomisiliGempa: false,
+    isTembakRu: false,
+  }
+  // 1 Sep → 2 Nov 2026 = 3 bulan kalender terlambat → denda kolom pertama.
+  const besar = calculateTax({ ...pickUp, isiSilinder: 2_477 })
+  assert.equal(besar.bulanTerlambat, 3)
+  assert.equal(besar.golonganSwdkllj, "F")
+  assert.equal(besar.swdklljBerjalan + besar.dendaSwdkllj, 163_000 + 40_000)
+  const kecil = calculateTax({ ...pickUp, isiSilinder: 2_393 })
+  assert.equal(kecil.golonganSwdkllj, "DP")
+  assert.equal(kecil.swdklljBerjalan + kecil.dendaSwdkllj, 143_000 + 35_000)
+  assert.equal(besar.total - kecil.total, 20_000 + 5_000, "Selisih hanya pada SWDKLLJ")
+
+  const motor: TaxCalculatorInput = { ...pickUp, njkb: 60_000_000, bobot: 1, jenisKendaraan: "SEPEDA MOTOR" }
+  const motorBesar = calculateTax({ ...motor, isiSilinder: 300 })
+  assert.equal(motorBesar.golonganSwdkllj, "C2")
+  assert.equal(motorBesar.swdklljBerjalan + motorBesar.dendaSwdkllj, 83_000 + 20_000)
+  const motorKecil = calculateTax({ ...motor, isiSilinder: 49 })
+  assert.equal(motorKecil.golonganSwdkllj, "A")
+  assert.equal(motorKecil.swdklljBerjalan, 3_000, "Golongan A: SW bebas, hanya KD")
+  assert.equal(motorKecil.dendaSwdkllj, 0, "Golongan A tanpa denda")
+
+  const microbus = calculateTax({ ...pickUp, jenisKendaraan: "MICROBUS", isiSilinder: 2_000 })
+  assert.equal(microbus.golonganSwdkllj, "EP")
+  assert.equal(microbus.swdklljBerjalan + microbus.dendaSwdkllj, 153_000 + 37_500)
+  pass("SWDKLLJ – pick up DP/F menurut CC, motor C2 dan A, microbus EP")
 }
 
 // Payment online tidak berlaku pada masa Pergub 54.

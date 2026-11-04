@@ -6,6 +6,12 @@
 /** Identitas Pergub keringanan PKB; aturannya ada di src/lib/pergub.ts. */
 export type PergubId = "54-2026" | "64-2026"
 
+/**
+ * Golongan SWDKLLJ Jasa Raharja yang dihitung kalkulator; tarifnya ada di
+ * src/lib/swdkllj.ts. Angkutan umum (DU/EU) dan alat berat (B) tidak didukung.
+ */
+export type GolonganSwdkllj = "A" | "C1" | "C2" | "DP" | "EP" | "F"
+
 /** Jenis kendaraan yang didukung oleh kalkulator */
 export type JenisKendaraan =
   | "SEPEDA MOTOR"
@@ -104,6 +110,8 @@ export interface VehicleData {
   njkb: number
   njub: number
   bobot: number
+  /** Isi silinder (CC) dari vehicle.engine_capacity_cc; null bila tidak tersedia. */
+  isiSilinder?: number | null
   /**
    * Warna plat (TNKB). null = sumber tidak menyediakan / nilai tidak dikenali;
    * frontend memakai DEFAULT_WARNA_PLAT dan user dapat mengubah manual.
@@ -198,6 +206,11 @@ export interface TaxCalculatorInput {
   njub: number   // Nilai Jual Ubah Bentuk; 0 jika tidak ada
   bobot: number
   jenisKendaraan: JenisKendaraan
+  /**
+   * Isi silinder (CC); menentukan golongan SWDKLLJ sepeda motor dan mobil
+   * barang. Kosong → golongan bawaan jenis (lihat golonganSwdkllj).
+   */
+  isiSilinder?: number | null
   jatuhTempoPajak: Date   // SD Notice — tanggal jatuh tempo pajak
   jatuhTempoStnk: Date    // SD STNK — tanggal berakhir STNK
   tanggalBayar: Date
@@ -263,6 +276,8 @@ export interface TaxCalculationResult {
   bulanTerlambat: number
 
   // SWDKLLJ
+  /** Golongan Jasa Raharja yang menentukan pokok dan denda SWDKLLJ. */
+  golonganSwdkllj: GolonganSwdkllj
   swdklljBerjalan: number
   swdklljTunggakan: number
   dendaSwdkllj: number             // Denda masa berjalan saja

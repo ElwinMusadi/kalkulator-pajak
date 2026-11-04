@@ -12,6 +12,7 @@
 
 import { differenceInCalendarDays } from "date-fns"
 import { getPergub, resolvePergub } from "./pergub"
+import { dendaSwdklljFor, golonganSwdkllj, TARIF_SWDKLLJ } from "./swdkllj"
 import {
   BIAYA_LAYANAN_KEYS,
   BIAYA_LAYANAN_MAX,
@@ -146,7 +147,6 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   }
 
   const isMotor = jenisKendaraan === "SEPEDA MOTOR"
-  const swdklljBase = isMotor ? 35_000 : 143_000
 
   /** Dasar pengenaan penuh (termasuk NJUB jika ada ubah bentuk) */
   const dasarPenuh = (njkb + njub) * bobot
@@ -258,7 +258,11 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
 
   // -----------------------------------------------------------------------
   // SWDKLLJ
+  // Pokok dan denda mengikuti golongan Jasa Raharja (src/lib/swdkllj.ts):
+  // jenis kendaraan, dan untuk sepeda motor serta mobil barang juga CC.
   // -----------------------------------------------------------------------
+  const golongan = golonganSwdkllj(jenisKendaraan, input.isiSilinder)
+  const swdklljBase = TARIF_SWDKLLJ[golongan].pokok
   const swdklljBerjalan = swdklljBase
   const swdklljTunggakan = tahunTunggakan * swdklljBase
 
@@ -267,19 +271,7 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
   // Keterlambatan diukur dari jatuh tempo pada tahun bayar, sehingga denda
   // yang dihitung adalah denda masa berjalan. Pergub 64: denda SWDKLLJ masa
   // tunggakan dihapus, denda masa berjalan tetap dipungut.
-  let dendaSwdkllj = 0
-  if (bulanTerlambat > 0) {
-    if (isMotor) {
-      if (bulanTerlambat <= 3) dendaSwdkllj = 8_000
-      else if (bulanTerlambat <= 6) dendaSwdkllj = 16_000
-      else if (bulanTerlambat <= 9) dendaSwdkllj = 24_000
-      else dendaSwdkllj = 32_000
-    } else {
-      if (bulanTerlambat <= 3) dendaSwdkllj = 35_000
-      else if (bulanTerlambat <= 6) dendaSwdkllj = 70_000
-      else dendaSwdkllj = 100_000
-    }
-  }
+  const dendaSwdkllj = dendaSwdklljFor(golongan, bulanTerlambat)
 
   // -----------------------------------------------------------------------
   // PNBP STNK & TNKB
@@ -356,6 +348,7 @@ export function calculateTax(input: TaxCalculatorInput): TaxCalculationResult {
     dendaOpsen,
     bulanTerlambat,
     swdklljBerjalan,
+    golonganSwdkllj: golongan,
     swdklljTunggakan,
     dendaSwdkllj,
     dendaSwdklljTunggakanDihapus: pergub.hapusDendaSwdklljTunggakan && tahunTunggakan > 0,

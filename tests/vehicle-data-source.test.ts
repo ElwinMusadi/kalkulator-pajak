@@ -10,6 +10,7 @@ import {
   parseOfficialWeight,
   parseOptionalNjub,
   parseSyncedAt,
+  parseIsiSilinder,
   sanitizeOriginUpt,
   parseRetryAfterSeconds,
   discardResponseBody,
@@ -140,6 +141,13 @@ assert.equal(sanitizeOriginUpt("UPTD Kab. Timor Tengah Selatan (SoE)"), "UPTD Ka
 for (const bad of ["", "   ", "x".repeat(121), "<script>alert(1)</script>", "UPT; DROP", 7, null]) {
   assert.equal(sanitizeOriginUpt(bad), null, `originUpt ${JSON.stringify(bad)}`)
 }
+// isiSilinder: bilangan bulat cc 1–50.000 (number atau string angka), selain itu null.
+assert.equal(parseIsiSilinder(1_497), 1_497)
+assert.equal(parseIsiSilinder(" 2400 "), 2_400)
+assert.equal(parseIsiSilinder(50_000), 50_000)
+for (const bad of [0, -110, 1.5, 50_001, "2.400", "1500cc", "", null, undefined, Number.NaN]) {
+  assert.equal(parseIsiSilinder(bad), null, `isiSilinder ${JSON.stringify(bad)}`)
+}
 assert.equal(parseOfficialWeight("1.050000"), 1.05)
 assert.equal(parseOfficialWeight(1.05), null)
 assert.equal(parseRetryAfterSeconds("30"), 30)
@@ -163,7 +171,22 @@ pass("Normalisasi Nopol, decimal string parsing, dan Retry-After helper aman")
       "MINIBUS",
       "Mapping response matched harus memprioritaskan category_raw",
     )
+    assert.equal(matched.data.isiSilinder, null, "Tanpa engine_capacity_cc → isiSilinder null")
   }
+
+  // Isi silinder dari vehicle.engine_capacity_cc; nilai rusak tidak menggagalkan lookup.
+  const denganCc = mapApiResponseToVehicleData(
+    { ...officialMatchedResponse, vehicle: { category_raw: "PICK UP", engine_capacity_cc: 2_477 } },
+    "DH0001XX",
+  )
+  assert.equal(denganCc.status, "found")
+  if (denganCc.status === "found") assert.equal(denganCc.data.isiSilinder, 2_477)
+  const ccRusak = mapApiResponseToVehicleData(
+    { ...officialMatchedResponse, vehicle: { category_raw: "PICK UP", engine_capacity_cc: "dua ribu" } },
+    "DH0001XX",
+  )
+  assert.equal(ccRusak.status, "found", "CC rusak tidak menggagalkan lookup")
+  if (ccRusak.status === "found") assert.equal(ccRusak.data.isiSilinder, null)
 
   // B. vehicle_status=found + njkb_status=not_found -> KENDARAAN DITEMUKAN, NJKB=0 (bukan vehicle not_found!)
   const vehicleFoundNjkbNotFound = mapApiResponseToVehicleData(

@@ -74,7 +74,7 @@ export function ResultSummary({ result, compact = false }: ResultSummaryProps) {
         : null,
       `PKB: ${formatRupiah(pokokPkb)}`,
       `Opsen PKB: ${formatRupiah(pokokOpsen)}`,
-      `SWDKLLJ: ${formatRupiah(swdkllj)}`,
+      `SWDKLLJ (Gol. ${result.golonganSwdkllj}): ${formatRupiah(swdkllj)}`,
       `PNBP: ${formatRupiah(pnbp)}`,
       result.biayaTembakRu > 0
         ? `Biaya tambahan: ${formatRupiah(result.biayaTembakRu)}`
