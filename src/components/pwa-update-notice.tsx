@@ -8,7 +8,7 @@ import {
   subscribeUpdateNoticeCoordination,
 } from "@/lib/update-notice-coordination"
 
-/** Layar pendek (ponsel landscape): kartu langsung diringkas menjadi pil. */
+/** Layar pendek (ponsel landscape): kartu tampil sebagai pil dulu. */
 const SHORT_VIEWPORT_QUERY = "(max-height: 500px)"
 
 function subscribeShortViewport(onChange: () => void) {
@@ -21,18 +21,18 @@ function getShortViewport() {
   return window.matchMedia(SHORT_VIEWPORT_QUERY).matches
 }
 
-type DisplayMode = "auto" | "expanded" | "collapsed"
-
 /**
- * Pemberitahuan versi baru. Tampil di halaman login maupun aplikasi setelah
- * worker baru mengambil alih; tidak pernah memuat ulang sendiri.
+ * Pemberitahuan versi baru di halaman login dan layar pemeriksaan sesi;
+ * tidak pernah memuat ulang sendiri. Setelah login, modal Info Terbaru
+ * (notification-center) yang menampilkannya sebagai pembaruan wajib, jadi
+ * kartu ini disembunyikan.
  *
- * - Kartu (atas) memuat peringatan reset isian + tombol "Perbarui"/"Nanti".
- * - "Nanti" meringkasnya menjadi pil kecil di kanan bawah (di atas bilah hasil
- *   mobile) agar tidak menutupi header; pil membuka kartu lagi, tidak langsung
- *   memuat ulang, sehingga peringatan selalu terlihat sebelum isian direset.
- *   Di layar pendek (landscape) pil pindah ke kiri bawah: di halaman login
- *   area itu panel merek tanpa kontrol, sehingga tombol Masuk tidak tertutup.
+ * - Kartu (atas) memuat peringatan reset isian + tombol "Perbarui". Tidak ada
+ *   "Nanti": versi baru wajib dipasang sebelum memakai kalkulator.
+ * - Di layar pendek (landscape) kartu tampil sebagai pil kecil di kiri bawah
+ *   (di halaman login area itu panel merek tanpa kontrol, sehingga tombol Masuk
+ *   tidak tertutup); pil membuka kartu, tidak langsung memuat ulang, sehingga
+ *   peringatan selalu terlihat sebelum isian direset.
  * - z-40: di bawah overlay dialog/drawer Radix (z-50) dan layar status penuh.
  */
 export function PwaUpdateNotice() {
@@ -43,30 +43,24 @@ export function PwaUpdateNotice() {
     getShortViewport,
     () => false,
   )
-  const [mode, setMode] = useState<DisplayMode>("auto")
-  const focusTarget = useRef<"pill" | "apply" | null>(null)
-  const pillRef = useRef<HTMLButtonElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const focusApply = useRef(false)
   const applyRef = useRef<HTMLButtonElement>(null)
-  // Modal pembuka menampilkan pembaruan sendiri; setelah ditunda di sana,
-  // pembaruan tetap terjangkau lewat pil.
-  const { modalOpen, deferred } = useSyncExternalStore(
+  const { handledByApp } = useSyncExternalStore(
     subscribeUpdateNoticeCoordination,
     getUpdateNoticeCoordination,
     getUpdateNoticeCoordination,
   )
 
   const applying = status === "applying"
-  const collapsed =
-    !applying &&
-    (mode === "collapsed" || (mode === "auto" && (shortViewport || deferred)))
+  const collapsed = !applying && shortViewport && !expanded
 
-  // Pindahkan fokus hanya setelah aksi pengguna (bukan saat pertama tampil),
-  // agar fokus keyboard tidak hilang ke <body> ketika kartu/pil bertukar.
+  // Pindahkan fokus hanya setelah pil diketuk (bukan saat pertama tampil),
+  // agar fokus keyboard tidak hilang ke <body> ketika pil berganti kartu.
   useEffect(() => {
-    const target = focusTarget.current
-    focusTarget.current = null
-    if (target === "pill") pillRef.current?.focus()
-    if (target === "apply") applyRef.current?.focus()
+    if (!focusApply.current || collapsed) return
+    focusApply.current = false
+    applyRef.current?.focus()
   }, [collapsed])
 
   const announcement =
@@ -78,24 +72,24 @@ export function PwaUpdateNotice() {
 
   return (
     <>
-      {/* Selalu terpasang agar pengumuman pembaca layar tidak terlewat. */}
+      {/* Selalu terpasang agar pengumuman pembaca layar tidak terlewat; setelah
+          login, modal Info Terbaru yang mengumumkannya. */}
       <div role="status" aria-live="polite" className="sr-only">
-        {announcement}
+        {handledByApp ? "" : announcement}
       </div>
 
       {status !== "idle" &&
-        !(modalOpen && !applying) &&
+        !handledByApp &&
         (collapsed ? (
           <button
-            ref={pillRef}
             type="button"
             data-pwa-update="pill"
             aria-label="Pembaruan tersedia, tampilkan detail"
             onClick={() => {
-              focusTarget.current = "apply"
-              setMode("expanded")
+              focusApply.current = true
+              setExpanded(true)
             }}
-            className="fixed right-3 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center gap-2 rounded-full border border-navy-600/30 bg-card pl-3 pr-4 text-[13px] font-semibold text-navy-800 shadow-float transition-colors hover:bg-navy-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:right-4 lg:bottom-6 xshort:left-3 xshort:right-auto"
+            className="fixed left-3 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center gap-2 rounded-full border border-navy-600/30 bg-card pl-3 pr-4 text-[13px] font-semibold text-navy-800 shadow-float transition-colors hover:bg-navy-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <span className="flex size-6 items-center justify-center rounded-full bg-navy-50" aria-hidden="true">
               <RefreshCw className="size-3.5" />
@@ -117,10 +111,10 @@ export function PwaUpdateNotice() {
                   Versi Baru Tersedia
                 </h2>
                 <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  Perbarui untuk memakai versi terbaru. Isian yang belum disimpan
-                  akan direset.
+                  Perbarui untuk memakai versi terbaru sebelum menghitung. Isian yang belum
+                  disimpan akan direset.
                 </p>
-                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <div className="mt-2.5">
                   <Button
                     ref={applyRef}
                     type="button"
@@ -136,19 +130,6 @@ export function PwaUpdateNotice() {
                     )}
                     {applying ? "Memperbarui…" : "Perbarui"}
                   </Button>
-                  {!applying && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        focusTarget.current = "pill"
-                        setMode("collapsed")
-                      }}
-                    >
-                      Nanti
-                    </Button>
-                  )}
                 </div>
                 {!online && !applying && (
                   <p className="mt-1.5 text-xs text-muted-foreground">

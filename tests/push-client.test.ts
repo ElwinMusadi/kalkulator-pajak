@@ -132,15 +132,15 @@ function full(overrides: Partial<PushEnvironment>): PushEnvironment {
   pass("Ajakan notifikasi: hanya bila server siap, perangkat belum aktif, izin belum diminta, dan tidak ditunda")
 }
 
-// 5. Modal pembuka muncul bila ada yang perlu dilihat
+// 5. Modal Info Terbaru dibuka untuk pengumuman atau ajakan (versi baru selalu tampil sendiri)
 {
-  const none = { unreadCount: 0, updateAvailable: false, prompt: null }
+  const none = { unreadCount: 0, prompt: null }
   assert.equal(shouldShowOpeningModal(none), false, "tidak ada apa-apa")
-  assert.equal(shouldShowOpeningModal({ ...none, unreadCount: 2 }), true, "pengumuman belum dibaca")
-  assert.equal(shouldShowOpeningModal({ ...none, updateAvailable: true }), true, "versi baru")
+  assert.equal(shouldShowOpeningModal({ ...none, unreadCount: 1 }), true, "pengumuman belum dibaca")
+  assert.equal(shouldShowOpeningModal({ ...none, unreadCount: 2 }), true, "beberapa pengumuman")
   assert.equal(shouldShowOpeningModal({ ...none, prompt: "enable" }), true, "ajakan notifikasi")
   assert.equal(shouldShowOpeningModal({ ...none, prompt: "ios-install" }), true, "petunjuk iPhone")
-  pass("Modal pembuka: muncul bila ada versi baru, pengumuman belum dibaca, atau ajakan notifikasi")
+  pass("Modal Info Terbaru: dibuka untuk pengumuman belum dibaca atau ajakan notifikasi")
 }
 
 // 6. Penundaan ajakan tersimpan di localStorage; tanpa penyimpanan tidak error

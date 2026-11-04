@@ -1,17 +1,16 @@
 /**
- * Koordinasi tampilan "versi baru tersedia" antara modal pembuka
- * (notification-center) dan kartu/pil PwaUpdateNotice, agar pembaruan tidak
- * tampil dua kali. Store eksternal kecil tanpa React.
+ * Koordinasi tampilan "versi baru tersedia" antara modal Info Terbaru
+ * (notification-center, setelah login) dan kartu PwaUpdateNotice (halaman
+ * login dan layar pemeriksaan sesi), agar pembaruan tidak tampil dua kali.
+ * Store eksternal kecil tanpa React.
  */
 
 export interface UpdateNoticeCoordination {
-  /** Modal pembuka sedang tampil (dan menampilkan pembaruan bila ada). */
-  modalOpen: boolean
-  /** Pembaruan sudah ditunda dari modal: kartu langsung diringkas menjadi pil. */
-  deferred: boolean
+  /** Aplikasi (setelah login) terpasang dan menampilkan pembaruan wajib di modalnya. */
+  handledByApp: boolean
 }
 
-let state: UpdateNoticeCoordination = { modalOpen: false, deferred: false }
+let state: UpdateNoticeCoordination = { handledByApp: false }
 const listeners = new Set<() => void>()
 
 export function getUpdateNoticeCoordination(): UpdateNoticeCoordination {
@@ -27,7 +26,7 @@ export function subscribeUpdateNoticeCoordination(listener: () => void): () => v
 
 export function setUpdateNoticeCoordination(next: Partial<UpdateNoticeCoordination>): void {
   const merged = { ...state, ...next }
-  if (merged.modalOpen === state.modalOpen && merged.deferred === state.deferred) return
+  if (merged.handledByApp === state.handledByApp) return
   state = merged
   for (const listener of [...listeners]) listener()
 }

@@ -259,11 +259,14 @@ export function notificationPromptKind(input: {
   return null
 }
 
-/** Modal pembuka muncul bila ada setidaknya satu hal yang perlu dilihat. */
+/**
+ * Modal Info Terbaru dibuka untuk pengumuman belum dibaca atau ajakan
+ * notifikasi. Versi baru selalu menampilkan modal sendiri (wajib diperbarui),
+ * terlepas dari fungsi ini.
+ */
 export function shouldShowOpeningModal(input: {
   unreadCount: number
-  updateAvailable: boolean
   prompt: NotificationPromptKind | null
 }): boolean {
-  return input.unreadCount > 0 || input.updateAvailable || input.prompt !== null
+  return input.unreadCount > 0 || input.prompt !== null
 }
